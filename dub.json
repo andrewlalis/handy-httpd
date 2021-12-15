@@ -1,0 +1,9 @@
+{
+	"authors": [
+		"Andrew Lalis"
+	],
+	"copyright": "Copyright © 2021, Andrew Lalis",
+	"description": "Extremely lightweight HTTP server for D.",
+	"license": "MIT",
+	"name": "handy-httpd"
+}
