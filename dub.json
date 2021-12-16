@@ -3,6 +3,9 @@
 		"Andrew Lalis"
 	],
 	"copyright": "Copyright © 2021, Andrew Lalis",
+	"dependencies": {
+		"httparsed": "~>1.2.1"
+	},
 	"description": "Extremely lightweight HTTP server for D.",
 	"license": "MIT",
 	"name": "handy-httpd"
