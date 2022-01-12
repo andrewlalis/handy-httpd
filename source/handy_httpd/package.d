@@ -4,7 +4,6 @@ public import handy_httpd.server;
 public import handy_httpd.request;
 public import handy_httpd.response;
 public import handy_httpd.handler;
-public import handy_httpd.handlers;
 public import handy_httpd.responses;
 
 /** 
@@ -32,7 +31,9 @@ unittest {
             "127.0.0.1",
             PORT,
             8192,
-            true
+            100,
+            true,
+            10
         );
         // Start up the server in its own thread.
         new Thread(() {s.start();}).start();
@@ -47,6 +48,7 @@ unittest {
     }
     assert(s.isReady);
 
+    // Test basic HTTP request behavior.
     import std.net.curl;
     import std.string;
     import std.exception;
@@ -55,13 +57,13 @@ unittest {
     assert(get(url) == "Hello world!");
     assertThrown!CurlException(post(url, ["hello"]));
 
-    // Test parallel request handling.
-    for (int i = 0; i < 10; i++) {
-        new Thread(() {
-            auto c = HTTP();
-            assert(get(url, c) == "Hello world!");
-        }).start();
-    }
+    // Test high volume request handling. TODO: Find basic HTTP request library to use for testing.
+    // for (int i = 0; i < 10; i++) {
+    //     new Thread(() {
+    //         auto c = HTTP();
+    //         assert(get(url, c) == "Hello world!");
+    //     }).start();
+    // }
 
     s.stop();
 }
