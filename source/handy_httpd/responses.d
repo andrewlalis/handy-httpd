@@ -1,3 +1,6 @@
+/** 
+ * Contains convenience functions for pre-formatted HTTP responses.
+ */
 module handy_httpd.responses;
 
 import handy_httpd.response;

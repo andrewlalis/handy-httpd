@@ -1,3 +1,6 @@
+/** 
+ * Contains HTTP response components.
+ */
 module handy_httpd.response;
 
 import std.array;

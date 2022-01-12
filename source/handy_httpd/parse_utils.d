@@ -1,3 +1,6 @@
+/** 
+ * Internal parsing utilities for the server's HTTP request processing.
+ */
 module handy_httpd.parse_utils;
 
 import std.typecons;

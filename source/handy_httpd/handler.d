@@ -1,3 +1,6 @@
+/** 
+ * Contains core components for the HTTP handler structure.
+ */
 module handy_httpd.handler;
 
 import handy_httpd.request;

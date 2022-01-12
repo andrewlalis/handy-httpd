@@ -1,3 +1,6 @@
+/** 
+ * Contains the core HTTP server components.
+ */
 module handy_httpd.server;
 
 import std.stdio;

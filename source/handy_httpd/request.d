@@ -1,3 +1,6 @@
+/** 
+ * Contains HTTP request components.
+ */
 module handy_httpd.request;
 
 /** 
