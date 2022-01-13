@@ -63,6 +63,7 @@ class HttpServer {
         while (serverSocket.isAlive()) {
             auto clientSocket = serverSocket.accept();
             workerPool.put(task!handleRequest(
+                this,
                 clientSocket,
                 this.handler,
                 this.receiveBufferSize,
@@ -102,22 +103,34 @@ class HttpServer {
         this.verbose = verbose;
         return this;
     }
+
+    public bool isVerbose() {
+        return this.verbose;
+    }
 }
 
 /** 
  * Handles an HTTP request. It is intended for this function to be called as
  * an asynchronous task by the server's task pool.
  * Params:
+ *   server = The HttpServer that's handling the request.
  *   clientSocket = The socket to send responses to.
  *   handler = The handler that will handle the request.
  *   bufferSize = The buffer size to use when reading the request.
  *   verbose = Whether to print verbose log information.
  */
-private void handleRequest(Socket clientSocket, HttpRequestHandler handler, size_t bufferSize, bool verbose) {
+private void handleRequest(
+    HttpServer server,
+    Socket clientSocket,
+    HttpRequestHandler handler,
+    size_t bufferSize,
+    bool verbose
+) {
     ubyte[] receiveBuffer = new ubyte[bufferSize];
     auto received = clientSocket.receive(receiveBuffer);
     string data = cast(string) receiveBuffer[0..received];
     auto request = parseRequest(data);
+    request.server = server;
     if (verbose) writefln!"<- %s %s"(request.method, request.url);
     try {
         auto response = handler.handle(request);

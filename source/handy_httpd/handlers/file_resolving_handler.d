@@ -26,8 +26,16 @@ class FileResolvingHandler : HttpRequestHandler {
     }
 
     HttpResponse handle(HttpRequest request) {
+        if (request.server.isVerbose()) {
+            writefln!"Resolving file for url %s..."(request.url);
+        }
         string path = sanitizeRequestPath(request.url);
-        if (path == null) return notFound();
+        if (path == null) {
+            if (request.server.isVerbose()) {
+                writefln!"Could not resolve file for url %s. Maybe it doesn't exist?"(request.url);
+            }
+            return notFound();
+        }
         return fileResponse(path, getMimeType(path));
     }
 
@@ -41,13 +49,17 @@ class FileResolvingHandler : HttpRequestHandler {
      */
     private string sanitizeRequestPath(string url) {
         import std.path : buildNormalizedPath;
-        import std.file : exists;
+        import std.file : exists, isDir;
+        import std.regex;
         if (url.length == 0 || url == "/") return "index.html";
         string normalized = this.basePath ~ "/" ~ buildNormalizedPath(url[1 .. $]);
-        if (normalized[$] == '/') { // Append "index.html" for any directory request.
-            normalized ~= "index.html";
-        }
+        
         if (!exists(normalized)) return null;
+        // If the user has requested a directory, try and serve "index.html" from it.
+        if (isDir(normalized)) {
+            normalized ~= "/index.html";
+            if (!exists(normalized)) return null;
+        }
         return normalized;
     }
 }

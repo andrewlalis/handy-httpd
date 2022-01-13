@@ -102,6 +102,10 @@ private Tuple!(string, string[string]) parseUrlAndParams(string rawUrl) {
         result[0] = rawUrl[0..p];
         result[1] = parseQueryString(rawUrl[p..$]);
     }
+    // Strip away a trailing slash if there is one. This makes path matching easier.
+    if (result[0][$ - 1] == '/') {
+        result[0] = result[0][0 .. $ - 1];
+    }
     return result;
 }
 
@@ -129,6 +133,5 @@ private string[string] parseQueryString(string queryString) {
             params[paramName] = paramValue;
         }
     }
-    writeln(params);
     return params;
 }
