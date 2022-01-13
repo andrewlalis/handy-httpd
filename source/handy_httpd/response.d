@@ -14,39 +14,39 @@ struct HttpResponse {
     /** 
      * The status code.
      */
-    ushort status;
+    public ushort status;
 
     /** 
      * A short textual representation of the status.
      */
-    string statusText;
+    public string statusText;
 
     /** 
      * An associative array of headers.
      */
-    string[string] headers;
+    public string[string] headers;
 
     /** 
      * The body of the message.
      */
-    ubyte[] messageBody;
+    public ubyte[] messageBody;
 
-    HttpResponse setStatus(ushort status) {
+    public HttpResponse setStatus(ushort status) {
         this.status = status;
         return this;
     }
 
-    HttpResponse setStatusText(string statusText) {
+    public HttpResponse setStatusText(string statusText) {
         this.statusText = statusText;
         return this;
     }
 
-    HttpResponse addHeader(string name, string value) {
+    public HttpResponse addHeader(string name, string value) {
         this.headers[name] = value;
         return this;
     }
 
-    HttpResponse setBody(string messageBody) {
+    public HttpResponse setBody(string messageBody) {
         this.messageBody = cast(ubyte[]) messageBody;
         return this;
     }
@@ -55,7 +55,7 @@ struct HttpResponse {
      * Converts this response to a byte array in HTTP format.
      * Returns: A byte array containing the response content.
      */
-    ubyte[] toBytes() {
+    public ubyte[] toBytes() {
         auto a = appender!(ubyte[]);
         auto statusLine = format!"HTTP/1.1 %d %s\r\n"(status, statusText);
         a ~= cast(ubyte[]) statusLine;

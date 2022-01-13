@@ -36,6 +36,13 @@ struct HttpRequest {
     public const string[string] params;
 
     /** 
+     * An associative array containing any path parameters obtained from the
+     * request url. These are only populated in cases where it is possible to
+     * parse path parameters, such as with a PathDelegatingHandler.
+     */
+    public string[string] pathParams;
+
+    /** 
      * A reference to the HttpServer that is handling this request.
      */
     public HttpServer server;

@@ -39,6 +39,7 @@ class PathDelegatingHandler : HttpRequestHandler {
                 if (request.server.isVerbose()) {
                     writefln!"Found matching handler for url %s (pattern: %s)"(request.url, pattern);
                 }
+                request.pathParams = parsePathParams(pattern, request.url);
                 return handler.handle(request);
             }
         }
@@ -98,8 +99,6 @@ private bool pathMatches(string pattern, string url) {
         .replaceAll(singleCharRegex, "[^/]")
         .replaceAll(pathParamRegex, "[^/]+");
     Captures!string c = matchFirst(url, s);
-    // import std.stdio;
-    // writefln!"%s matched on %s using regex %s gives matches %s"(url, pattern, s, c);
     return !c.empty() && c.front() == url;
 }
 
@@ -121,4 +120,54 @@ unittest {
     assert(!pathMatches("/help/*", "/help/other/other"));
     assert(!pathMatches("/users/{id}", "/users"));
     assert(!pathMatches("/users/{id}", "/users/1/2/3"));
+}
+
+/** 
+ * Parses a set of named path parameters from a url, according to a given path
+ * pattern where named path parameters are indicated by curly braces.
+ *
+ * For example, the pattern string "/users/{id}" can be used to parse the url
+ * "/users/123" to obtain ["id": "123"] as the path parameters.
+ * Params:
+ *   pattern = The path pattern to use to parse params from.
+ *   url = The url to parse parameters from.
+ * Returns: An associative array containing the path parameters.
+ */
+private string[string] parsePathParams(string pattern, string url) {
+    import std.regex;
+    import std.container.dlist;
+
+    // First collect an ordered list of the names of all path parameters to look for.
+    auto pathParamRegex = ctRegex!(`\{([^/]+)\}`);
+    DList!string pathParams = DList!string();
+    auto m = matchAll(pattern, pathParamRegex);
+    while (!m.empty) {
+        auto c = m.front();
+        pathParams.insertFront(c[1]);
+        m.popFront();
+    }
+
+    string[string] params;
+
+    // Now parse all path parameters in order, and add them to the array.
+    string preparedPathPattern = replaceAll(pattern, pathParamRegex, "([^/]+)");
+    auto c = matchFirst(url, regex(preparedPathPattern));
+    if (c.empty) return params; // If there's complete no matching, just exit.
+    c.popFront(); // Pop the first capture group, which contains the full match.
+    while (!c.empty) {
+        if (pathParams.empty()) break;
+        string expectedParamName = pathParams.back();
+        pathParams.removeBack();
+        params[expectedParamName] = c.front();
+        c.popFront();
+    }
+    return params;
+}
+
+unittest {
+    assert(parsePathParams("/users/{id}", "/users/1") == ["id": "1"]);
+    assert(parsePathParams("/users/{id}/{name}", "/users/123/andrew") == ["id": "123", "name": "andrew"]);
+    assert(parsePathParams("/users/{id}", "/users") == null);
+    assert(parsePathParams("/users", "/users") == null);
+    assert(parsePathParams("/{a}/b/{c}", "/one/b/two") == ["a": "one", "c": "two"]);
 }

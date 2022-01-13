@@ -39,29 +39,6 @@ Besides these barebones showcases, handy-httpd also gives you the ability to con
 - Whether to show verbose logging output.
 - Number of worker threads to use for request processing.
 
-
-## Requests
-Each HTTP request is parsed into the following struct for use with any `HttpRequestHandler`:
-```d
-struct HttpRequest {
-    public const string method;
-    public const string url;
-    public const int ver;
-    public const string[string] headers;
-    public const string[string] params;
-}
-```
-
-## Responses
-The following struct is used to send responses from any `HttpRequestHandler`:
-```d
-struct HttpResponse {
-    ushort status;
-    string statusText;
-    string[string] headers;
-    ubyte[] messageBody;
-```
-
 ## Path-Delegating Handler
 In many cases, you'll want a dedicated handler for specific URL paths on your server. You can achieve this with the `PathDelegatingHandler`.
 
@@ -106,4 +83,20 @@ The `PathDelegatingHandler` allows you to register an `HttpRequestHandler` for s
   WILL match: /users/1
   WILL NOT match: /users/123
   WILL NOT match: /users
+```
+
+### Path Parameters
+Often times, you will want to extract certain data from parts of a URL. You can do this for any handlers which are registered with a `PathDelegatingHandler`. Such handlers, when their `handle` method is invoked, will have their `request` parameter's `pathParams` populated with the parsed path parameters. Let's look at an example:
+
+```d
+import handy_httpd.responses;
+import handy_httpd.handlers.path_delegating_handler;
+import std.conv;
+import std.string;
+
+auto handler = new PathDelegatingHandler()
+  .addPath("/users/{id}", simpleHandler((request) {
+    ulong userId = request.pathParams["id"].to!ulong;
+    return okResponse().setBody(format!"Hello, %d"(userId));
+  }));
 ```
