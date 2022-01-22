@@ -56,7 +56,7 @@ class HttpServer {
     public void start() {
         serverSocket = new TcpSocket();
         serverSocket.bind(this.address);
-        if (this.verbose) writefln("Bound to address %s", this.address);
+        if (this.verbose) writefln!"Bound to address %s"(this.address);
         serverSocket.listen(this.connectionQueueSize);
         if (this.verbose) writeln("Now accepting connections.");
         this.ready = true;

@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/static_file_test
+static_file_test.so
+static_file_test.dylib
+static_file_test.dll
+static_file_test.a
+static_file_test.lib
+static_file_test-test-*
+*.exe
+*.o
+*.obj
+*.lst

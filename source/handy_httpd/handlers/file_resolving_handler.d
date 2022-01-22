@@ -17,12 +17,40 @@ class FileResolvingHandler : HttpRequestHandler {
     private string basePath;
 
     /** 
+     * Associative array containing mime type mappings for file extensions.
+     */
+    private string[string] mimeTypes;
+
+    /** 
      * Constructs the request handler.
      * Params:
      *   basePath = The path to use to resolve files in.
      */
     this(string basePath = ".") {
         this.basePath = basePath;
+        this.mimeTypes = [
+            ".html": "text/html",
+            ".js": "text/javascript",
+            ".css": "text/css",
+            ".json": "application/json",
+            ".png": "image/png",
+            ".jpg": "image/jpg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".wav": "audio/wav",
+            ".ogg": "audio/ogg",
+            ".mp3": "audio/mpeg",
+            ".mp4": "video/mp4",
+            ".woff": "application/font-woff",
+            ".ttf": "application/font-ttf",
+            ".eot": "application/vnd.ms-fontobject",
+            ".otf": "application/font-otf",
+            ".svg": "application/image/svg+xml",
+            ".wasm": "application/wasm",
+            ".pdf": "application/pdf",
+            ".txt": "text/plain",
+            ".xml": "application/xml"
+        ];
     }
 
     HttpResponse handle(HttpRequest request) {
@@ -40,6 +68,18 @@ class FileResolvingHandler : HttpRequestHandler {
     }
 
     /** 
+     * Registers a new mime type for this handler.
+     * Params:
+     *   fileExtension = The file extension to use, including the '.' separator.
+     *   mimeType = The mime type that will be assigned to the given file extension.
+     * Returns: The handler, for method chaining.
+     */
+    public FileResolvingHandler registerMimeType(string fileExtension, string mimeType) {
+        mimeTypes[fileExtension] = mimeType;
+        return this;
+    }
+
+    /** 
      * Sanitizes a request url such that it points to a file within the
      * configured base path for this handler.
      * Params:
@@ -51,7 +91,7 @@ class FileResolvingHandler : HttpRequestHandler {
         import std.path : buildNormalizedPath;
         import std.file : exists, isDir;
         import std.regex;
-        if (url.length == 0 || url == "/") return "index.html";
+        if (url.length == 0 || url == "/") return this.basePath ~ "/index.html";
         string normalized = this.basePath ~ "/" ~ buildNormalizedPath(url[1 .. $]);
         
         if (!exists(normalized)) return null;
@@ -62,43 +102,24 @@ class FileResolvingHandler : HttpRequestHandler {
         }
         return normalized;
     }
-}
 
-/** 
- * Tries to determine the mime type of a file. Defaults to "text/html" for
- * files of an unknown type.
- * Params:
- *   filename = The name of the file to determine mime type for.
- * Returns: A mime type string.
- */
-private string getMimeType(string filename) {
-    import std.string : lastIndexOf;
-    import std.uni : toLower;
-    string[string] MIME_TYPES = [
-        ".html": "text/html",
-        ".js": "text/javascript",
-        ".css": "text/css",
-        ".json": "application/json",
-        ".png": "image/png",
-        ".jpg": "image/jpg",
-        ".gif": "image/gif",
-        ".wav": "audio/wav",
-        ".ogg": "audio/ogg",
-        ".mp3": "audio/mpeg",
-        ".mp4": "video/mp4",
-        ".woff": "application/font-woff",
-        ".ttf": "application/font-ttf",
-        ".eot": "application/vnd.ms-fontobject",
-        ".otf": "application/font-otf",
-        ".svg": "application/image/svg+xml",
-        ".wasm": "application/wasm"
-    ];
-    auto p = filename.lastIndexOf('.');
-    if (p == -1) return "text/html";
-    string extension = filename[p..$].toLower();
-    if (extension !in MIME_TYPES) {
-        writefln!"Warning: Unknown mime type for file extension %s"(extension);
-        return "text/plain";
+    /** 
+    * Tries to determine the mime type of a file. Defaults to "text/html" for
+    * files of an unknown type.
+    * Params:
+    *   filename = The name of the file to determine mime type for.
+    * Returns: A mime type string.
+    */
+    private string getMimeType(string filename) {
+        import std.string : lastIndexOf;
+        import std.uni : toLower;
+        auto p = filename.lastIndexOf('.');
+        if (p == -1) return "text/html";
+        string extension = filename[p..$].toLower();
+        if (extension !in this.mimeTypes) {
+            writefln!"Warning: Unknown mime type for file extension %s"(extension);
+            return "text/plain";
+        }
+        return this.mimeTypes[extension];
     }
-    return MIME_TYPES[extension];
 }

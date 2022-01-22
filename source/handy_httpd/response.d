@@ -31,21 +31,46 @@ struct HttpResponse {
      */
     public ubyte[] messageBody;
 
+    /** 
+     * Sets the status of the response.
+     * Params:
+     *   status = The status code.
+     * Returns: The response object, for method chaining.
+     */
     public HttpResponse setStatus(ushort status) {
         this.status = status;
         return this;
     }
 
+    /** 
+     * Sets the status text of the response.
+     * Params:
+     *   statusText = The status text.
+     * Returns: The response object, for method chaining.
+     */
     public HttpResponse setStatusText(string statusText) {
         this.statusText = statusText;
         return this;
     }
 
+    /** 
+     * Adds a header to the response.
+     * Params:
+     *   name = The name of the header.
+     *   value = The value to set for the header.
+     * Returns: The response object, for method chaining.
+     */
     public HttpResponse addHeader(string name, string value) {
         this.headers[name] = value;
         return this;
     }
 
+    /** 
+     * Sets the body of the response.
+     * Params:
+     *   messageBody = The message body to send.
+     * Returns: The response object, for method chaining.
+     */
     public HttpResponse setBody(string messageBody) {
         this.messageBody = cast(ubyte[]) messageBody;
         return this;
