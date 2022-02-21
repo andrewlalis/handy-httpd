@@ -47,6 +47,12 @@ class HttpServer {
         this.workerPool.isDaemon = true;
     }
 
+    /**
+     * Will be called before the socket is bound to the address. One can set
+     * special socket options in here by overriding it.
+     */
+    protected void configurePreBind(Socket socket) {}
+
     /** 
      * Starts the server on the calling thread, so that it will begin accepting
      * HTTP requests. Once the server is able to accept requests, `isReady()`
@@ -55,6 +61,7 @@ class HttpServer {
      */
     public void start() {
         serverSocket = new TcpSocket();
+        configurePreBind(serverSocket);
         serverSocket.bind(this.address);
         if (this.verbose) writefln!"Bound to address %s"(this.address);
         serverSocket.listen(this.connectionQueueSize);
