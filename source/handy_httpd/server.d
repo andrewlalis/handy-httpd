@@ -49,7 +49,12 @@ class HttpServer {
 
     /**
      * Will be called before the socket is bound to the address. One can set
-     * special socket options in here by overriding it.
+     * special socket options in here by overriding it. 
+     * 
+     * Note: one application would be to add SocketOption.REUSEADDR, in 
+     * order to prevent long TIME_WAIT states preventing quick restarts 
+     * of the server after termination on some systems. Learn more about it
+     * here: https://stackoverflow.com/a/14388707.
      */
     protected void configurePreBind(Socket socket) {}
 
