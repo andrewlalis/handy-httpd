@@ -6,12 +6,11 @@ module handy_httpd.server;
 import std.stdio;
 import std.socket;
 import std.regex;
-import std.parallelism;
 
 import handy_httpd.request;
 import handy_httpd.response;
 import handy_httpd.handler;
-import handy_httpd.parse_utils;
+import handy_httpd.worker;
 
 /** 
  * A simple HTTP server that accepts requests on a given port and address, and
@@ -20,13 +19,13 @@ import handy_httpd.parse_utils;
  */
 class HttpServer {
     private Address address;
-    size_t receiveBufferSize;
-    int connectionQueueSize;
+    private size_t receiveBufferSize;
+    private int connectionQueueSize;
     private bool verbose;
     private HttpRequestHandler handler;
-    private TaskPool workerPool;
     private bool ready = false;
     private Socket serverSocket = null;
+    private HttpServerWorker[] workers;
 
     this(
         HttpRequestHandler handler = noOpHandler(),
@@ -42,9 +41,12 @@ class HttpServer {
         this.connectionQueueSize = connectionQueueSize;
         this.verbose = verbose;
         this.handler = handler;
-        
-        this.workerPool = new TaskPool(workerPoolSize);
-        this.workerPool.isDaemon = true;
+
+        this.workers.length = workerPoolSize;
+        for (size_t i = 0; i < workerPoolSize; i++) {
+            this.workers[i] = new HttpServerWorker(receiveBufferSize);
+            this.workers[i].start(); // Start all workers so their threads are spawned and ready for requests.
+        }
     }
 
     /**
@@ -73,26 +75,47 @@ class HttpServer {
         if (this.verbose) writeln("Now accepting connections.");
         this.ready = true;
         while (serverSocket.isAlive()) {
-            auto clientSocket = serverSocket.accept();
-            workerPool.put(task!handleRequest(
-                this,
-                clientSocket,
-                this.handler,
-                this.receiveBufferSize,
-                this.verbose
-            ));
+            Socket clientSocket = serverSocket.accept();
+            HttpServerWorker worker = getBestWorker();
+            worker.queueRequest(clientSocket, this, this.handler);
+            worker.start();
         }
         this.ready = false;
     }
 
     /** 
-     * Shuts down the server by closing the server socket, if possible. Note
-     * that this is not a blocking call, and the server will shutdown sometime
-     * after this is called.
+     * Searches for the best worker in our pool to handle the next request.
+     * Generally, this is the first available worker that's not running and has
+     * nothing in its queue, but if we're busy, we choose the worker whose
+     * queue is the smallest.
+     * Returns: The best worker to handle the next request.
+     */
+    private HttpServerWorker getBestWorker() {
+        ubyte minQueueSize = 255;
+        HttpServerWorker bestWorker = null;
+        foreach (i, worker; this.workers) {
+            // Quickly find best worker.
+            if (!worker.isRunning() && worker.getQueueSize() == 0) return worker;
+            if (worker.getQueueSize() < minQueueSize) {
+                minQueueSize = worker.getQueueSize();
+                bestWorker = worker;
+            }
+        }
+        if (bestWorker is null) throw new Exception("No available worker!");
+        return bestWorker;
+    }
+
+    /** 
+     * Shuts down the server by closing the server socket, if possible. This
+     * will block until all pending requests have been fulfilled.
      */
     public void stop() {
+        if (verbose) writeln("Stopping the server.");
         if (serverSocket !is null) {
             serverSocket.close();
+        }
+        foreach (i, worker; this.workers) {
+            worker.join(false);
         }
     }
 
@@ -116,40 +139,11 @@ class HttpServer {
         return this;
     }
 
+    /** 
+     * Tells whether the server will give verbose output.
+     * Returns: Whether the server is set to give verbose output.
+     */
     public bool isVerbose() {
         return this.verbose;
     }
-}
-
-/** 
- * Handles an HTTP request. It is intended for this function to be called as
- * an asynchronous task by the server's task pool.
- * Params:
- *   server = The HttpServer that's handling the request.
- *   clientSocket = The socket to send responses to.
- *   handler = The handler that will handle the request.
- *   bufferSize = The buffer size to use when reading the request.
- *   verbose = Whether to print verbose log information.
- */
-private void handleRequest(
-    HttpServer server,
-    Socket clientSocket,
-    HttpRequestHandler handler,
-    size_t bufferSize,
-    bool verbose
-) {
-    ubyte[] receiveBuffer = new ubyte[bufferSize];
-    auto received = clientSocket.receive(receiveBuffer);
-    string data = cast(string) receiveBuffer[0..received];
-    auto request = parseRequest(data);
-    request.server = server;
-    if (verbose) writefln!"<- %s %s"(request.method, request.url);
-    try {
-        auto response = handler.handle(request);
-        clientSocket.send(response.toBytes());
-        if (verbose) writefln!"\t-> %d %s"(response.status, response.statusText);
-    } catch (Exception e) {
-        writefln!"An error occurred while handling a request: %s"(e.msg);
-    }
-    clientSocket.close();
 }

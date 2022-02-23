@@ -16,7 +16,7 @@ import handy_httpd.request : HttpRequest;
 /** 
  * The header struct to use when parsing data.
  */
-private struct Header {
+public struct Header {
     const(char)[] name;
     const(char)[] value;
 }
@@ -24,7 +24,7 @@ private struct Header {
 /** 
  * The message struct to use when parsing HTTP requests, using the httparsed library.
  */
-private struct Msg {
+public struct Msg {
     @safe pure nothrow @nogc:
         void onMethod(const(char)[] method) { this.method = method; }
 
@@ -44,6 +44,10 @@ private struct Msg {
 
         void onStatusMsg(const(char)[] statusMsg) { this.statusMsg = statusMsg; }
 
+        void reset() {
+            this.m_headersLength = 0;
+        }
+
     public const(char)[] method;
     public const(char)[] uri;
     public int minorVer;
@@ -62,9 +66,7 @@ private struct Msg {
  *   s = The raw HTTP request string.
  * Returns: An HttpRequest object which can be passed to a handler.
  */
-public HttpRequest parseRequest(string s) {
-    // TODO: Find a way to cache request parsers instead of initializing them for each request.
-    MsgParser!Msg requestParser = initParser!Msg();
+public HttpRequest parseRequest(MsgParser!Msg requestParser, string s) {
     // requestParser.msg.m_headersLength = 0; // Reset the parser headers.
     int result = requestParser.parseRequest(s);
     if (result != s.length) {

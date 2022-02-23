@@ -57,13 +57,5 @@ unittest {
     assert(get(url) == "Hello world!");
     assertThrown!CurlException(post(url, ["hello"]));
 
-    // Test high volume request handling. TODO: Find basic HTTP request library to use for testing.
-    // for (int i = 0; i < 10; i++) {
-    //     new Thread(() {
-    //         auto c = HTTP();
-    //         assert(get(url, c) == "Hello world!");
-    //     }).start();
-    // }
-
     s.stop();
 }
