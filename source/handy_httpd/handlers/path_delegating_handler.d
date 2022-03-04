@@ -33,20 +33,21 @@ class PathDelegatingHandler : HttpRequestHandler {
         return this;
     }
 
-    HttpResponse handle(HttpRequest request) {
+    void handle(ref HttpRequest request, ref HttpResponse response) {
         foreach (pattern, handler; handlers) {
             if (pathMatches(pattern, request.url)) {
                 if (request.server.isVerbose()) {
                     writefln!"Found matching handler for url %s (pattern: %s)"(request.url, pattern);
                 }
                 request.pathParams = parsePathParams(pattern, request.url);
-                return handler.handle(request);
+                handler.handle(request, response);
+                return; // Exit once we handle the request.
             }
         }
         if (request.server.isVerbose()) {
             writefln!"No matching handler found for url %s"(request.url);
         }
-        return notFound();
+        response.notFound();
     }
 }
 
@@ -56,9 +57,9 @@ unittest {
     import core.thread;
 
     auto handler = new PathDelegatingHandler()
-        .addPath("/home", simpleHandler(request => okResponse()))
-        .addPath("/users", simpleHandler(request => okResponse()))
-        .addPath("/users/{id}", simpleHandler(request => okResponse()));
+        .addPath("/home", simpleHandler((ref request, ref response) {response.okResponse();}))
+        .addPath("/users", simpleHandler((ref request, ref response) {response.okResponse();}))
+        .addPath("/users/{id}", simpleHandler((ref request, ref response) {response.okResponse();}));
 
     HttpServer server = new HttpServer(handler).setVerbose(true);
     new Thread(() {server.start();}).start();

@@ -21,11 +21,11 @@ unittest {
      */
     HttpServer getSimpleServer() {
         auto s = new HttpServer(
-            simpleHandler((request) {
+            simpleHandler((ref request, ref response) {
                 if (request.method == "GET") {
-                    return okResponse().setBody("Hello world!");
+                    response.writeBody("Hello world!");
                 } else {
-                    return methodNotAllowed();
+                    response.methodNotAllowed();
                 }
             }),
             "127.0.0.1",

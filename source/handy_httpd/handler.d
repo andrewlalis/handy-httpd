@@ -15,9 +15,9 @@ interface HttpRequestHandler {
      * multiple threads, as requests may be processed in parallel.
      * Params:
      *   request = The request to handle.
-     * Returns: An HTTP response to send to the client.
+     *   response = The response to send back to the client.
      */
-    HttpResponse handle(HttpRequest request);
+    void handle(ref HttpRequest request, ref HttpResponse response);
 }
 
 /** 
@@ -26,10 +26,10 @@ interface HttpRequestHandler {
  *   fn = The function that will handle requests.
  * Returns: The request handler.
  */
-HttpRequestHandler simpleHandler(HttpResponse function(HttpRequest) fn) {
+HttpRequestHandler simpleHandler(void function(ref HttpRequest, ref HttpResponse) fn) {
     return new class HttpRequestHandler {
-        HttpResponse handle(HttpRequest request) {
-            return fn(request);
+        void handle(ref HttpRequest request, ref HttpResponse response) {
+            fn(request, response);
         }
     };
 }
@@ -41,8 +41,8 @@ HttpRequestHandler simpleHandler(HttpResponse function(HttpRequest) fn) {
  */
 HttpRequestHandler noOpHandler() {
     return new class HttpRequestHandler {
-        HttpResponse handle(HttpRequest request) {
-            return HttpResponse(503, "Service Unavailable", null, null);
+        void handle(ref HttpRequest request, ref HttpResponse response) {
+            response.setStatus(503).setStatusText("Service Unavailable").flushHeaders();
         }
     };
 }

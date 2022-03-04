@@ -1,5 +1,7 @@
 /** 
  * Contains convenience functions for pre-formatted HTTP responses.
+ * Note that all functions here will flush the response, meaning that you do
+ * not have to manually flush the response in your handler.
  */
 module handy_httpd.responses;
 
@@ -7,40 +9,49 @@ import handy_httpd.response;
 
 /** 
  * Convenience method to prepare a simple 200 OK response.
- * Returns: A 200 OK HTTP response.
+ * Params:
+ *    response = The HTTP response to write to.
  */
-HttpResponse okResponse() {
-    return HttpResponse(200, "OK", null, []);
+void okResponse(ref HttpResponse response) {
+    response.setStatus(200).setStatusText("OK").flushHeaders();
 }
 
 /** 
  * Convenience method to send a file response to a request.
  * Params:
+ *   response = The HTTP response to write to.
  *   filename = The filename to send.
  *   type = The mime type to send, such as "text/html; charset=utf-8"
- * Returns: A 200 OK response whose body is the contents of the file that was
- * specified, or 404 Not Found if the file could not be found.
  */
-HttpResponse fileResponse(string filename, string type) {
+void fileResponse(ref HttpResponse response, string filename, string type) {
     import std.file;
+    import std.stdio;
+    import std.conv : to;
     if (!exists(filename)) {
-        return HttpResponse(404, "Not Found", null, null)
-            .addHeader("Content-Type", type);
+        response.setStatus(404).setStatusText("Not Found")
+            .addHeader("Content-Type", type).flushHeaders();
     } else {
-        ubyte[] data = cast(ubyte[]) read(filename);
-        return HttpResponse(200, "OK", null, data)
+        response.setStatus(200).setStatusText("OK")
             .addHeader("Content-Type", type);
+        auto file = File(filename, "r");
+        ulong size = file.size();
+        response.addHeader("Content-Length", size.to!string).flushHeaders();
+        // Flush the headers, and begin streaming the file directly.
+        foreach (ubyte[] buffer; file.byChunk(16_384)) {
+            response.clientSocket.send(buffer);
+        }
     }
 }
 
-HttpResponse notFound() {
-    return HttpResponse(404, "Not Found", null, null);
+void notFound(ref HttpResponse response) {
+    response.setStatus(404).setStatusText("Not Found").flushHeaders();
 }
 
 /** 
  * Convenience method to send a method not allowed response.
- * Returns: A 405 Method Not Allowed response.
+ * Params:
+ *   response = The response to write to.
  */
-HttpResponse methodNotAllowed() {
-    return HttpResponse(405, "Method Not Allowed", null, null);
+void methodNotAllowed(ref HttpResponse response) {
+    response.setStatus(405).setStatusText("Method Not Allowed").flushHeaders();
 }

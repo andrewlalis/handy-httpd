@@ -6,6 +6,7 @@ module handy_httpd.response;
 import std.array;
 import std.string : format, representation;
 import std.conv;
+import std.socket : Socket;
 
 /** 
  * The data that the HTTP server will send back to clients.
@@ -27,9 +28,11 @@ struct HttpResponse {
     public string[string] headers;
 
     /** 
-     * The body of the message.
+     * The socket that's used to send data to the client.
      */
-    public ubyte[] messageBody;
+    public Socket clientSocket;
+
+    private bool flushed = false;
 
     /** 
      * Sets the status of the response.
@@ -65,35 +68,30 @@ struct HttpResponse {
         return this;
     }
 
-    /** 
-     * Sets the body of the response.
-     * Params:
-     *   messageBody = The message body to send.
-     * Returns: The response object, for method chaining.
-     */
-    public HttpResponse setBody(string messageBody) {
-        this.messageBody = cast(ubyte[]) messageBody;
-        return this;
+    public void flushHeaders() {
+        if (flushed) return;
+        auto app = appender!string;
+        app ~= format!"HTTP/1.1 %d %s\r\n"(this.status, this.statusText);
+        foreach (name, value; this.headers) {
+            app ~= format!"%s: %s\r\n"(name, value);
+        }
+        app ~= "\r\n";
+        ubyte[] data = cast(ubyte[]) app[];
+        auto sent = this.clientSocket.send(data);
+        if (sent == Socket.ERROR) throw new Exception("Socket error occurred while writing status and headers.");
     }
 
     /** 
-     * Converts this response to a byte array in HTTP format.
-     * Returns: A byte array containing the response content.
+     * Writes the given string content to the body of the response. If this
+     * response has not yet written its status line and headers, it will do
+     * that first.
+     * Params:
+     *   body = The content to write.
      */
-    public ubyte[] toBytes() {
-        auto a = appender!(ubyte[]);
-        auto statusLine = format!"HTTP/1.1 %d %s\r\n"(status, statusText);
-        a ~= cast(ubyte[]) statusLine;
-        if (messageBody.length > 0) {
-            headers["Content-Length"] = messageBody.length.to!string;
-        }
-        foreach (name, value; headers) {
-            a ~= cast(ubyte[]) (name ~ ": " ~ value ~ "\r\n");
-        }
-        a ~= cast(ubyte[]) "\r\n";
-        if (messageBody.length > 0) {
-            a ~= messageBody;
-        }
-        return a[];
+    public void writeBody(string body) {
+        if (!flushed) addHeader("Content-Length", body.length.to!string);
+        flushHeaders();
+        auto sent = this.clientSocket.send(cast(ubyte[]) body);
+        if (sent == Socket.ERROR) throw new Exception("Socket error occurred while writing body.");
     }
 }

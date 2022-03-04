@@ -4,7 +4,8 @@
 module handy_httpd.request;
 
 import std.socket : Socket;
-import handy_httpd.server;
+import handy_httpd.server: HttpServer;
+import handy_httpd.response : HttpResponse;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can

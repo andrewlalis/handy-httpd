@@ -162,9 +162,11 @@ class HttpServer {
                 request.clientSocket = clientSocket;
                 if (verbose) writefln!"<- %s %s"(request.method, request.url);
                 try {
-                    auto response = this.handler.handle(request);
-                    clientSocket.send(response.toBytes());
-                    if (verbose) writefln!"\t-> %d %s"(response.status, response.statusText);
+                    HttpResponse response;
+                    response.status = 200;
+                    response.statusText = "OK";
+                    response.clientSocket = clientSocket;
+                    this.handler.handle(request, response);
                 } catch (Exception e) {
                     writefln!"An error occurred while handling a request: %s"(e.msg);
                 }
