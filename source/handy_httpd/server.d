@@ -6,11 +6,17 @@ module handy_httpd.server;
 import std.stdio;
 import std.socket;
 import std.regex;
+import std.container.dlist : DList;
+import core.sync.semaphore : Semaphore;
+import core.atomic : atomicLoad;
+import core.thread.threadgroup : ThreadGroup;
 
 import handy_httpd.request;
 import handy_httpd.response;
 import handy_httpd.handler;
-import handy_httpd.worker;
+import handy_httpd.parse_utils : parseRequest, Msg;
+
+import httparsed : MsgParser, initParser;
 
 /** 
  * A simple HTTP server that accepts requests on a given port and address, and
@@ -21,11 +27,13 @@ class HttpServer {
     private Address address;
     private size_t receiveBufferSize;
     private int connectionQueueSize;
+    private size_t workerPoolSize;
     private bool verbose;
     private HttpRequestHandler handler;
-    private bool ready = false;
+    private shared bool ready = false;
     private Socket serverSocket = null;
-    private HttpServerWorker[] workers;
+    private Semaphore requestSemaphore;
+    private DList!Socket requestQueue;
 
     this(
         HttpRequestHandler handler = noOpHandler(),
@@ -39,14 +47,9 @@ class HttpServer {
         this.address = parseAddress(hostname, port);
         this.receiveBufferSize = receiveBufferSize;
         this.connectionQueueSize = connectionQueueSize;
+        this.workerPoolSize = workerPoolSize;
         this.verbose = verbose;
         this.handler = handler;
-
-        this.workers.length = workerPoolSize;
-        for (size_t i = 0; i < workerPoolSize; i++) {
-            this.workers[i] = new HttpServerWorker(receiveBufferSize);
-            this.workers[i].start(); // Start all workers so their threads are spawned and ready for requests.
-        }
     }
 
     /**
@@ -72,37 +75,28 @@ class HttpServer {
         serverSocket.bind(this.address);
         if (this.verbose) writefln!"Bound to address %s"(this.address);
         serverSocket.listen(this.connectionQueueSize);
-        if (this.verbose) writeln("Now accepting connections.");
         this.ready = true;
+
+        // Initialize worker threads.
+        this.requestSemaphore = new Semaphore();
+        ThreadGroup tg = new ThreadGroup();
+        for (int i = 0; i < this.workerPoolSize; i++) {
+            tg.create(&workerThreadFunction);
+        }
+
+        if (this.verbose) writeln("Now accepting connections.");
         while (serverSocket.isAlive()) {
             Socket clientSocket = serverSocket.accept();
-            HttpServerWorker worker = getBestWorker();
-            worker.queueRequest(clientSocket, this, this.handler);
-            worker.start();
+            this.requestQueue.insertBack(clientSocket);
+            this.requestSemaphore.notify();
         }
         this.ready = false;
-    }
-
-    /** 
-     * Searches for the best worker in our pool to handle the next request.
-     * Generally, this is the first available worker that's not running and has
-     * nothing in its queue, but if we're busy, we choose the worker whose
-     * queue is the smallest.
-     * Returns: The best worker to handle the next request.
-     */
-    private HttpServerWorker getBestWorker() {
-        ubyte minQueueSize = 255;
-        HttpServerWorker bestWorker = null;
-        foreach (i, worker; this.workers) {
-            // Quickly find best worker.
-            if (!worker.isRunning() && worker.getQueueSize() == 0) return worker;
-            if (worker.getQueueSize() < minQueueSize) {
-                minQueueSize = worker.getQueueSize();
-                bestWorker = worker;
-            }
+        
+        // Shutdown worker threads. We call notify() one last time to stop them waiting.
+        for (int i = 0; i < this.workerPoolSize; i++) {
+            this.requestSemaphore.notify();
         }
-        if (bestWorker is null) throw new Exception("No available worker!");
-        return bestWorker;
+        tg.joinAll();
     }
 
     /** 
@@ -113,9 +107,6 @@ class HttpServer {
         if (verbose) writeln("Stopping the server.");
         if (serverSocket !is null) {
             serverSocket.close();
-        }
-        foreach (i, worker; this.workers) {
-            worker.join(false);
         }
     }
 
@@ -145,5 +136,42 @@ class HttpServer {
      */
     public bool isVerbose() {
         return this.verbose;
+    }
+
+    /** 
+     * Worker function that runs for all worker threads that process incoming
+     * requests. Workers will wait for the requestSemaphore to be notified so
+     * that they can process a request. The worker will stay alive as long as
+     * this server is set as ready.
+     */
+    private void workerThreadFunction() {
+        MsgParser!Msg requestParser = initParser!Msg();
+        ubyte[] receiveBuffer = new ubyte[this.receiveBufferSize];
+        while (atomicLoad(this.ready)) {
+            this.requestSemaphore.wait();
+            if (!this.requestQueue.empty) {
+                Socket clientSocket = this.requestQueue.removeAny();
+                auto received = clientSocket.receive(receiveBuffer);
+                if (received == 0 || received == Socket.ERROR) {
+                    continue; // Skip if we didn't receive valid data.
+                }
+                string data = cast(string) receiveBuffer[0..received];
+                requestParser.msg.reset();
+                auto request = parseRequest(requestParser, data);
+                request.server = this;
+                request.clientSocket = clientSocket;
+                if (verbose) writefln!"<- %s %s"(request.method, request.url);
+                try {
+                    HttpResponse response;
+                    response.status = 200;
+                    response.statusText = "OK";
+                    response.clientSocket = clientSocket;
+                    this.handler.handle(request, response);
+                } catch (Exception e) {
+                    writefln!"An error occurred while handling a request: %s"(e.msg);
+                }
+                clientSocket.close();
+            }
+        }
     }
 }

@@ -3,7 +3,9 @@
  */
 module handy_httpd.request;
 
-import handy_httpd.server;
+import std.socket : Socket;
+import handy_httpd.server: HttpServer;
+import handy_httpd.response : HttpResponse;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
@@ -46,4 +48,10 @@ struct HttpRequest {
      * A reference to the HttpServer that is handling this request.
      */
     public HttpServer server;
+
+    /** 
+     * The underlying socket that the request was received from, and to which
+     * the response will be written.
+     */
+    public Socket clientSocket;
 }

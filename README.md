@@ -1,34 +1,32 @@
 # handy-httpd
 
-An extremely lightweight HTTP server for the [D programming language](https://dlang.org/). Handy-httpd uses a simple worker pool to process incoming requests, in conjunction with a user-defined `HttpRequestHandler`. Consider the following example in which we serve files from the `./static/` directory:
+An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
+For a complete overview, please visit [the wiki](https://github.com/andrewlalis/handy-httpd/wiki).
+
+Here's an example of serving static files from a directory:
 ```d
 import handy_httpd;
 import handy_httpd.handlers.file_resolving_handler;
 
 void main() {
-	auto s = new HttpServer(new FileResolvingHandler("static"));
-	s.start();
+	new HttpServer(new FileResolvingHandler("static")).start();
 }
 ```
 
 It's also quite simple to define your own custom request handler. Here's an example of a custom request handler that only responds to the `/hello` endpoint:
-
 ```d
 import handy_httpd;
+import handy_httpd.responses;
 
 void main() {
-	auto s = new HttpServer(simpleHandler((request) {
+	auto s = new HttpServer(simpleHandler((ref request, ref response) {
 		if (request.url == "/hello") {
-			return okResponse()
-				.setBody("Hello world!");
+			response.writeBody("Hello world!");
 		} else {
-			return notFound();
+			response.notFound();
 		}
 	}));
 	s.start();
 }
 ```
-> Note: the `HttpRequestHandler simpleHandler(HttpResponse function(HttpRequest) fn)` function allows you to pass a function as a request handler. Internally, it's using an anonymous class.
-
-For more information, please check out the [wiki on GitHub](https://github.com/andrewlalis/handy-httpd/wiki).

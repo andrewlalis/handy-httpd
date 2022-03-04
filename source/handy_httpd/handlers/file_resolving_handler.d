@@ -53,18 +53,19 @@ class FileResolvingHandler : HttpRequestHandler {
         ];
     }
 
-    HttpResponse handle(HttpRequest request) {
+    void handle(ref HttpRequest request, ref HttpResponse response) {
         if (request.server.isVerbose()) {
             writefln!"Resolving file for url %s..."(request.url);
         }
         string path = sanitizeRequestPath(request.url);
-        if (path == null) {
+        if (path != null) {
+            response.fileResponse(path, getMimeType(path));
+        } else {
             if (request.server.isVerbose()) {
                 writefln!"Could not resolve file for url %s. Maybe it doesn't exist?"(request.url);
             }
-            return notFound();
+            response.notFound();
         }
-        return fileResponse(path, getMimeType(path));
     }
 
     /** 
