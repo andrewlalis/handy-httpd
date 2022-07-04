@@ -36,7 +36,7 @@ class PathDelegatingHandler : HttpRequestHandler {
     void handle(ref HttpRequest request, ref HttpResponse response) {
         foreach (pattern, handler; handlers) {
             if (pathMatches(pattern, request.url)) {
-                if (request.server.isVerbose()) {
+                if (request.server.verbose) {
                     writefln!"Found matching handler for url %s (pattern: %s)"(request.url, pattern);
                 }
                 request.pathParams = parsePathParams(pattern, request.url);
@@ -44,7 +44,7 @@ class PathDelegatingHandler : HttpRequestHandler {
                 return; // Exit once we handle the request.
             }
         }
-        if (request.server.isVerbose()) {
+        if (request.server.verbose) {
             writefln!"No matching handler found for url %s"(request.url);
         }
         response.notFound();
@@ -53,6 +53,7 @@ class PathDelegatingHandler : HttpRequestHandler {
 
 unittest {
     import handy_httpd.server;
+    import handy_httpd.server_config;
     import handy_httpd.responses;
     import core.thread;
 
@@ -61,7 +62,9 @@ unittest {
         .addPath("/users", simpleHandler((ref request, ref response) {response.okResponse();}))
         .addPath("/users/{id}", simpleHandler((ref request, ref response) {response.okResponse();}));
 
-    HttpServer server = new HttpServer(handler).setVerbose(true);
+    ServerConfig config = ServerConfig.defaultValues();
+    config.verbose = true;
+    HttpServer server = new HttpServer(handler, config);
     new Thread(() {server.start();}).start();
     while (!server.isReady()) Thread.sleep(msecs(10));
 

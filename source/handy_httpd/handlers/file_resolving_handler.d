@@ -54,14 +54,14 @@ class FileResolvingHandler : HttpRequestHandler {
     }
 
     void handle(ref HttpRequest request, ref HttpResponse response) {
-        if (request.server.isVerbose()) {
+        if (request.server.verbose) {
             writefln!"Resolving file for url %s..."(request.url);
         }
         string path = sanitizeRequestPath(request.url);
         if (path != null) {
             response.fileResponse(path, getMimeType(path));
         } else {
-            if (request.server.isVerbose()) {
+            if (request.server.verbose) {
                 writefln!"Could not resolve file for url %s. Maybe it doesn't exist?"(request.url);
             }
             response.notFound();

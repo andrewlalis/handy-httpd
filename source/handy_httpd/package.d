@@ -1,6 +1,7 @@
 module handy_httpd;
 
 public import handy_httpd.server;
+public import handy_httpd.server_config;
 public import handy_httpd.request;
 public import handy_httpd.response;
 public import handy_httpd.handler;
@@ -20,6 +21,10 @@ unittest {
      * Returns: A simple HTTP server for testing.
      */
     HttpServer getSimpleServer() {
+        ServerConfig config = ServerConfig.defaultValues();
+        config.port = PORT;
+        config.verbose = true;
+        config.workerPoolSize = 10;
         auto s = new HttpServer(
             simpleHandler((ref request, ref response) {
                 if (request.method == "GET") {
@@ -28,12 +33,7 @@ unittest {
                     response.methodNotAllowed();
                 }
             }),
-            "127.0.0.1",
-            PORT,
-            8192,
-            100,
-            true,
-            10
+            config
         );
         // Start up the server in its own thread.
         new Thread(() {s.start();}).start();

@@ -14,6 +14,7 @@ import core.thread.threadgroup : ThreadGroup;
 import handy_httpd.request;
 import handy_httpd.response;
 import handy_httpd.handler;
+import handy_httpd.server_config;
 import handy_httpd.parse_utils : parseRequest, Msg;
 
 import httparsed : MsgParser, initParser;
@@ -24,44 +25,44 @@ import httparsed : MsgParser, initParser;
  * client.
  */
 class HttpServer {
+    public ServerConfig config;
     private Address address;
-    private size_t receiveBufferSize;
-    private int connectionQueueSize;
-    private size_t workerPoolSize;
-    private bool verbose;
     private HttpRequestHandler handler;
     private shared bool ready = false;
     private Socket serverSocket = null;
     private Semaphore requestSemaphore;
     private DList!Socket requestQueue;
+    private ThreadGroup workerThreadGroup;
 
+    /** 
+     * Constructs a new server using the supplied handler to handle all
+     * incoming requests.
+     * Params:
+     *   handler = The handler to handle all requests.
+     *   config = The server configuration.
+     */
     this(
         HttpRequestHandler handler = noOpHandler(),
-        string hostname = "127.0.0.1",
-        ushort port = 8080,
-        size_t receiveBufferSize = 8192,
-        int connectionQueueSize = 100,
-        bool verbose = false,
-        size_t workerPoolSize = 25
+        ServerConfig config = ServerConfig.defaultValues
     ) {
-        this.address = parseAddress(hostname, port);
-        this.receiveBufferSize = receiveBufferSize;
-        this.connectionQueueSize = connectionQueueSize;
-        this.workerPoolSize = workerPoolSize;
-        this.verbose = verbose;
+        this.config = config;
+        this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
     }
 
-    /**
-     * Will be called before the socket is bound to the address. One can set
-     * special socket options in here by overriding it. 
-     * 
-     * Note: one application would be to add SocketOption.REUSEADDR, in 
-     * order to prevent long TIME_WAIT states preventing quick restarts 
-     * of the server after termination on some systems. Learn more about it
-     * here: https://stackoverflow.com/a/14388707.
+    /** 
+     * Constructs a new server using the supplied handler function to handle
+     * all incoming requests.
+     * Params:
+     *   handlerFunc = The function to use to handle requests.
+     *   config = The server configuration.
      */
-    protected void configurePreBind(Socket socket) {}
+    this(
+        void function(ref HttpRequest request, ref HttpResponse response) handlerFunc,
+        ServerConfig config = ServerConfig.defaultValues
+    ) {
+        this(simpleHandler(handlerFunc), config);
+    }
 
     /** 
      * Starts the server on the calling thread, so that it will begin accepting
@@ -70,33 +71,25 @@ class HttpServer {
      * calling `stop()`.
      */
     public void start() {
-        serverSocket = new TcpSocket();
-        configurePreBind(serverSocket);
-        serverSocket.bind(this.address);
-        if (this.verbose) writefln!"Bound to address %s"(this.address);
-        serverSocket.listen(this.connectionQueueSize);
+        this.serverSocket = new TcpSocket();
+        foreach (socketConfigFunction; this.config.preBindCallbacks) {
+            socketConfigFunction(this.serverSocket);
+        }
+        this.serverSocket.bind(this.address);
+        if (this.config.verbose) writefln!"Bound to address %s"(this.address);
+        this.serverSocket.listen(this.config.connectionQueueSize);
+        initWorkerThreads();
         this.ready = true;
 
-        // Initialize worker threads.
-        this.requestSemaphore = new Semaphore();
-        ThreadGroup tg = new ThreadGroup();
-        for (int i = 0; i < this.workerPoolSize; i++) {
-            tg.create(&workerThreadFunction);
-        }
-
-        if (this.verbose) writeln("Now accepting connections.");
-        while (serverSocket.isAlive()) {
-            Socket clientSocket = serverSocket.accept();
+        if (this.config.verbose) writeln("Now accepting connections.");
+        while (this.serverSocket.isAlive()) {
+            Socket clientSocket = this.serverSocket.accept();
             this.requestQueue.insertBack(clientSocket);
             this.requestSemaphore.notify();
         }
         this.ready = false;
         
-        // Shutdown worker threads. We call notify() one last time to stop them waiting.
-        for (int i = 0; i < this.workerPoolSize; i++) {
-            this.requestSemaphore.notify();
-        }
-        tg.joinAll();
+        shutdownWorkerThreads();
     }
 
     /** 
@@ -104,9 +97,9 @@ class HttpServer {
      * will block until all pending requests have been fulfilled.
      */
     public void stop() {
-        if (verbose) writeln("Stopping the server.");
-        if (serverSocket !is null) {
-            serverSocket.close();
+        if (this.config.verbose) writeln("Stopping the server.");
+        if (this.serverSocket !is null) {
+            this.serverSocket.close();
         }
     }
 
@@ -115,27 +108,30 @@ class HttpServer {
      * Returns: Whether the server is ready to receive requests.
      */
     public bool isReady() {
-        return ready;
+        return this.ready;
     }
 
     /** 
-     * Sets the server's verbosity, which determines whether detailed log
-     * messages are printed during runtime.
-     * Params:
-     *   verbose = Whether to enable verbose output.
-     * Returns: The server instance, for method chaining.
+     * Spawns all worker threads in a new thread group, and initializes the
+     * semaphore that they will use to be notified of work to do.
      */
-    public HttpServer setVerbose(bool verbose) {
-        this.verbose = verbose;
-        return this;
+    private void initWorkerThreads() {
+        this.requestSemaphore = new Semaphore();
+        this.workerThreadGroup = new ThreadGroup();
+        for (int i = 0; i < this.config.workerPoolSize; i++) {
+            this.workerThreadGroup.create(&workerThreadFunction);
+        }
     }
 
     /** 
-     * Tells whether the server will give verbose output.
-     * Returns: Whether the server is set to give verbose output.
+     * Shuts down all worker threads by sending one final semaphore notification
+     * to all of them.
      */
-    public bool isVerbose() {
-        return this.verbose;
+    private void shutdownWorkerThreads() {
+        for (int i = 0; i < this.config.workerPoolSize; i++) {
+            this.requestSemaphore.notify();
+        }
+        this.workerThreadGroup.joinAll();
     }
 
     /** 
@@ -146,7 +142,7 @@ class HttpServer {
      */
     private void workerThreadFunction() {
         MsgParser!Msg requestParser = initParser!Msg();
-        ubyte[] receiveBuffer = new ubyte[this.receiveBufferSize];
+        ubyte[] receiveBuffer = new ubyte[this.config.receiveBufferSize];
         while (atomicLoad(this.ready)) {
             this.requestSemaphore.wait();
             if (!this.requestQueue.empty) {
@@ -166,6 +162,9 @@ class HttpServer {
                     response.status = 200;
                     response.statusText = "OK";
                     response.clientSocket = clientSocket;
+                    foreach (headerName, headerValue; this.config.defaultHeaders) {
+                        response.addHeader(headerName, headerValue);
+                    }
                     this.handler.handle(request, response);
                 } catch (Exception e) {
                     writefln!"An error occurred while handling a request: %s"(e.msg);
@@ -173,5 +172,13 @@ class HttpServer {
                 clientSocket.close();
             }
         }
+    }
+
+    /** 
+     * Shortcut for checking if a server is configured for verbose output.
+     * Returns: Whether the server is configured for verbose output.
+     */
+    public bool verbose() {
+        return this.config.verbose;
     }
 }
