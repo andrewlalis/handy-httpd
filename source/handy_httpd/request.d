@@ -45,6 +45,12 @@ struct HttpRequest {
     public string[string] pathParams;
 
     /** 
+     * A string containing the body content of the request. This may be null,
+     * if the request doesn't have a body.
+     */
+    public string bodyContent;
+
+    /** 
      * A reference to the HttpServer that is handling this request.
      */
     public HttpServer server;
@@ -54,4 +60,24 @@ struct HttpRequest {
      * the response will be written.
      */
     public Socket clientSocket;
+
+    /** 
+     * Determines if this request has a non-empty body.
+     * Returns: True if this request's body is not null, and not empty.
+     */
+    public bool hasBody() {
+        return bodyContent !is null && bodyContent.length > 0;
+    }
+
+    import std.json;
+
+    /** 
+     * Gets the body of this request as a JSON value.
+     * Returns: The parsed JSONValue representing the body. If the body is
+     * empty, an empty JSON object is returned.
+     */
+    public JSONValue bodyAsJson() {
+        if (!hasBody) return JSONValue(string[string].init);
+        return parseJSON(bodyContent);
+    }
 }

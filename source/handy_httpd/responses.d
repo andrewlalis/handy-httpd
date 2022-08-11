@@ -17,6 +17,22 @@ void okResponse(ref HttpResponse response) {
 }
 
 /** 
+ * Convenience method to prepare a 200 OK response with a body.
+ * Params:
+ *   response = The HTTP response to write to.
+ *   bodyContent = The body of the response.
+ *   contentType = The content type of the body.
+ */
+void okResponse(ref HttpResponse response, string bodyContent, string contentType = "text/plain") {
+    import std.conv : to;
+    response.setStatus(200).setStatusText("OK");
+    response.addHeader("Content-Type", contentType);
+    response.addHeader("Content-Length", bodyContent.length.to!string);
+    response.flushHeaders();
+    response.clientSocket.send(bodyContent);
+}
+
+/** 
  * Convenience method to send a file response to a request.
  * Params:
  *   response = The HTTP response to write to.

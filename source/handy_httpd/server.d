@@ -72,6 +72,9 @@ class HttpServer {
      */
     public void start() {
         this.serverSocket = new TcpSocket();
+        if (this.config.reuseAddress) {
+            this.serverSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+        }
         foreach (socketConfigFunction; this.config.preBindCallbacks) {
             socketConfigFunction(this.serverSocket);
         }

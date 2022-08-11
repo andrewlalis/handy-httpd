@@ -1,0 +1,14 @@
+{
+	"authors": [
+		"Andrew Lalis"
+	],
+	"dependencies": {
+		"handy-httpd": {
+			"path": "../../"
+		}
+	},
+	"copyright": "Copyright © 2022, Andrew Lalis",
+	"description": "A minimal D application.",
+	"license": "MIT",
+	"name": "upload_test"
+}

@@ -46,6 +46,11 @@ struct ServerConfig {
     SocketConfigureFunction[] preBindCallbacks;
 
     /** 
+     * Whether to set the REUSEADDR flag for the socket.
+     */
+    bool reuseAddress;
+
+    /** 
      * A set of default headers that are added to all HTTP responses.
      */
     string[string] defaultHeaders;
@@ -56,6 +61,7 @@ struct ServerConfig {
         cfg.port = 8080;
         cfg.receiveBufferSize = 8192;
         cfg.connectionQueueSize = 100;
+        cfg.reuseAddress = true;
         cfg.verbose = false;
         cfg.workerPoolSize = 25;
         return cfg;

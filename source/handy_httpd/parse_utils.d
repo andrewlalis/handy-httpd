@@ -69,22 +69,25 @@ public struct Msg {
 public HttpRequest parseRequest(MsgParser!Msg requestParser, string s) {
     // requestParser.msg.m_headersLength = 0; // Reset the parser headers.
     int result = requestParser.parseRequest(s);
-    if (result != s.length) {
-        throw new Exception("Error! parse result doesn't match length. " ~ result.to!string);
-    }
     string[string] headers;
     foreach (h; requestParser.headers) {
         headers[h.name] = cast(string) h.value;
     }
     string rawUrl = decode(cast(string) requestParser.uri);
     auto urlAndParams = parseUrlAndParams(rawUrl);
+    string bodyContent = null;
+    if (result < s.length) {
+        bodyContent = s[result .. $];
+    }
 
     return HttpRequest(
         cast(string) requestParser.method,
         urlAndParams[0],
         requestParser.minorVer,
         headers,
-        urlAndParams[1]
+        urlAndParams[1],
+        null,
+        bodyContent
     );
 }
 
