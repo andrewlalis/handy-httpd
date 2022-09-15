@@ -6,6 +6,7 @@ module handy_httpd.server;
 import std.stdio;
 import std.socket;
 import std.regex;
+import std.conv : to, ConvException;
 import std.container.dlist : DList;
 import core.sync.semaphore : Semaphore;
 import core.atomic : atomicLoad;
@@ -145,7 +146,7 @@ class HttpServer {
      */
     private void workerThreadFunction() {
         MsgParser!Msg requestParser = initParser!Msg();
-        ubyte[] receiveBuffer = new ubyte[this.config.receiveBufferSize];
+        char[] receiveBuffer = new char[this.config.receiveBufferSize];
         while (atomicLoad(this.ready)) {
             this.requestSemaphore.wait();
             if (!this.requestQueue.empty) {
@@ -154,9 +155,25 @@ class HttpServer {
                 if (received == 0 || received == Socket.ERROR) {
                     continue; // Skip if we didn't receive valid data.
                 }
-                string data = cast(string) receiveBuffer[0..received];
+                string data = receiveBuffer[0..received].idup;
                 requestParser.msg.reset();
                 auto request = parseRequest(requestParser, data);
+                
+                const(string*) pcontentLength = "Content-Length" in request.headers;
+                if(pcontentLength !is null) {
+                    try {
+                        size_t contentLength = (*pcontentLength).to!size_t;
+                        size_t recivedTotal = request.bodyContent.length;
+                        while(recivedTotal < contentLength && received > 0) {
+                            received = clientSocket.receive(receiveBuffer);
+                            recivedTotal += received;
+                            request.bodyContent ~= receiveBuffer[0..received].idup;
+                        }
+                    } catch(ConvException e) {
+                        if (verbose) writefln!"Content-Length is not a number: %s"(e.msg);
+                    }
+                }
+
                 request.server = this;
                 request.clientSocket = clientSocket;
                 if (verbose) writefln!"<- %s %s"(request.method, request.url);
