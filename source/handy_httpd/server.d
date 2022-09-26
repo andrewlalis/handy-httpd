@@ -159,14 +159,15 @@ class HttpServer {
                 requestParser.msg.reset();
                 auto request = parseRequest(requestParser, data);
                 
+                // Use the Content-Length header to try and continue reading the rest of the body.
                 const(string*) pcontentLength = "Content-Length" in request.headers;
                 if(pcontentLength !is null) {
                     try {
                         size_t contentLength = (*pcontentLength).to!size_t;
-                        size_t recivedTotal = request.bodyContent.length;
-                        while(recivedTotal < contentLength && received > 0) {
+                        size_t receivedTotal = request.bodyContent.length;
+                        while (receivedTotal < contentLength && received > 0) {
                             received = clientSocket.receive(receiveBuffer);
-                            recivedTotal += received;
+                            receivedTotal += received;
                             request.bodyContent ~= receiveBuffer[0..received].idup;
                         }
                     } catch(ConvException e) {
