@@ -35,39 +35,49 @@ struct HttpResponse {
     private bool flushed = false;
 
     /** 
-     * Sets the status of the response.
+     * Sets the status of the response. This can only be done before headers
+     * are flushed.
      * Params:
      *   status = The status code.
      * Returns: The response object, for method chaining.
      */
     public HttpResponse setStatus(ushort status) {
+        if (flushed) throw new Exception("Cannot modify header after it's been flushed.");
         this.status = status;
         return this;
     }
 
     /** 
-     * Sets the status text of the response.
+     * Sets the status text of the response. This can only be done before
+     * headers are flushed.
      * Params:
      *   statusText = The status text.
      * Returns: The response object, for method chaining.
      */
     public HttpResponse setStatusText(string statusText) {
+        if (flushed) throw new Exception("Cannot modify header after it's been flushed.");
         this.statusText = statusText;
         return this;
     }
 
     /** 
-     * Adds a header to the response.
+     * Adds a header to the response. This can only be done before headers are
+     * flushed.
      * Params:
      *   name = The name of the header.
      *   value = The value to set for the header.
      * Returns: The response object, for method chaining.
      */
     public HttpResponse addHeader(string name, string value) {
+        if (flushed) throw new Exception("Cannot modify header after it's been flushed.");
         this.headers[name] = value;
         return this;
     }
 
+    /** 
+     * Flushes the headers for this request, sending them on the socket to the
+     * client. Once this is done, header information can no longer be modified.
+     */
     public void flushHeaders() {
         if (flushed) return;
         auto app = appender!string;
@@ -79,6 +89,7 @@ struct HttpResponse {
         ubyte[] data = cast(ubyte[]) app[];
         auto sent = this.clientSocket.send(data);
         if (sent == Socket.ERROR) throw new Exception("Socket error occurred while writing status and headers.");
+        flushed = true;
     }
 
     /** 
@@ -93,5 +104,13 @@ struct HttpResponse {
         flushHeaders();
         auto sent = this.clientSocket.send(cast(ubyte[]) body);
         if (sent == Socket.ERROR) throw new Exception("Socket error occurred while writing body.");
+    }
+
+    /** 
+     * Tells whether the header of this response has already been flushed.
+     * Returns: Whether the response headers have been flushed.
+     */
+    public bool isFlushed() {
+        return flushed;
     }
 }

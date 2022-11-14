@@ -1,11 +1,10 @@
 module handy_httpd.handlers.file_resolving_handler;
 
-import std.stdio;
-
 import handy_httpd.handler;
 import handy_httpd.request;
 import handy_httpd.response;
 import handy_httpd.responses;
+import handy_httpd.logger;
 
 /** 
  * Request handler that resolves files within a given base path.
@@ -54,16 +53,13 @@ class FileResolvingHandler : HttpRequestHandler {
     }
 
     void handle(ref HttpRequest request, ref HttpResponse response) {
-        if (request.server.verbose) {
-            writefln!"Resolving file for url %s..."(request.url);
-        }
+        auto log = request.server.getLogger();
+        log.infoF!"Resolving file for url %s..."(request.url);
         string path = sanitizeRequestPath(request.url);
         if (path != null) {
-            response.fileResponse(path, getMimeType(path));
+            response.fileResponse(path, getMimeType(path, log));
         } else {
-            if (request.server.verbose) {
-                writefln!"Could not resolve file for url %s. Maybe it doesn't exist?"(request.url);
-            }
+            log.infoFV!"Could not resolve file for url %s. Maybe it doesn't exist?"(request.url);
             response.notFound();
         }
     }
@@ -109,16 +105,17 @@ class FileResolvingHandler : HttpRequestHandler {
     * files of an unknown type.
     * Params:
     *   filename = The name of the file to determine mime type for.
+    *   log = The logger to use, in case of errors.
     * Returns: A mime type string.
     */
-    private string getMimeType(string filename) {
+    private string getMimeType(string filename, ServerLogger log) {
         import std.string : lastIndexOf;
         import std.uni : toLower;
         auto p = filename.lastIndexOf('.');
         if (p == -1) return "text/html";
         string extension = filename[p..$].toLower();
         if (extension !in this.mimeTypes) {
-            writefln!"Warning: Unknown mime type for file extension %s"(extension);
+            log.infoFV!"Warning: Unknown mime type for file extension %s"(extension);
             return "text/plain";
         }
         return this.mimeTypes[extension];

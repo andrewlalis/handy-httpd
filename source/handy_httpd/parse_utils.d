@@ -6,7 +6,6 @@ module handy_httpd.parse_utils;
 import std.typecons;
 import std.conv;
 import std.array;
-import std.stdio;
 import std.string;
 import std.algorithm;
 import std.uri;

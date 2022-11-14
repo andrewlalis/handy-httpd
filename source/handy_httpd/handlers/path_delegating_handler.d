@@ -1,7 +1,5 @@
 module handy_httpd.handlers.path_delegating_handler;
 
-import std.stdio;
-
 import handy_httpd.handler;
 import handy_httpd.request;
 import handy_httpd.response;
@@ -17,8 +15,17 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     private HttpRequestHandler[string] handlers;
 
+    /** 
+     * A handler to delegate to when no matching handler is found for a
+     * request. Defaults to a simple 404 response.
+     */
+    private HttpRequestHandler notFoundHandler;
+
     this(HttpRequestHandler[string] handlers = null) {
         this.handlers = handlers;
+        this.notFoundHandler = simpleHandler((ref HttpRequest req, ref HttpResponse resp) {
+            resp.notFound();
+        });
     }
 
     /** 
@@ -33,21 +40,39 @@ class PathDelegatingHandler : HttpRequestHandler {
         return this;
     }
 
+    /** 
+     * Sets a handler to use when no matching handler was found for a request's
+     * path.
+     * Params:
+     *   handler = The handler to use. It should not be null.
+     * Returns: This handler, for method chaining.
+     */
+    public PathDelegatingHandler setNotFoundHandler(HttpRequestHandler handler) {
+        if (handler is null) throw new Exception("Cannot set notFoundHandler to null.");
+        this.notFoundHandler = handler;
+        return this;
+    }
+
+    /** 
+     * Handles an incoming request by delegating to the first registered
+     * handler that matches the request's url path. If no handler is found,
+     * a 404 NOT FOUND response is sent by default.
+     * Params:
+     *   request = The HTTP request.
+     *   response = The HTTP response.
+     */
     void handle(ref HttpRequest request, ref HttpResponse response) {
+        auto log = request.server.getLogger();
         foreach (pattern, handler; handlers) {
             if (pathMatches(pattern, request.url)) {
-                if (request.server.verbose) {
-                    writefln!"Found matching handler for url %s (pattern: %s)"(request.url, pattern);
-                }
+                log.infoFV!"Found matching handler for url %s (pattern: %s)"(request.url, pattern);
                 request.pathParams = parsePathParams(pattern, request.url);
                 handler.handle(request, response);
                 return; // Exit once we handle the request.
             }
         }
-        if (request.server.verbose) {
-            writefln!"No matching handler found for url %s"(request.url);
-        }
-        response.notFound();
+        log.infoFV!"No matching handler found for url %s"(request.url);
+        notFoundHandler.handle(request, response);
     }
 }
 

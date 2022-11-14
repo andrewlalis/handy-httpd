@@ -3,7 +3,6 @@
  */
 module handy_httpd.server;
 
-import std.stdio;
 import std.socket;
 import std.regex;
 import std.conv : to, ConvException;
@@ -17,6 +16,7 @@ import handy_httpd.response;
 import handy_httpd.handler;
 import handy_httpd.server_config;
 import handy_httpd.parse_utils : parseRequest, Msg;
+import handy_httpd.logger;
 
 import httparsed : MsgParser, initParser;
 
@@ -26,14 +26,56 @@ import httparsed : MsgParser, initParser;
  * client.
  */
 class HttpServer {
+    /** 
+     * The server's configuration values.
+     */
     public ServerConfig config;
+
+    /** 
+     * The address to which this server is bound.
+     */
     private Address address;
+
+    /** 
+     * The handler that all requests will be delegated to.
+     */
     private HttpRequestHandler handler;
+
+    /** 
+     * An exception handler to use when an exception occurs.
+     */
+    private ServerExceptionHandler exceptionHandler;
+
+    /** 
+     * Internal flag that indicates when we're ready to accept connections.
+     */
     private shared bool ready = false;
+
+    /** 
+     * The server socket that accepts connections.
+     */
     private Socket serverSocket = null;
+
+    /** 
+     * A semaphore that's used to coordinate worker threads so that they can
+     * each take from the request queue.
+     */
     private Semaphore requestSemaphore;
+
+    /** 
+     * The queue of requests to process, from which worker threads will pull.
+     */
     private DList!Socket requestQueue;
+
+    /** 
+     * The group of worker threads that will process requests.
+     */
     private ThreadGroup workerThreadGroup;
+
+    /** 
+     * The server's logger.
+     */
+    private ServerLogger log;
 
     /** 
      * Constructs a new server using the supplied handler to handle all
@@ -49,6 +91,8 @@ class HttpServer {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
+        this.log = ServerLogger(&this.config);
+        this.exceptionHandler = new BasicServerExceptionHandler();
     }
 
     /** 
@@ -80,12 +124,12 @@ class HttpServer {
             socketConfigFunction(this.serverSocket);
         }
         this.serverSocket.bind(this.address);
-        if (this.config.verbose) writefln!"Bound to address %s"(this.address);
+        log.infoFV!"Bound to address %s"(this.address);
         this.serverSocket.listen(this.config.connectionQueueSize);
         initWorkerThreads();
         this.ready = true;
 
-        if (this.config.verbose) writeln("Now accepting connections.");
+        log.infoV("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
             Socket clientSocket = this.serverSocket.accept();
             this.requestQueue.insertBack(clientSocket);
@@ -101,7 +145,7 @@ class HttpServer {
      * will block until all pending requests have been fulfilled.
      */
     public void stop() {
-        if (this.config.verbose) writeln("Stopping the server.");
+        log.infoV("Stopping the server.");
         if (this.serverSocket !is null) {
             this.serverSocket.close();
         }
@@ -171,24 +215,24 @@ class HttpServer {
                             request.bodyContent ~= receiveBuffer[0..received].idup;
                         }
                     } catch(ConvException e) {
-                        if (verbose) writefln!"Content-Length is not a number: %s"(e.msg);
+                        log.infoFV!"Content-Length is not a number: %s"(e.msg);
                     }
                 }
 
                 request.server = this;
                 request.clientSocket = clientSocket;
-                if (verbose) writefln!"<- %s %s"(request.method, request.url);
+                log.infoFV!"<- %s %s"(request.method, request.url);
+                HttpResponse response;
+                response.status = 200;
+                response.statusText = "OK";
+                response.clientSocket = clientSocket;
+                foreach (headerName, headerValue; this.config.defaultHeaders) {
+                    response.addHeader(headerName, headerValue);
+                }
                 try {
-                    HttpResponse response;
-                    response.status = 200;
-                    response.statusText = "OK";
-                    response.clientSocket = clientSocket;
-                    foreach (headerName, headerValue; this.config.defaultHeaders) {
-                        response.addHeader(headerName, headerValue);
-                    }
                     this.handler.handle(request, response);
                 } catch (Exception e) {
-                    writefln!"An error occurred while handling a request: %s"(e.msg);
+                    this.exceptionHandler.handle(request, response, e);
                 }
                 clientSocket.close();
             }
@@ -196,10 +240,10 @@ class HttpServer {
     }
 
     /** 
-     * Shortcut for checking if a server is configured for verbose output.
-     * Returns: Whether the server is configured for verbose output.
+     * Gets the server's logger.
+     * Returns: The server's logger.
      */
-    public bool verbose() {
-        return this.config.verbose;
+    ServerLogger getLogger() {
+        return log;
     }
 }

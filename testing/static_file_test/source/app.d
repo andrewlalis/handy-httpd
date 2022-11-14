@@ -7,10 +7,7 @@ void main() {
 	auto h = new FileResolvingHandler("content");
 	auto cfg = ServerConfig.defaultValues();
 	cfg.connectionQueueSize = 500;
-	cfg.preBindCallbacks ~= (s) {
-		s.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-		writeln("Set REUSEADDR to true.");
-	};
+	cfg.reuseAddress = true;
 	auto s = new HttpServer(h, cfg);
 	s.start();
 }
