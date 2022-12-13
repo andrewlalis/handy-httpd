@@ -52,15 +52,15 @@ class FileResolvingHandler : HttpRequestHandler {
         ];
     }
 
-    void handle(ref HttpRequest request, ref HttpResponse response) {
-        auto log = request.server.getLogger();
-        log.infoF!"Resolving file for url %s..."(request.url);
-        string path = sanitizeRequestPath(request.url);
+    void handle(ref HttpRequestContext ctx) {
+        auto log = ctx.request.server.getLogger();
+        log.infoF!"Resolving file for url %s..."(ctx.request.url);
+        string path = sanitizeRequestPath(ctx.request.url);
         if (path != null) {
-            response.fileResponse(path, getMimeType(path, log));
+            ctx.response.fileResponse(path, getMimeType(path, log));
         } else {
-            log.infoFV!"Could not resolve file for url %s. Maybe it doesn't exist?"(request.url);
-            response.notFound();
+            log.infoFV!"Could not resolve file for url %s. Maybe it doesn't exist?"(ctx.request.url);
+            ctx.response.notFound();
         }
     }
 

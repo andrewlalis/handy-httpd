@@ -66,7 +66,6 @@ public struct Msg {
  * Returns: An HttpRequest object which can be passed to a handler.
  */
 public HttpRequest parseRequest(MsgParser!Msg requestParser, string s) {
-    // requestParser.msg.m_headersLength = 0; // Reset the parser headers.
     int result = requestParser.parseRequest(s);
     string[string] headers;
     foreach (h; requestParser.headers) {

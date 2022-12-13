@@ -26,11 +26,11 @@ unittest {
         config.verbose = true;
         config.workerPoolSize = 10;
         auto s = new HttpServer(
-            simpleHandler((ref request, ref response) {
-                if (request.method == "GET") {
-                    response.writeBody("Hello world!");
+            toHandler((ref ctx) {
+                if (ctx.request.method == "GET") {
+                    ctx.response.writeBody("Hello world!");
                 } else {
-                    response.methodNotAllowed();
+                    ctx.response.methodNotAllowed();
                 }
             }),
             config

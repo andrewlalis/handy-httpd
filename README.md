@@ -2,7 +2,25 @@
 
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
-For a complete overview, please visit [the wiki](https://github.com/andrewlalis/handy-httpd/wiki).
+## Start Your Server
+In this example, we take advantage of the [Dub package manager](https://code.dlang.org/)'s single-file SDL syntax to declare HandyHttpd as a dependency.
+```d
+#!/usr/bin/env dub
+/+ dub.sdl:
+	dependency "handy_httpd" version="~>3.3"
++/
+import handy_httpd;
+
+void main() {
+	new HttpServer((ref ctx) {
+		if (ctx.request.url == "/hello") {
+			response.writeBody("Hello world!");
+		} else {
+			response.notFound();
+		}
+	}).start();
+}
+```
 
 Here's an example of serving static files from a directory:
 ```d

@@ -6,6 +6,24 @@ module handy_httpd.handler;
 import handy_httpd.request;
 import handy_httpd.response;
 
+/**
+ * A simple container for the components that are available in the context of
+ * handling an HttpRequest. This includes:
+ * - The HttpRequest.
+ * - The HttpResponse.
+ */
+struct HttpRequestContext {
+    /**
+     * The request that a client sent.
+     */
+    HttpRequest request;
+
+    /**
+     * The response that
+     */
+    HttpResponse response;
+}
+
 /** 
  * Interface for any component that handles HTTP requests.
  */
@@ -14,10 +32,9 @@ interface HttpRequestHandler {
      * Handles an HTTP request. Note that this method may be called from
      * multiple threads, as requests may be processed in parallel.
      * Params:
-     *   request = The request to handle.
-     *   response = The response to send back to the client.
+     *   ctx = The request context.
      */
-    void handle(ref HttpRequest request, ref HttpResponse response);
+    void handle(ref HttpRequestContext ctx);
 }
 
 /** 
@@ -28,11 +45,10 @@ interface ServerExceptionHandler {
     /** 
      * Handles an HTTP request associated with an exception.
      * Params:
-     *   request = The HTTP request.
-     *   response = The response to send back to the client.
+     *   ctx = The request context.
      *   e = The exception that was thrown.
      */
-    void handle(ref HttpRequest request, ref HttpResponse response, Exception e);
+    void handle(ref HttpRequestContext ctx, Exception e);
 }
 
 /** 
@@ -41,14 +57,14 @@ interface ServerExceptionHandler {
  * indicates that an error occurred.
  */
 class BasicServerExceptionHandler : ServerExceptionHandler {
-    void handle(ref HttpRequest request, ref HttpResponse response, Exception e) {
-        auto log = request.server.getLogger();
+    void handle(ref HttpRequestContext ctx, Exception e) {
+        auto log = ctx.request.server.getLogger();
         log.infoF!"An error occurred while handling a request: %s"(e.msg);
-        if (!response.isFlushed) {
-            response.setStatus(500);
-            response.setStatusText("Internal Server Error");
-            response.addHeader("Content-Type", "text/plain");
-            response.writeBody("An error occurred while handling your request.");
+        if (!ctx.response.isFlushed) {
+            ctx.response.setStatus(500);
+            ctx.response.setStatusText("Internal Server Error");
+            ctx.response.addHeader("Content-Type", "text/plain");
+            ctx.response.writeBody("An error occurred while handling your request.");
         } else {
             log.infoV("The response has already been sent; cannot send 500 error.");
         }
@@ -61,10 +77,10 @@ class BasicServerExceptionHandler : ServerExceptionHandler {
  *   fn = The function that will handle requests.
  * Returns: The request handler.
  */
-HttpRequestHandler simpleHandler(void function(ref HttpRequest, ref HttpResponse) fn) {
+HttpRequestHandler toHandler(void function(ref HttpRequestContext) fn) {
     return new class HttpRequestHandler {
-        void handle(ref HttpRequest request, ref HttpResponse response) {
-            fn(request, response);
+        void handle(ref HttpRequestContext ctx) {
+            fn(ctx);
         }
     };
 }
@@ -75,9 +91,9 @@ HttpRequestHandler simpleHandler(void function(ref HttpRequest, ref HttpResponse
  * Returns: The request handler.
  */
 HttpRequestHandler noOpHandler() {
-    return new class HttpRequestHandler {
-        void handle(ref HttpRequest request, ref HttpResponse response) {
-            response.setStatus(503).setStatusText("Service Unavailable").flushHeaders();
-        }
-    };
+    return toHandler((ref ctx) {
+        ctx.response.setStatus(503)
+            .setStatusText("Service Unavailable")
+            .flushHeaders();
+    });
 }

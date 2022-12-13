@@ -23,9 +23,7 @@ class PathDelegatingHandler : HttpRequestHandler {
 
     this(HttpRequestHandler[string] handlers = null) {
         this.handlers = handlers;
-        this.notFoundHandler = simpleHandler((ref HttpRequest req, ref HttpResponse resp) {
-            resp.notFound();
-        });
+        this.notFoundHandler = toHandler((ref ctx) {ctx.response.notFound();});
     }
 
     /** 
@@ -58,21 +56,20 @@ class PathDelegatingHandler : HttpRequestHandler {
      * handler that matches the request's url path. If no handler is found,
      * a 404 NOT FOUND response is sent by default.
      * Params:
-     *   request = The HTTP request.
-     *   response = The HTTP response.
+     *   ctx = The request context.
      */
-    void handle(ref HttpRequest request, ref HttpResponse response) {
-        auto log = request.server.getLogger();
+    void handle(ref HttpRequestContext ctx) {
+        auto log = ctx.request.server.getLogger();
         foreach (pattern, handler; handlers) {
-            if (pathMatches(pattern, request.url)) {
-                log.infoFV!"Found matching handler for url %s (pattern: %s)"(request.url, pattern);
-                request.pathParams = parsePathParams(pattern, request.url);
-                handler.handle(request, response);
+            if (pathMatches(pattern, ctx.request.url)) {
+                log.infoFV!"Found matching handler for url %s (pattern: %s)"(ctx.request.url, pattern);
+                ctx.request.pathParams = parsePathParams(pattern, ctx.request.url);
+                handler.handle(ctx);
                 return; // Exit once we handle the request.
             }
         }
-        log.infoFV!"No matching handler found for url %s"(request.url);
-        notFoundHandler.handle(request, response);
+        log.infoFV!"No matching handler found for url %s"(ctx.request.url);
+        notFoundHandler.handle(ctx);
     }
 }
 
@@ -83,9 +80,9 @@ unittest {
     import core.thread;
 
     auto handler = new PathDelegatingHandler()
-        .addPath("/home", simpleHandler((ref request, ref response) {response.okResponse();}))
-        .addPath("/users", simpleHandler((ref request, ref response) {response.okResponse();}))
-        .addPath("/users/{id}", simpleHandler((ref request, ref response) {response.okResponse();}));
+        .addPath("/home", toHandler((ref ctx) {ctx.response.okResponse();}))
+        .addPath("/users", toHandler((ref ctx) {ctx.response.okResponse();}))
+        .addPath("/users/{id}", toHandler((ref ctx) {ctx.response.okResponse();}));
 
     ServerConfig config = ServerConfig.defaultValues();
     config.verbose = true;

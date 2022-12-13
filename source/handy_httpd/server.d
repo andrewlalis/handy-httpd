@@ -103,10 +103,10 @@ class HttpServer {
      *   config = The server configuration.
      */
     this(
-        void function(ref HttpRequest request, ref HttpResponse response) handlerFunc,
+        void function(ref HttpRequestContext) handlerFunc,
         ServerConfig config = ServerConfig.defaultValues
     ) {
-        this(simpleHandler(handlerFunc), config);
+        this(toHandler(handlerFunc), config);
     }
 
     /** 
@@ -195,44 +195,46 @@ class HttpServer {
             this.requestSemaphore.wait();
             if (!this.requestQueue.empty) {
                 Socket clientSocket = this.requestQueue.removeAny();
-                auto received = clientSocket.receive(receiveBuffer);
+                size_t received = clientSocket.receive(receiveBuffer);
                 if (received == 0 || received == Socket.ERROR) {
                     continue; // Skip if we didn't receive valid data.
                 }
                 string data = receiveBuffer[0..received].idup;
                 requestParser.msg.reset();
-                auto request = parseRequest(requestParser, data);
+
+                // Prepare the request context by parsing the HttpRequest, and preparing a default response.
+                HttpRequestContext ctx = HttpRequestContext(
+                    parseRequest(requestParser, data),
+                    HttpResponse().setStatus(200).setStatusText("OK")
+                );
+                ctx.request.server = this;
+                ctx.request.clientSocket = clientSocket;
+                ctx.response.clientSocket = clientSocket;
+                foreach (headerName, headerValue; this.config.defaultHeaders) {
+                    ctx.response.addHeader(headerName, headerValue);
+                }
                 
                 // Use the Content-Length header to try and continue reading the rest of the body.
-                const(string*) pcontentLength = "Content-Length" in request.headers;
-                if(pcontentLength !is null) {
+                const(string*) providedContentLength = "Content-Length" in ctx.request.headers;
+                if (providedContentLength !is null) {
                     try {
-                        size_t contentLength = (*pcontentLength).to!size_t;
-                        size_t receivedTotal = request.bodyContent.length;
+                        size_t contentLength = (*providedContentLength).to!size_t;
+                        size_t receivedTotal = ctx.request.bodyContent.length;
                         while (receivedTotal < contentLength && received > 0) {
                             received = clientSocket.receive(receiveBuffer);
                             receivedTotal += received;
-                            request.bodyContent ~= receiveBuffer[0..received].idup;
+                            ctx.request.bodyContent ~= receiveBuffer[0..received].idup;
                         }
                     } catch(ConvException e) {
                         log.infoFV!"Content-Length is not a number: %s"(e.msg);
                     }
                 }
 
-                request.server = this;
-                request.clientSocket = clientSocket;
-                log.infoFV!"<- %s %s"(request.method, request.url);
-                HttpResponse response;
-                response.status = 200;
-                response.statusText = "OK";
-                response.clientSocket = clientSocket;
-                foreach (headerName, headerValue; this.config.defaultHeaders) {
-                    response.addHeader(headerName, headerValue);
-                }
+                log.infoFV!"<- %s %s"(ctx.request.method, ctx.request.url);
                 try {
-                    this.handler.handle(request, response);
+                    this.handler.handle(ctx);
                 } catch (Exception e) {
-                    this.exceptionHandler.handle(request, response, e);
+                    this.exceptionHandler.handle(ctx, e);
                 }
                 clientSocket.close();
             }
