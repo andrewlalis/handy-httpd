@@ -25,6 +25,12 @@ class FilterChain {
         if (next !is null) filter.apply(ctx, next);
     }
 
+    /** 
+     * Appends the given filter chain to the end of this one.
+     * Params:
+     *   other = The other filter chain.
+     * Returns: A reference to this filter chain.
+     */
     FilterChain append(FilterChain other) {
         FilterChain link = this;
         while (link.next !is null) {
@@ -83,10 +89,33 @@ class FilterChain {
 }
 
 /** 
- * A filter that can be applied to a request context.
+ * A filter that can be applied to a request context. If the filter determines
+ * that it's okay to continue processing the request, it should call
+ * `filterChain.doFilter(ctx);` to continue the chain. If the chain is not
+ * continued, request processing ends at this filter, and the current response
+ * is flushed to the client.
  */
 interface HttpRequestFilter {
     void apply(ref HttpRequestContext ctx, FilterChain filterChain);
+}
+
+/** 
+ * An alias for a function that can be used as a request filter.
+ */
+alias HttpRequestFilterFunction = void function (ref HttpRequestContext, FitlerChain);
+
+/** 
+ * Constructs a new request filter object from the given function.
+ * Params:
+ *   fn = The request filter function.
+ * Returns: The request filter.
+ */
+HttpRequestFilter toFilter(HttpRequestFilterFunction fn) {
+    return new class HttpRequestFilter {
+        void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
+            fn(ctx, filterChain);
+        }
+    };
 }
 
 /** 
@@ -108,21 +137,46 @@ private class HandlerFilter : HttpRequestFilter {
 
 /** 
  * A request handler that can apply a series of filters before and after a
- * request is ultimately handled by a handler.
+ * request is ultimately handled by a handler. The filtered request handler
+ * prepares a filter chain that looks something like this:
+ * ```
+ * pre-request filters -> handler -> post-request filters
+ * ```
+ * 
+ * When a request is handled by this handler, it will be passed on to the above
+ * filter chain for processing.
  */
 class FilteredRequestHandler : HttpRequestHandler {
     private FilterChain filterChain;
 
-    this(HttpRequestHandler handler, FilterChain preRequest, FilterChain postRequest) {
-        this.filterChain = new FilterChain();
-        filterChain.filter = new HandlerFilter(handler);
-        filterChain.next = postRequest;
-        if (preRequest !is null) {
-            filterChain = preRequest.append(filterChain);
+    /** 
+     * Constructs a filtered request handler that applies the pre-request
+     * filter chain, followed by provided handler (if all filters pass), and
+     * then finally followed by the post-request filter chain.
+     * Params:
+     *   handler = The handler to call.
+     *   preRequest = A pre-request filter chain to apply before calling the
+     *                handler.
+     *   postRequest = A post-request filter chain to apply after calling the
+     *                 handler.
+     */
+    this(HttpRequestHandler handler, FilterChain preRequest = null, FilterChain postRequest = null) {
+        FilterChain handlerFilterChain = new FilterChain();
+        handlerFilterChain.filter = new HandlerFilter(handler);
+        handlerFilterChain.next = postRequest;
+
+        if (preRequest !is null) {// If there are pre-request filters, start there.
+            this.filterChain = preRequest.append(filterChain);
+        } else {// Otherwise, start at the handler.
+            this.filterChain = handlerFilterChain;
         }
     }
 
-    this(HttpRequestHandler handler, HttpRequestFilter[] preRequestFilters = [], HttpRequestFilter[] postRequestFilters = []) {
+    this(
+        HttpRequestHandler handler,
+        HttpRequestFilter[] preRequestFilters = [],
+        HttpRequestFilter[] postRequestFilters = []
+    ) {
         this(
             handler,
             FilterChain.build(preRequestFilters),
