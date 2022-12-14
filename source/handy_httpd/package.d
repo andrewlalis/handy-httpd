@@ -1,11 +1,15 @@
+/**
+ * The main module of the handy-httpd server library. Importing this module
+ * will publically import the basic components needed for most applications.
+ */
 module handy_httpd;
 
 public import handy_httpd.server;
-public import handy_httpd.server_config;
-public import handy_httpd.request;
-public import handy_httpd.response;
-public import handy_httpd.handler;
-public import handy_httpd.responses;
+public import handy_httpd.components.config;
+public import handy_httpd.components.request;
+public import handy_httpd.components.response;
+public import handy_httpd.components.handler;
+public import handy_httpd.components.responses;
 
 /** 
  * General-purpose testing for the HTTP server and its behavior.

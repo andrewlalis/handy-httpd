@@ -3,9 +3,9 @@
  * Note that all functions here will flush the response, meaning that you do
  * not have to manually flush the response in your handler.
  */
-module handy_httpd.responses;
+module handy_httpd.components.responses;
 
-import handy_httpd.response;
+import handy_httpd.components.response;
 
 /** 
  * Convenience method to prepare a simple 200 OK response.

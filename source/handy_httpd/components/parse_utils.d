@@ -1,7 +1,7 @@
 /** 
  * Internal parsing utilities for the server's HTTP request processing.
  */
-module handy_httpd.parse_utils;
+module handy_httpd.components.parse_utils;
 
 import std.typecons;
 import std.conv;
@@ -10,7 +10,8 @@ import std.string;
 import std.algorithm;
 import std.uri;
 import httparsed;
-import handy_httpd.request : HttpRequest;
+
+import handy_httpd.components.request : HttpRequest;
 
 /** 
  * The header struct to use when parsing data.

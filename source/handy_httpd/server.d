@@ -11,12 +11,12 @@ import core.sync.semaphore : Semaphore;
 import core.atomic : atomicLoad;
 import core.thread.threadgroup : ThreadGroup;
 
-import handy_httpd.request;
-import handy_httpd.response;
-import handy_httpd.handler;
-import handy_httpd.server_config;
-import handy_httpd.parse_utils : parseRequest, Msg;
-import handy_httpd.logger;
+import handy_httpd.components.request;
+import handy_httpd.components.response;
+import handy_httpd.components.handler;
+import handy_httpd.components.config;
+import handy_httpd.components.parse_utils : parseRequest, Msg;
+import handy_httpd.components.logger;
 
 import httparsed : MsgParser, initParser;
 

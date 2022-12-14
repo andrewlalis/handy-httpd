@@ -1,10 +1,10 @@
 module handy_httpd.handlers.file_resolving_handler;
 
-import handy_httpd.handler;
-import handy_httpd.request;
-import handy_httpd.response;
-import handy_httpd.responses;
-import handy_httpd.logger;
+import handy_httpd.components.handler;
+import handy_httpd.components.request;
+import handy_httpd.components.response;
+import handy_httpd.components.responses;
+import handy_httpd.components.logger;
 
 /** 
  * Request handler that resolves files within a given base path.
@@ -52,6 +52,12 @@ class FileResolvingHandler : HttpRequestHandler {
         ];
     }
 
+    /**
+     * Handles requests for files, where the url points to the file location
+     * relative to the server's working directory.
+     * Params:
+     *   ctx = The request context.
+     */
     void handle(ref HttpRequestContext ctx) {
         auto log = ctx.request.server.getLogger();
         log.infoF!"Resolving file for url %s..."(ctx.request.url);

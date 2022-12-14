@@ -1,7 +1,7 @@
 /** 
  * Contains HTTP response components.
  */
-module handy_httpd.response;
+module handy_httpd.components.response;
 
 import std.array;
 import std.string : format, representation;

@@ -3,7 +3,7 @@
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
 ## Start Your Server
-In this example, we take advantage of the [Dub package manager](https://code.dlang.org/)'s single-file SDL syntax to declare HandyHttpd as a dependency.
+In this example, we take advantage of the [Dub package manager](https://code.dlang.org/)'s single-file SDL syntax to declare HandyHttpd as a dependency. For this example, we'll call this `my_server.d`.
 ```d
 #!/usr/bin/env dub
 /+ dub.sdl:
@@ -21,30 +21,11 @@ void main() {
 	}).start();
 }
 ```
-
-Here's an example of serving static files from a directory:
-```d
-import handy_httpd;
-import handy_httpd.handlers.file_resolving_handler;
-
-void main() {
-	new HttpServer(new FileResolvingHandler("static")).start();
-}
+To start the server, just mark the script as executable, and run it:
+```shell
+chmod +x my_server.d
+./my_server.d
 ```
+And finally, if you navigate to http://localhost:8080/hello, you should see the `Hello world!` text appear.
 
-It's also quite simple to define your own custom request handler. Here's an example of a custom request handler that only responds to the `/hello` endpoint:
-```d
-import handy_httpd;
-import handy_httpd.responses;
 
-void main() {
-	auto s = new HttpServer(simpleHandler((ref request, ref response) {
-		if (request.url == "/hello") {
-			response.writeBody("Hello world!");
-		} else {
-			response.notFound();
-		}
-	}));
-	s.start();
-}
-```

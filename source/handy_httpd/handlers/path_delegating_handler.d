@@ -1,9 +1,9 @@
 module handy_httpd.handlers.path_delegating_handler;
 
-import handy_httpd.handler;
-import handy_httpd.request;
-import handy_httpd.response;
-import handy_httpd.responses;
+import handy_httpd.components.handler;
+import handy_httpd.components.request;
+import handy_httpd.components.response;
+import handy_httpd.components.responses;
 
 /** 
  * A request handler that delegates handling of requests to other handlers,
@@ -35,6 +35,18 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     public PathDelegatingHandler addPath(string path, HttpRequestHandler handler) {
         this.handlers[path] = handler;
+        return this;
+    }
+
+    /** 
+     * Adds a new function to handle requests to the given path.
+     * Params:
+     *   path = The path pattern to match against requests.
+     *   fn = The function that will handle requests to the given path.
+     * Returns: This handler, for method chaining.
+     */
+    public PathDelegatingHandler addPath(string path, HttpRequestHandlerFunction fn) {
+        this.handlers[path] = toHandler(fn);
         return this;
     }
 
@@ -75,14 +87,14 @@ class PathDelegatingHandler : HttpRequestHandler {
 
 unittest {
     import handy_httpd.server;
-    import handy_httpd.server_config;
-    import handy_httpd.responses;
+    import handy_httpd.components.config;
+    import handy_httpd.components.responses;
     import core.thread;
 
     auto handler = new PathDelegatingHandler()
-        .addPath("/home", toHandler((ref ctx) {ctx.response.okResponse();}))
-        .addPath("/users", toHandler((ref ctx) {ctx.response.okResponse();}))
-        .addPath("/users/{id}", toHandler((ref ctx) {ctx.response.okResponse();}));
+        .addPath("/home", (ref ctx) {ctx.response.okResponse();})
+        .addPath("/users", (ref ctx) {ctx.response.okResponse();})
+        .addPath("/users/{id}", (ref ctx) {ctx.response.okResponse();});
 
     ServerConfig config = ServerConfig.defaultValues();
     config.verbose = true;

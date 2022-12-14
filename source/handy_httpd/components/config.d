@@ -1,4 +1,8 @@
-module handy_httpd.server_config;
+/** 
+ * Module containing the server configuration and associated functions.
+ */
+module handy_httpd.components.config;
+
 import std.socket : Socket;
 
 /** 

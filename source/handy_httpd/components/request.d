@@ -1,11 +1,12 @@
 /** 
  * Contains HTTP request components.
  */
-module handy_httpd.request;
+module handy_httpd.components.request;
 
 import std.socket : Socket;
+
 import handy_httpd.server: HttpServer;
-import handy_httpd.response : HttpResponse;
+import handy_httpd.components.response : HttpResponse;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can

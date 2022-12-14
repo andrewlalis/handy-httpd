@@ -1,10 +1,10 @@
 /** 
  * Contains core components for the HTTP handler structure.
  */
-module handy_httpd.handler;
+module handy_httpd.components.handler;
 
-import handy_httpd.request;
-import handy_httpd.response;
+import handy_httpd.components.request;
+import handy_httpd.components.response;
 
 /**
  * A simple container for the components that are available in the context of
@@ -23,6 +23,11 @@ struct HttpRequestContext {
      */
     HttpResponse response;
 }
+
+/** 
+ * An alias for the signature of a function capable of handling requests.
+ */
+alias HttpRequestHandlerFunction = void function(ref HttpRequestContext);
 
 /** 
  * Interface for any component that handles HTTP requests.
@@ -77,7 +82,7 @@ class BasicServerExceptionHandler : ServerExceptionHandler {
  *   fn = The function that will handle requests.
  * Returns: The request handler.
  */
-HttpRequestHandler toHandler(void function(ref HttpRequestContext) fn) {
+HttpRequestHandler toHandler(HttpRequestHandlerFunction fn) {
     return new class HttpRequestHandler {
         void handle(ref HttpRequestContext ctx) {
             fn(ctx);
