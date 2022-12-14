@@ -54,7 +54,7 @@ class FileResolvingHandler : HttpRequestHandler {
 
     /**
      * Handles requests for files, where the url points to the file location
-     * relative to the server's working directory.
+     * relative to the base path.
      * Params:
      *   ctx = The request context.
      */

@@ -103,7 +103,7 @@ class HttpServer {
      *   config = The server configuration.
      */
     this(
-        void function(ref HttpRequestContext) handlerFunc,
+        HttpRequestHandlerFunction handlerFunc,
         ServerConfig config = ServerConfig.defaultValues
     ) {
         this(toHandler(handlerFunc), config);
