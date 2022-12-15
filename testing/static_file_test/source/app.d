@@ -8,6 +8,7 @@ void main() {
 	auto cfg = ServerConfig.defaultValues();
 	cfg.connectionQueueSize = 500;
 	cfg.reuseAddress = true;
+	cfg.verbose = true;
 	auto s = new HttpServer(h, cfg);
 	s.start();
 }

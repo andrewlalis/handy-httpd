@@ -2,6 +2,11 @@
 
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
+##### Table of Contents
+1. [Start Your Server](#start-your-server)
+2. [Request Handlers](#request-handlers)
+3. [Configuration](#configuration)
+
 ## Start Your Server
 In this example, we take advantage of the [Dub package manager](https://code.dlang.org/)'s single-file SDL syntax to declare HandyHttpd as a dependency. For this example, we'll call this `my_server.d`.
 ```d
@@ -30,7 +35,7 @@ chmod +x my_server.d
 
 And finally, if you navigate to http://localhost:8080/hello, you should see the `Hello world!` text appear.
 
-## Handlers
+## Request Handlers
 handy-httpd operates under the concept of a "handler"; a single component that's responsible for handling an HTTP request and writing a response. Every server is configured with one, and only one handler. In the above example, we defined the handler using D's function syntax. You can also make your own handler class which implements the `handy_httpd.components.handler.HttpRequestHandler` interface.
 
 For your convenience, several pre-made handlers have been supplied with handy-httpd, and can be imported with `import handy_httpd.handlers;`. These are:

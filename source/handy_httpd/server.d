@@ -7,6 +7,7 @@ import std.socket;
 import std.regex;
 import std.conv : to, ConvException;
 import std.container.dlist : DList;
+import std.typecons : Nullable;
 import core.sync.semaphore : Semaphore;
 import core.atomic : atomicLoad;
 import core.thread.threadgroup : ThreadGroup;
@@ -17,6 +18,7 @@ import handy_httpd.components.handler;
 import handy_httpd.components.config;
 import handy_httpd.components.parse_utils : parseRequest, Msg;
 import handy_httpd.components.logger;
+import handy_httpd.components.worker;
 
 import httparsed : MsgParser, initParser;
 
@@ -29,7 +31,7 @@ class HttpServer {
     /** 
      * The server's configuration values.
      */
-    public ServerConfig config;
+    public const ServerConfig config;
 
     /** 
      * The address to which this server is bound.
@@ -152,11 +154,31 @@ class HttpServer {
     }
 
     /** 
-     * Tells whether the server is ready to receive requests.
+     * Tells whether the server is ready to receive requests. This loads the
+     * ready status safely for access by multiple threads.
      * Returns: Whether the server is ready to receive requests.
      */
     public bool isReady() {
-        return this.ready;
+        return atomicLoad(this.ready);
+    }
+
+    /** 
+     * Blocks the calling thread until we're notified by a semaphore, and tries
+     * to obtain the next socket to a client for which we should process a
+     * request.
+     * 
+     * This method is intended to be called by worker threads.
+     *
+     * Returns: A nullable socket, which, if not null, contains a socket that's
+     * ready for request processing.
+     */
+    public Nullable!Socket waitForNextClient() {
+        this.requestSemaphore.wait();
+        Nullable!Socket result;
+        if (!this.requestQueue.empty) {
+            result = this.requestQueue.removeAny();
+        }
+        return result;
     }
 
     /** 
@@ -166,8 +188,10 @@ class HttpServer {
     private void initWorkerThreads() {
         this.requestSemaphore = new Semaphore();
         this.workerThreadGroup = new ThreadGroup();
-        for (int i = 0; i < this.config.workerPoolSize; i++) {
-            this.workerThreadGroup.create(&workerThreadFunction);
+        for (int i = 1; i <= this.config.workerPoolSize; i++) {
+            ServerWorkerThread worker = new ServerWorkerThread(this, i);
+            worker.start();
+            this.workerThreadGroup.add(worker);
         }
     }
 
@@ -183,69 +207,27 @@ class HttpServer {
     }
 
     /** 
-     * Worker function that runs for all worker threads that process incoming
-     * requests. Workers will wait for the requestSemaphore to be notified so
-     * that they can process a request. The worker will stay alive as long as
-     * this server is set as ready.
+     * Gets the configured handler for requests.
+     * Returns: The handler.
      */
-    private void workerThreadFunction() {
-        MsgParser!Msg requestParser = initParser!Msg();
-        char[] receiveBuffer = new char[this.config.receiveBufferSize];
-        while (atomicLoad(this.ready)) {
-            this.requestSemaphore.wait();
-            if (!this.requestQueue.empty) {
-                Socket clientSocket = this.requestQueue.removeAny();
-                size_t received = clientSocket.receive(receiveBuffer);
-                if (received == 0 || received == Socket.ERROR) {
-                    continue; // Skip if we didn't receive valid data.
-                }
-                string data = receiveBuffer[0..received].idup;
-                requestParser.msg.reset();
+    public HttpRequestHandler getHandler() {
+        return handler;
+    }
 
-                // Prepare the request context by parsing the HttpRequest, and preparing a default response.
-                HttpRequestContext ctx = HttpRequestContext(
-                    parseRequest(requestParser, data),
-                    HttpResponse().setStatus(200).setStatusText("OK")
-                );
-                ctx.request.server = this;
-                ctx.request.clientSocket = clientSocket;
-                ctx.response.clientSocket = clientSocket;
-                foreach (headerName, headerValue; this.config.defaultHeaders) {
-                    ctx.response.addHeader(headerName, headerValue);
-                }
-                
-                // Use the Content-Length header to try and continue reading the rest of the body.
-                const(string*) providedContentLength = "Content-Length" in ctx.request.headers;
-                if (providedContentLength !is null) {
-                    try {
-                        size_t contentLength = (*providedContentLength).to!size_t;
-                        size_t receivedTotal = ctx.request.bodyContent.length;
-                        while (receivedTotal < contentLength && received > 0) {
-                            received = clientSocket.receive(receiveBuffer);
-                            receivedTotal += received;
-                            ctx.request.bodyContent ~= receiveBuffer[0..received].idup;
-                        }
-                    } catch(ConvException e) {
-                        log.infoFV!"Content-Length is not a number: %s"(e.msg);
-                    }
-                }
-
-                log.infoFV!"<- %s %s"(ctx.request.method, ctx.request.url);
-                try {
-                    this.handler.handle(ctx);
-                } catch (Exception e) {
-                    this.exceptionHandler.handle(ctx, e);
-                }
-                clientSocket.close();
-            }
-        }
+    /** 
+     * Gets the configured exception handler for any exceptions that occur
+     * during request handling.
+     * Returns: The exception handler.
+     */
+    public ServerExceptionHandler getExceptionHandler() {
+        return exceptionHandler;
     }
 
     /** 
      * Gets the server's logger.
      * Returns: The server's logger.
      */
-    ServerLogger getLogger() {
+    public ServerLogger getLogger() {
         return log;
     }
 }

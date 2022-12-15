@@ -15,7 +15,11 @@ import handy_httpd.components.config;
  * messages, using a bound server configuration.
  */
 struct ServerLogger {
-    private ServerConfig* config;
+    /** 
+     * A reference to the server's configuration, which may have an impact on
+     * how logs are written.
+     */
+    private const(ServerConfig)* config;
 
     /** 
      * Writes an info log to stdout.

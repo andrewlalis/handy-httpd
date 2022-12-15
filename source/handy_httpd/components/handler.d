@@ -25,7 +25,9 @@ struct HttpRequestContext {
 }
 
 /** 
- * An alias for the signature of a function capable of handling requests.
+ * An alias for the signature of a function capable of handling requests. It's
+ * just a `void` function that takes a single `ref HttpRequestContext`
+ * parameter. It is acceptable to throw exceptions from the function.
  */
 alias HttpRequestHandlerFunction = void function(ref HttpRequestContext);
 

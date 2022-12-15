@@ -102,7 +102,7 @@ interface HttpRequestFilter {
 /** 
  * An alias for a function that can be used as a request filter.
  */
-alias HttpRequestFilterFunction = void function (ref HttpRequestContext, FitlerChain);
+alias HttpRequestFilterFunction = void function (ref HttpRequestContext, FilterChain);
 
 /** 
  * Constructs a new request filter object from the given function.
