@@ -7,6 +7,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 2. [Request Handlers](#request-handlers)
 3. [Configuration](#configuration)
 4. [Architecture](#architecture)
+5. [Testing](#testing)
 
 ## Start Your Server
 In this example, we take advantage of the [Dub package manager](https://code.dlang.org/)'s single-file SDL syntax to declare HandyHttpd as a dependency. For this example, we'll call this `my_server.d`.

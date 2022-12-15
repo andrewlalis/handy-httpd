@@ -1,6 +1,7 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"httparsed": "1.2.1"
+		"httparsed": "1.2.1",
+		"unit-threaded": "2.1.2"
 	}
 }

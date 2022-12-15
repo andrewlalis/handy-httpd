@@ -4,10 +4,27 @@
 	],
 	"name": "handy-httpd",
 	"description": "Extremely lightweight HTTP server for D.",
-	"copyright": "Copyright © 2021, Andrew Lalis",
+	"copyright": "Copyright © 2022, Andrew Lalis",
 	"license": "MIT",
 	"dependencies": {
 		"httparsed": "~>1.2.1"
 	},
-	"targetType": "library"
+	"configurations": [
+		{
+			"name": "library",
+			"targetType": "library"
+		},
+		{
+			"name": "unittest",
+			"targetType": "executable",
+			"preBuildCommands": [
+				"$DUB run --compiler=$$DC unit-threaded -c gen_ut_main -- -f bin/ut.d -d $DUB"
+			],
+			"mainSourceFile": "bin/ut.d",
+			"excludedSourceFiles": ["src/main.d"],
+			"dependencies": {
+				"unit-threaded": "*"
+			}
+		}
+	]
 }

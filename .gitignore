@@ -2,6 +2,7 @@
 docs.json
 __dummy.html
 docs/
+bin/
 /handy-httpd
 handy-httpd.so
 handy-httpd.dylib
