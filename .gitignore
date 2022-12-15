@@ -9,6 +9,7 @@ handy-httpd.dll
 handy-httpd.a
 handy-httpd.lib
 handy-httpd-test-*
+libhandy-httpd.a
 *.exe
 *.o
 *.obj

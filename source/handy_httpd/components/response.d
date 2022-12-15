@@ -93,16 +93,31 @@ struct HttpResponse {
     }
 
     /** 
-     * Writes the given string content to the body of the response. If this
+     * Writes the given text to the body of the response. It's a simple wrapper
+     * around `writeBody(ubyte[], string)`.
+     * Params:
+     *   text = The text to write.
+     */
+    public void writeBody(string text) {
+        writeBody(cast(ubyte[]) text, "text/plain; charset=utf-8");
+    }
+
+    /** 
+     * Writes the given byte content to the body of the response. If this
      * response has not yet written its status line and headers, it will do
      * that first.
      * Params:
      *   body = The content to write.
+     *   contentType = The mime type of the body content. Defaults to
+     *                 `application/octet-stream`.
      */
-    public void writeBody(string body) {
-        if (!flushed) addHeader("Content-Length", body.length.to!string);
+    public void writeBody(ubyte[] body, string contentType = "application/octet-stream") {
+        if (!flushed) {
+            addHeader("Content-Length", body.length.to!string);
+            addHeader("Content-Type", contentType);
+        }
         flushHeaders();
-        auto sent = this.clientSocket.send(cast(ubyte[]) body);
+        auto sent = this.clientSocket.send(body);
         if (sent == Socket.ERROR) throw new Exception("Socket error occurred while writing body.");
     }
 

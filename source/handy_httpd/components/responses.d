@@ -59,6 +59,11 @@ void fileResponse(ref HttpResponse response, string filename, string type) {
     }
 }
 
+/** 
+ * Convenience method to send a 404 Not Found response to a request.
+ * Params:
+ *   response = The HTTP response to write to.
+ */
 void notFound(ref HttpResponse response) {
     response.setStatus(404).setStatusText("Not Found").flushHeaders();
 }
