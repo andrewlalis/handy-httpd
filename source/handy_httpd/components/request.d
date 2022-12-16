@@ -3,8 +3,6 @@
  */
 module handy_httpd.components.request;
 
-import std.socket : Socket;
-
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
 
@@ -52,17 +50,6 @@ struct HttpRequest {
     public string bodyContent;
 
     /** 
-     * A reference to the HttpServer that is handling this request.
-     */
-    public HttpServer server;
-
-    /** 
-     * The underlying socket that the request was received from, and to which
-     * the response will be written.
-     */
-    public Socket clientSocket;
-
-    /** 
      * Determines if this request has a non-empty body.
      * Returns: True if this request's body is not null, and not empty.
      */
@@ -80,5 +67,118 @@ struct HttpRequest {
     public JSONValue bodyAsJson() {
         if (!hasBody) return JSONValue(string[string].init);
         return parseJSON(bodyContent);
+    }
+
+    /** 
+     * Gets a URL parameter as the specified type, or returns the default value
+     * if the parameter with the given name doesn't exist.
+     * Params:
+     *   name = The name of the URL parameter.
+     *   defaultValue = The default value to return if the URL parameter
+     *                  doesn't exist.
+     * Returns: The value of the URL parameter.
+     */
+    public T getParamAs(T)(string name, T defaultValue = T.init) {
+        import std.conv : to;
+        if (name !in params) return defaultValue;
+        return params[name].to!T;
+    }
+
+    unittest {
+        HttpRequest req = HttpRequest(
+            "GET",
+            "/api",
+            1,
+            string[string].init,
+            [
+                "a": "123",
+                "b": "c",
+                "c": "true"
+            ],
+            string[string].init,
+            ""
+        );
+        assert(req.getParamAs!int("a") == 123);
+        assert(req.getParamAs!char("b") == 'c');
+        assert(req.getParamAs!bool("c") == true);
+        assert(req.getParamAs!int("d") == 0);
+    }
+
+    /** 
+     * Gets a path parameter as the specified type, or returns the default
+     * value if the path parameter with the given name doesn't exist.
+     * Params:
+     *   name = The name of the path parameter.
+     *   defaultValue = The default value to return if the path parameter
+     *                  doesn't exist.
+     * Returns: The value of the path parameter.
+     */
+    public T getPathParamAs(T)(string name, T defaultValue = T.init) {
+        import std.conv : to;
+        if (name !in pathParams) return defaultValue;
+        return pathParams[name].to!T;
+    }
+
+    unittest {
+        HttpRequest req;
+        req.pathParams = [
+            "a": "123",
+            "b": "c",
+            "c": "true"
+        ];
+        assert(req.getPathParamAs!int("a") == 123);
+        assert(req.getPathParamAs!char("b") == 'c');
+        assert(req.getPathParamAs!bool("c") == true);
+        assert(req.getPathParamAs!int("d") == 0);
+    }
+}
+
+/** 
+ * A utility class for a fluent interface for building requests. This is useful
+ * for testing.
+ */
+class HttpRequestBuilder {
+    string method;
+    string url;
+    string[string] headers;
+    string[string] params;
+    string[string] pathParams;
+    string bodyContent;
+
+    this(string method, string url) {
+        this.method = method;
+        this.url = url;
+    }
+
+    HttpRequestBuilder withHeader(string name, string value) {
+        this.headers[name] = value;
+        return this;
+    }
+
+    HttpRequestBuilder withParam(string name, string value) {
+        this.params[name] = value;
+        return this;
+    }
+
+    HttpRequestBuilder withPathParam(string name, string value) {
+        this.pathParams[name] = value;
+        return this;
+    }
+
+    HttpRequestBuilder withBodyContent(string content) {
+        this.bodyContent = content;
+        return this;
+    }
+
+    HttpRequest build() {
+        return HttpRequest(
+            this.method,
+            this.url,
+            1,
+            this.headers,
+            this.params,
+            this.pathParams,
+            this.bodyContent
+        );
     }
 }

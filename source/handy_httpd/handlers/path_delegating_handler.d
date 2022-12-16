@@ -71,7 +71,7 @@ class PathDelegatingHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequestContext ctx) {
-        auto log = ctx.request.server.getLogger();
+        auto log = ctx.server.getLogger();
         foreach (pattern, handler; handlers) {
             if (pathMatches(pattern, ctx.request.url)) {
                 log.infoFV!"Found matching handler for url %s (pattern: %s)"(ctx.request.url, pattern);
@@ -90,6 +90,7 @@ unittest {
     import handy_httpd.components.config;
     import handy_httpd.components.responses;
     import std.socket;
+    import std.stdio;
     import unit_threaded;
 
     auto handler = new PathDelegatingHandler()
@@ -97,34 +98,33 @@ unittest {
         .addPath("/users", (ref ctx) {ctx.response.okResponse();})
         .addPath("/users/{id}", (ref ctx) {ctx.response.okResponse();});
 
-    auto mockSocket = mock!Socket;
+    /*
+    To test the handle() method, we create a pair of dummy sockets and a dummy
+    server to satisfy dependencies, then create some fake request contexts and
+    see how the handler changes them.
+    */
+    Socket[2] sockets = socketPair();
+    Socket clientSocket = sockets[1];
+    HttpServer server = new HttpServer(handler);
 
-    HttpRequestContext ctx = HttpRequestContext(
-        HttpRequest(
-            "GET",
-            "/home",
-            1,
-            string[string].init,
-            string[string].init,
-            string[string].init,
-            null,
-            null,
-            mockSocket
-        ),
-        HttpResponse(200, "OK", string[string].init, mockSocket, false)
-    );
+    auto ctx1 = new HttpRequestContextBuilder(server, clientSocket)
+        .withRequest("GET", "/home")
+        .build();
+    handler.handle(ctx1);
+    assert(ctx1.response.status == 200);
+    
+    auto ctx2 = new HttpRequestContextBuilder(server, clientSocket)
+        .withRequest("GET", "/home-not-exists")
+        .build();
+    handler.handle(ctx2);
+    assert(ctx2.response.status == 404);
 
-    handler.handle(ctx);
-    assert(ctx.response.status == 200);
-
-    // assert(get("http://localhost:8080/home") == "");
-    // assert(get("http://localhost:8080/home/") == "");
-    // assert(get("http://localhost:8080/users") == "");
-    // assert(get("http://localhost:8080/users/andrew") == "");
-    // assertThrown!CurlException(get("http://localhost:8080/not-home"));
-    // assertThrown!CurlException(get("http://localhost:8080/users/andrew/data"));
-
-    // server.stop();
+    auto ctx3 = new HttpRequestContextBuilder(server, clientSocket)
+        .withRequest("GET", "/users/34")
+        .build();
+    handler.handle(ctx3);
+    assert(ctx3.response.status == 200);
+    assert(ctx3.request.pathParams["id"] == "34");
 }
 
 /** 

@@ -15,12 +15,12 @@ struct HttpResponse {
     /** 
      * The status code.
      */
-    public ushort status;
+    public ushort status = 200;
 
     /** 
      * A short textual representation of the status.
      */
-    public string statusText;
+    public string statusText = "OK";
 
     /** 
      * An associative array of headers.

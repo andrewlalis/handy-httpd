@@ -59,7 +59,7 @@ class FileResolvingHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequestContext ctx) {
-        auto log = ctx.request.server.getLogger();
+        auto log = ctx.server.getLogger();
         log.infoF!"Resolving file for url %s..."(ctx.request.url);
         string path = sanitizeRequestPath(ctx.request.url);
         if (path != null) {

@@ -99,8 +99,8 @@ class ServerWorkerThread : Thread {
             parseRequest(requestParser, data),
             HttpResponse().setStatus(200).setStatusText("OK")
         );
-        ctx.request.server = this.server;
-        ctx.request.clientSocket = clientSocket;
+        ctx.server = this.server;
+        ctx.clientSocket = clientSocket;
         ctx.response.clientSocket = clientSocket;
         foreach (headerName, headerValue; this.server.config.defaultHeaders) {
             ctx.response.addHeader(headerName, headerValue);

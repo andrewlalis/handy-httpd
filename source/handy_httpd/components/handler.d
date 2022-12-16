@@ -5,6 +5,9 @@ module handy_httpd.components.handler;
 
 import handy_httpd.components.request;
 import handy_httpd.components.response;
+import handy_httpd.server;
+
+import std.socket;
 
 /**
  * A simple container for the components that are available in the context of
@@ -16,12 +19,50 @@ struct HttpRequestContext {
     /**
      * The request that a client sent.
      */
-    HttpRequest request;
+    public HttpRequest request;
 
     /**
      * The response that
      */
-    HttpResponse response;
+    public HttpResponse response;
+
+    /** 
+     * The internal socket that is used to communicate with the client.
+     */
+    public Socket clientSocket;
+
+    /** 
+     * The server from which this context was created.
+     */
+    public HttpServer server;
+}
+
+class HttpRequestContextBuilder {
+    import std.socket;
+    import handy_httpd.server;
+
+    private HttpServer server;
+    private Socket clientSocket;
+    private HttpRequestBuilder requestBuilder;
+
+    this(HttpServer server, Socket clientSocket) {
+        this.server = server;
+        this.clientSocket = clientSocket;
+    }
+
+    HttpRequestContextBuilder withRequest(string method, string url) {
+        this.requestBuilder = new HttpRequestBuilder(method, url);
+        return this;
+    }
+
+    HttpRequestContext build() {
+        return HttpRequestContext(
+            this.requestBuilder.build(),
+            HttpResponse(200, "OK", string[string].init, this.clientSocket, false),
+            this.clientSocket,
+            this.server
+        );
+    }
 }
 
 /** 
@@ -65,7 +106,7 @@ interface ServerExceptionHandler {
  */
 class BasicServerExceptionHandler : ServerExceptionHandler {
     void handle(ref HttpRequestContext ctx, Exception e) {
-        auto log = ctx.request.server.getLogger();
+        auto log = ctx.server.getLogger();
         log.infoF!"An error occurred while handling a request: %s"(e.msg);
         if (!ctx.response.isFlushed) {
             ctx.response.setStatus(500);
