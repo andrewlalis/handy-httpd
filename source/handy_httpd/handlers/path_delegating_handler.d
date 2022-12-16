@@ -1,3 +1,7 @@
+/** 
+ * This module defines a handler that delegates to other handlers, depending on
+ * the request URL path and/or request method.
+ */
 module handy_httpd.handlers.path_delegating_handler;
 
 import handy_httpd.components.handler;
@@ -10,10 +14,7 @@ import handy_httpd.components.responses;
  * based on a configured Ant-style path pattern.
  */
 class PathDelegatingHandler : HttpRequestHandler {
-    /** 
-     * The associative array that maps path patterns to request handlers.
-     */
-    private HttpRequestHandler[string] handlers;
+    private HandlerMapping[] handlerMappings;
 
     /** 
      * A handler to delegate to when no matching handler is found for a
@@ -21,33 +22,118 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     private HttpRequestHandler notFoundHandler;
 
-    this(HttpRequestHandler[string] handlers = null) {
-        this.handlers = handlers;
+    this() {
+        this.handlerMappings = [];
         this.notFoundHandler = toHandler((ref ctx) {ctx.response.notFound();});
     }
 
     /** 
-     * Adds a new path/handler to this delegating handler.
+     * Adds a new path mapping to this handler, so that when handling requests,
+     * if the request's URL matches the given path pattern, and the request's
+     * method is one of the given methods, then the given handler will be used
+     * to handle the request.
+     *
+     * For example, to invoke `myHandler` on GET and PATCH requests to `/users/{name}`,
+     * we can add a mapping like so:
+     * ```d
+     * new PathDelegatingHandler()
+     *     .addMapping(["GET", "PATCH"], "/users/{name}", myHandler);
+     * ```
+     *
+     * To let a handler apply to any request method, you can also simply supply
+     * `["*"]` as the `methods` argument.
+     * ```d
+     * new PathDelegatingHandler()
+     *     .addMapping(["*"], "/users/{name}", myHandler);
+     * ```
+     *
      * Params:
-     *   path = The path pattern to match against requests.
-     *   handler = The handler that will handle requests to the given path.
-     * Returns: This handler, for method chaining.
+     *   methods = The methods that the handler accepts.
+     *   pathPattern = The path pattern the handler accepts.
+     *   handler = The handler to handle requests.
+     * Returns: This path delegating handler.
      */
-    public PathDelegatingHandler addPath(string path, HttpRequestHandler handler) {
-        this.handlers[path] = handler;
+    public PathDelegatingHandler addMapping(string[] methods, string pathPattern, HttpRequestHandler handler) {
+        import std.algorithm;
+        import std.string;
+        import std.array;
+
+        if (handler is null) throw new Exception("Cannot add a mapping for a null handler.");
+        methods = methods
+            .map!(m => toUpper(m)).array
+            .sort!((a, b) => a < b).array;
+        foreach (mapping; this.handlerMappings) {
+            // TODO: Actually parse and check if path patterns overlap.
+            if (mapping.pathPattern == pathPattern && mapping.methods == methods) {
+                throw new Exception(
+                    format!"A mapping already exists for methods %s and path %s."(methods, pathPattern)
+                );
+            }
+        }
+        sort(methods);
+        this.handlerMappings ~= HandlerMapping(pathPattern, methods, handler);
         return this;
     }
 
     /** 
-     * Adds a new function to handle requests to the given path.
+     * Overloaded version of `addMapping` that accepts a handler function.
      * Params:
-     *   path = The path pattern to match against requests.
-     *   fn = The function that will handle requests to the given path.
-     * Returns: This handler, for method chaining.
+     *   methods = The methods that the handler accepts.
+     *   pathPattern = The path pattern the handler accepts.
+     *   handler = The handler to handle requests.
+     * Returns: This path delegating handler.
      */
-    public PathDelegatingHandler addPath(string path, HttpRequestHandlerFunction fn) {
-        this.handlers[path] = toHandler(fn);
-        return this;
+    public PathDelegatingHandler addMapping(string[] methods, string pathPattern, HttpRequestHandlerFunction handler) {
+        return this.addMapping(methods, pathPattern, toHandler(handler));
+    }
+
+    /** 
+     * Overloaded version of `addMapping` that accepts a single method.
+     * Params:
+     *   method = The methods that the handler accepts.
+     *   pathPattern = The path pattern the handler accepts.
+     *   handler = The handler to handle requests.
+     * Returns: This path delegating handler.
+     */
+    public PathDelegatingHandler addMapping(string method, string pathPattern, HttpRequestHandler handler) {
+        return this.addMapping([method], pathPattern, handler);
+    }
+
+    /** 
+     * Overloaded version of `addMapping` that accepts a single method and a
+     * handler function.
+     * Params:
+     *   method = The methods that the handler accepts.
+     *   pathPattern = The path pattern the handler accepts.
+     *   handler = The handler to handle requests.
+     * Returns: This path delegating handler.
+     */
+    public PathDelegatingHandler addMapping(string method, string pathPattern, HttpRequestHandlerFunction handler) {
+        return this.addMapping([method], pathPattern, handler);
+    }
+
+    /** 
+     * Overloaded version of `addMapping` that defaults to mapping all request
+     * methods to the given handler.
+     * Params:
+     *   pathPattern = The path pattern the handler accepts.
+     *   handler = The handler to handle requests.
+     * Returns: This path delegating handler.
+     */
+    public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandler handler) {
+        return this.addMapping(["*"], pathPattern, handler);
+    }
+
+    /** 
+     * Overloaded version of `addMapping` that defaults to mapping all request
+     * methods to the given handler function.
+     * Params:
+     *   pathPattern = The path pattern the handler accepts.
+     *   handler = The handler to handle requests.
+     * Returns: This path delegating handler.
+     */
+    public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandlerFunction handler) {
+        return this.addMapping(["*"], pathPattern, handler);
     }
 
     /** 
@@ -71,63 +157,97 @@ class PathDelegatingHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequestContext ctx) {
+        import std.algorithm : canFind;
         auto log = ctx.server.getLogger();
-        foreach (pattern, handler; handlers) {
-            if (pathMatches(pattern, ctx.request.url)) {
-                log.infoFV!"Found matching handler for url %s (pattern: %s)"(ctx.request.url, pattern);
-                ctx.request.pathParams = parsePathParams(pattern, ctx.request.url);
-                handler.handle(ctx);
+        foreach (mapping; handlerMappings) {
+            if (
+                pathMatches(mapping.pathPattern, ctx.request.url) &&
+                (
+                    mapping.methods.length == 0 ||
+                    mapping.methods[0] == "*" ||
+                    canFind(mapping.methods, ctx.request.method)
+                )
+            ) {
+                log.infoFV!"Found matching handler for %s %s (pattern: %s)"(
+                    ctx.request.method,
+                    ctx.request.url,
+                    mapping.pathPattern
+                );
+                ctx.request.pathParams = parsePathParams(mapping.pathPattern, ctx.request.url);
+                mapping.handler.handle(ctx);
                 return; // Exit once we handle the request.
             }
         }
         log.infoFV!"No matching handler found for url %s"(ctx.request.url);
         notFoundHandler.handle(ctx);
     }
+
+    unittest {
+        import handy_httpd.server;
+        import handy_httpd.components.config;
+        import handy_httpd.components.responses;
+        import std.socket;
+        import std.stdio;
+        import unit_threaded;
+
+        auto handler = new PathDelegatingHandler()
+            .addMapping("GET", "/home", (ref ctx) {ctx.response.okResponse();})
+            .addMapping("GET", "/users", (ref ctx) {ctx.response.okResponse();})
+            .addMapping("GET", "/users/{id}", (ref ctx) {ctx.response.okResponse();})
+            .addMapping("GET", "/api/*", (ref ctx) {ctx.response.okResponse();});
+
+        /*
+        To test the handle() method, we create a pair of dummy sockets and a dummy
+        server to satisfy dependencies, then create some fake request contexts and
+        see how the handler changes them.
+        */
+        HttpRequestContext generateHandledCtx(string method, string url) {
+            Socket[2] sockets = socketPair();
+            scope (exit) {
+                sockets[0].close();
+                sockets[1].close();
+            }
+            Socket clientSocket = sockets[1];
+            HttpServer server = new HttpServer(handler);
+            auto ctx = new HttpRequestContextBuilder(server, clientSocket)
+                .withRequest(method, url)
+                .build();
+            handler.handle(ctx);
+            return ctx;
+        }
+
+        assert(generateHandledCtx("GET", "/home").response.status == 200);
+        assert(generateHandledCtx("GET", "/home-not-exists").response.status == 404);
+        assert(generateHandledCtx("GET", "/users").response.status == 200);
+        assert(generateHandledCtx("GET", "/users/34").response.status == 200);
+        assert(generateHandledCtx("GET", "/users/34").request.getPathParamAs!int("id") == 34);
+        assert(generateHandledCtx("GET", "/api/test").response.status == 200);
+        assert(generateHandledCtx("GET", "/api/test/bleh").response.status == 404);
+        assert(generateHandledCtx("GET", "/api").response.status == 404);
+        assert(generateHandledCtx("GET", "/").response.status == 404);
+    }
 }
 
-unittest {
-    import handy_httpd.server;
-    import handy_httpd.components.config;
-    import handy_httpd.components.responses;
-    import std.socket;
-    import std.stdio;
-    import unit_threaded;
+/** 
+ * Represents a mapping of a specific request handler to a subset of URLs
+ * and/or request methods.
+ */
+struct HandlerMapping {
+    /** 
+     * The pattern used to match against URLs.
+     */
+    string pathPattern;
 
-    auto handler = new PathDelegatingHandler()
-        .addPath("/home", (ref ctx) {ctx.response.okResponse();})
-        .addPath("/users", (ref ctx) {ctx.response.okResponse();})
-        .addPath("/users/{id}", (ref ctx) {ctx.response.okResponse();})
-        .addPath("/api/*", (ref ctx) {ctx.response.okResponse();});
+    /** 
+     * The set of methods that this handler mapping can be used for.
+     */
+    string[] methods;
 
-    /*
-    To test the handle() method, we create a pair of dummy sockets and a dummy
-    server to satisfy dependencies, then create some fake request contexts and
-    see how the handler changes them.
-    */
-    HttpRequestContext generateHandledCtx(string method, string url) {
-        Socket[2] sockets = socketPair();
-        scope (exit) {
-            sockets[0].close();
-            sockets[1].close();
-        }
-        Socket clientSocket = sockets[1];
-        HttpServer server = new HttpServer(handler);
-        auto ctx = new HttpRequestContextBuilder(server, clientSocket)
-            .withRequest(method, url)
-            .build();
-        handler.handle(ctx);
-        return ctx;
-    }
-
-    assert(generateHandledCtx("GET", "/home").response.status == 200);
-    assert(generateHandledCtx("GET", "/home-not-exists").response.status == 404);
-    assert(generateHandledCtx("GET", "/users").response.status == 200);
-    assert(generateHandledCtx("GET", "/users/34").response.status == 200);
-    assert(generateHandledCtx("GET", "/users/34").request.getPathParamAs!int("id") == 34);
-    assert(generateHandledCtx("GET", "/api/test").response.status == 200);
-    assert(generateHandledCtx("GET", "/api/test/bleh").response.status == 404);
-    assert(generateHandledCtx("GET", "/api").response.status == 404);
-    assert(generateHandledCtx("GET", "/").response.status == 404);
+    /** 
+     * The handler to apply to requests whose URL and method match this
+     * mapping's path pattern and methods list.
+     */
+    HttpRequestHandler handler;
 }
 
 /** 

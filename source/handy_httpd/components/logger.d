@@ -26,7 +26,7 @@ struct ServerLogger {
      * Params:
      *   args = The arguments to write.
      */
-    void info(T...)(T args) {
+    public void info(T...)(T args) {
         writeln(args);
     }
 
@@ -35,7 +35,7 @@ struct ServerLogger {
      * Params:
      *   args = The arguments to write.
      */
-    void infoV(T...)(T args) {
+    public void infoV(T...)(T args) {
         if (config.verbose) info(args);
     }
 
@@ -44,7 +44,7 @@ struct ServerLogger {
      * Params:
      *   args = The arguments to the format string.
      */
-    void infoF(alias fmt, A...)(A args) if (isSomeString!(typeof(fmt))) {
+    public void infoF(alias fmt, A...)(A args) if (isSomeString!(typeof(fmt))) {
         info(format!(fmt)(args));
     }
 
@@ -54,7 +54,7 @@ struct ServerLogger {
      * Params:
      *   args = The arguments to the format string.
      */
-    void infoFV(alias fmt, A...)(A args) if (isSomeString!(typeof(fmt))) {
+    public void infoFV(alias fmt, A...)(A args) if (isSomeString!(typeof(fmt))) {
         if (config.verbose) infoF!(fmt)(args);
     }
 }
