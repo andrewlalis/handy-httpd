@@ -97,7 +97,7 @@ class ServerWorkerThread : Thread {
         // Prepare the request context by parsing the HttpRequest, and preparing a default response.
         HttpRequestContext ctx = HttpRequestContext(
             parseRequest(requestParser, data),
-            HttpResponse().setStatus(200).setStatusText("OK")
+            HttpResponse()
         );
         ctx.server = this.server;
         ctx.clientSocket = clientSocket;

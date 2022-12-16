@@ -80,6 +80,9 @@ static ServerConfig defaultValues() {
 }
 ```
 
+### Deploying to Production
+While it's not recommended to use Handy-httpd in production for critical infrastructure, you can still use it; maybe for smaller services or testing projects. In that case, it's recommended to run it behind nginx or some other reverse proxy server that handles raw request logging, SSL, and all the other aspects of a fully-featured web server.
+
 ## Architecture
 It's been discussed briefly before, but in this section, we'll go into detail about how Handy-httpd is designed.
 
