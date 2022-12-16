@@ -96,35 +96,38 @@ unittest {
     auto handler = new PathDelegatingHandler()
         .addPath("/home", (ref ctx) {ctx.response.okResponse();})
         .addPath("/users", (ref ctx) {ctx.response.okResponse();})
-        .addPath("/users/{id}", (ref ctx) {ctx.response.okResponse();});
+        .addPath("/users/{id}", (ref ctx) {ctx.response.okResponse();})
+        .addPath("/api/*", (ref ctx) {ctx.response.okResponse();});
 
     /*
     To test the handle() method, we create a pair of dummy sockets and a dummy
     server to satisfy dependencies, then create some fake request contexts and
     see how the handler changes them.
     */
-    Socket[2] sockets = socketPair();
-    Socket clientSocket = sockets[1];
-    HttpServer server = new HttpServer(handler);
+    HttpRequestContext generateHandledCtx(string method, string url) {
+        Socket[2] sockets = socketPair();
+        scope (exit) {
+            sockets[0].close();
+            sockets[1].close();
+        }
+        Socket clientSocket = sockets[1];
+        HttpServer server = new HttpServer(handler);
+        auto ctx = new HttpRequestContextBuilder(server, clientSocket)
+            .withRequest(method, url)
+            .build();
+        handler.handle(ctx);
+        return ctx;
+    }
 
-    auto ctx1 = new HttpRequestContextBuilder(server, clientSocket)
-        .withRequest("GET", "/home")
-        .build();
-    handler.handle(ctx1);
-    assert(ctx1.response.status == 200);
-    
-    auto ctx2 = new HttpRequestContextBuilder(server, clientSocket)
-        .withRequest("GET", "/home-not-exists")
-        .build();
-    handler.handle(ctx2);
-    assert(ctx2.response.status == 404);
-
-    auto ctx3 = new HttpRequestContextBuilder(server, clientSocket)
-        .withRequest("GET", "/users/34")
-        .build();
-    handler.handle(ctx3);
-    assert(ctx3.response.status == 200);
-    assert(ctx3.request.pathParams["id"] == "34");
+    assert(generateHandledCtx("GET", "/home").response.status == 200);
+    assert(generateHandledCtx("GET", "/home-not-exists").response.status == 404);
+    assert(generateHandledCtx("GET", "/users").response.status == 200);
+    assert(generateHandledCtx("GET", "/users/34").response.status == 200);
+    assert(generateHandledCtx("GET", "/users/34").request.getPathParamAs!int("id") == 34);
+    assert(generateHandledCtx("GET", "/api/test").response.status == 200);
+    assert(generateHandledCtx("GET", "/api/test/bleh").response.status == 404);
+    assert(generateHandledCtx("GET", "/api").response.status == 404);
+    assert(generateHandledCtx("GET", "/").response.status == 404);
 }
 
 /** 
@@ -219,4 +222,6 @@ unittest {
     assert(parsePathParams("/users/{id}", "/users") == null);
     assert(parsePathParams("/users", "/users") == null);
     assert(parsePathParams("/{a}/b/{c}", "/one/b/two") == ["a": "one", "c": "two"]);
+    // Check that if two path params have the same name, the last value is used.
+    assert(parsePathParams("/{first}/{second}/{first}", "/a/b/c") == ["first": "c", "second": "b"]);
 }
