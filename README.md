@@ -7,7 +7,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 2. [Request Handlers](#request-handlers)
 3. [Configuration](#configuration)
 4. [Architecture](#architecture)
-5. [Testing](#testing)
+5. [Developing](#developing)
 
 ## Start Your Server
 In this example, we take advantage of the [Dub package manager](https://code.dlang.org/)'s single-file SDL syntax to declare HandyHttpd as a dependency. For this example, we'll call this `my_server.d`.
@@ -148,3 +148,6 @@ auto filteredHandler = new FilteredRequestHandler(
 auto server = new HttpServer(filteredHandler);
 server.start();
 ```
+
+## Developing
+When developing or making changes to Handy-httpd, you can test it simply by making a proof-of-concept server for the feature you're adding, and declaring its handy-httpd dependency path to point to your local instance of this project. For example, see `testing/static_file_test` for a server that will always use the local handy-httpd version as its dependency.
