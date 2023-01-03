@@ -91,19 +91,86 @@ class FileResolvingHandler : HttpRequestHandler {
      * or null if no valid file could be found.
      */
     private string sanitizeRequestPath(string url) {
-        import std.path : buildNormalizedPath;
+        import std.path;
         import std.file : exists, isDir;
+        import std.algorithm : startsWith;
         import std.regex;
-        if (url.length == 0 || url == "/") return this.basePath ~ "/index.html";
-        string normalized = this.basePath ~ "/" ~ buildNormalizedPath(url[1 .. $]);
-        
-        if (!exists(normalized)) return null;
-        // If the user has requested a directory, try and serve "index.html" from it.
-        if (isDir(normalized)) {
-            normalized ~= "/index.html";
-            if (!exists(normalized)) return null;
+
+        string normalizedUrl;
+        if (url.length == 0 || url == "/") {
+            return findIndexFile(this.basePath);
+        } else {
+            if (startsWith(url, "/")) url = url[1 .. $];
+            normalizedUrl = buildNormalizedPath(buildPath(this.basePath, url));
+
+            // Ensure that any path outside the base path is ignored.
+            string baseAbsolutePath = absolutePath(this.basePath).buildNormalizedPath;
+            string normalizedAbsolutePath = absolutePath(normalizedUrl);
+            if (!startsWith(normalizedAbsolutePath, baseAbsolutePath)) return null;
         }
-        return normalized;
+        
+        if (exists(normalizedUrl)) {
+            if (isDir(normalizedUrl)) {
+                return findIndexFile(normalizedUrl);
+            } else {
+                return normalizedUrl;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    unittest {
+        import std.path;
+        import std.file;
+        import std.stdio;
+        
+        // For these tests, we'll pretend that the project root dir is our base path for files to serve.
+        // For the test, we create a simple "index.html" which is removed at the end.
+        auto f = File("index.html", "w");
+        f.writeln("<html><body>Hello world.</body></html>");
+        f.close();
+        scope (exit) {
+            if (exists("index.html")) std.file.remove("index.html");
+            if (exists("index.htm")) std.file.remove("index.htm");
+            if (exists("index.txt")) std.file.remove("index.txt");
+            if (exists("index")) std.file.remove("index");
+        }
+        FileResolvingHandler handler = new FileResolvingHandler(".");
+        // Try resolving the base index file when given a URL for the base path.
+        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index.html"));
+        assert(handler.sanitizeRequestPath("") == buildPath(".", "index.html"));
+        // Check that it resolves other common index file types too.
+        std.file.rename("index.html", "index.htm");
+        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index.htm"));
+        std.file.rename("index.htm", "index.txt");
+        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index.txt"));
+        std.file.rename("index.txt", "index");
+        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index"));
+        // Check some basic files which exist.
+        assert(handler.sanitizeRequestPath("/dub.json") == buildPath(".", "dub.json"), handler.sanitizeRequestPath("/dub.json"));
+        // assert(handler.sanitizeRequestPath("/source/handy_httpd/package.d") == buildPath(".", "source", "handy_httpd", "package.d"));
+        // Check that non-existent paths resolve to null.
+        assert(handler.sanitizeRequestPath("/non-existent-path") is null);
+        // Ensure that requests for resources outside the base path are ignored.
+        assert(handler.sanitizeRequestPath("/../README.md") is null);
+        assert(handler.sanitizeRequestPath("/../../data.txt") is null);
+    }
+
+    private string findIndexFile(string dir) {
+        import std.file : exists;
+        import std.path : buildPath;
+        string[] possibleIndexFiles = [
+            "index.html",
+            "index.htm",
+            "index.txt",
+            "index"
+        ];
+        foreach (filename; possibleIndexFiles) {
+            string path = buildPath(dir, filename);
+            if (exists(path)) return path;
+        }
+        return null;
     }
 
     /** 

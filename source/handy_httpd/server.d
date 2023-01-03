@@ -142,6 +142,10 @@ class HttpServer {
         shutdownWorkerThreads();
     }
 
+    unittest {
+        
+    }
+
     /** 
      * Shuts down the server by closing the server socket, if possible. This
      * will block until all pending requests have been fulfilled.
