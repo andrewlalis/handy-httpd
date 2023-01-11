@@ -1,0 +1,19 @@
+{
+  "name": "docs",
+  "version": "0.0.1",
+  "description": "Documentation for handy_httpd",
+  "main": "index.js",
+  "authors": {
+    "name": "Andrew Lalis",
+    "email": "andrewlalisofficial@gmail.com"
+  },
+  "repository": "https://github.com/andrewlalis/handy-httpd/docs",
+  "scripts": {
+    "dev": "vuepress dev src",
+    "build": "vuepress build src"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "vuepress": "^1.5.3"
+  }
+}

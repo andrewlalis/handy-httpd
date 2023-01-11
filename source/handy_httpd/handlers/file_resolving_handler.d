@@ -1,3 +1,7 @@
+/** 
+ * This module defines the `FileResolvingHandler`, which is a pre-built handler
+ * you can use to easily serve static file content from a directory.
+ */
 module handy_httpd.handlers.file_resolving_handler;
 
 import handy_httpd.components.handler;
@@ -7,7 +11,15 @@ import handy_httpd.components.responses;
 import handy_httpd.components.logger;
 
 /** 
- * Request handler that resolves files within a given base path.
+ * Request handler that resolves files within a given base path. This handler
+ * will take the request URL, and try to find a file or directory matching that
+ * URL within its configured `basePath`. If a directory is requested, the
+ * handler will try to serve an "index" file from it, if such a file exists. If
+ * a file is requested, that file will be served, with the appropriate mime
+ * type, if it exists.
+ *
+ * Note that only files strictly within the given `basePath` are able to be
+ * served; requests like `/../../data.txt` will result in a 404.
  */
 class FileResolvingHandler : HttpRequestHandler {
     /** 
@@ -151,7 +163,10 @@ class FileResolvingHandler : HttpRequestHandler {
 
         // Check some basic files which exist.
         assert(handler.sanitizeRequestPath("/dub.json") == buildPath("dub.json"));
-        assert(handler.sanitizeRequestPath("/source/handy_httpd/package.d") == buildPath("source", "handy_httpd", "package.d"));
+        assert(
+            handler.sanitizeRequestPath("/source/handy_httpd/package.d") ==
+            buildPath("source", "handy_httpd", "package.d")
+        );
         // Check that non-existent paths resolve to null.
         assert(handler.sanitizeRequestPath("/non-existent-path") is null);
         // Ensure that requests for resources outside the base path are ignored.

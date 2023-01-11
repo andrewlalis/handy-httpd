@@ -1,7 +1,6 @@
 .dub
 docs.json
 __dummy.html
-docs/
 bin/
 /handy-httpd
 handy-httpd.so
@@ -15,3 +14,4 @@ libhandy-httpd.a
 *.o
 *.obj
 *.lst
+.DS_Store

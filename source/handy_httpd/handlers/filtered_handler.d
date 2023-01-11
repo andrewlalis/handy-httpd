@@ -144,7 +144,9 @@ private class HandlerFilter : HttpRequestFilter {
  * ```
  * 
  * When a request is handled by this handler, it will be passed on to the above
- * filter chain for processing.
+ * filter chain for processing. If the handler throws an exception, the filter
+ * chain will be aborted, and the exception will be immediately handled by the
+ * server's configured exception handler.
  */
 class FilteredRequestHandler : HttpRequestHandler {
     private FilterChain filterChain;
