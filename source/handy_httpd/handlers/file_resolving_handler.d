@@ -28,27 +28,28 @@ class FileResolvingHandler : HttpRequestHandler {
     this(string basePath = ".") {
         this.basePath = basePath;
         this.mimeTypes = [
-            ".html": "text/html",
-            ".js": "text/javascript",
-            ".css": "text/css",
-            ".json": "application/json",
-            ".png": "image/png",
-            ".jpg": "image/jpg",
-            ".gif": "image/gif",
-            ".webp": "image/webp",
-            ".wav": "audio/wav",
-            ".ogg": "audio/ogg",
-            ".mp3": "audio/mpeg",
-            ".mp4": "video/mp4",
-            ".woff": "application/font-woff",
-            ".ttf": "application/font-ttf",
-            ".eot": "application/vnd.ms-fontobject",
-            ".otf": "application/font-otf",
-            ".svg": "application/image/svg+xml",
-            ".wasm": "application/wasm",
-            ".pdf": "application/pdf",
-            ".txt": "text/plain",
-            ".xml": "application/xml"
+            "html": "text/html",
+            "md": "text/markdown",
+            "txt": "text/plain",
+            "js": "text/javascript",
+            "css": "text/css",
+            "json": "application/json",
+            "png": "image/png",
+            "jpg": "image/jpg",
+            "gif": "image/gif",
+            "webp": "image/webp",
+            "wav": "audio/wav",
+            "ogg": "audio/ogg",
+            "mp3": "audio/mpeg",
+            "mp4": "video/mp4",
+            "woff": "application/font-woff",
+            "ttf": "application/font-ttf",
+            "eot": "application/vnd.ms-fontobject",
+            "otf": "application/font-otf",
+            "svg": "application/image/svg+xml",
+            "wasm": "application/wasm",
+            "pdf": "application/pdf",
+            "xml": "application/xml"
         ];
     }
 
@@ -62,10 +63,10 @@ class FileResolvingHandler : HttpRequestHandler {
         auto log = ctx.server.getLogger();
         log.infoF!"Resolving file for url %s..."(ctx.request.url);
         string path = sanitizeRequestPath(ctx.request.url);
-        if (path != null) {
+        if (path !is null) {
             ctx.response.fileResponse(path, getMimeType(path, log));
         } else {
-            log.infoFV!"Could not resolve file for url %s. Maybe it doesn't exist?"(ctx.request.url);
+            log.infoFV!"Could not resolve file for url %s."(ctx.request.url);
             ctx.response.notFound();
         }
     }
@@ -73,7 +74,7 @@ class FileResolvingHandler : HttpRequestHandler {
     /** 
      * Registers a new mime type for this handler.
      * Params:
-     *   fileExtension = The file extension to use, including the '.' separator.
+     *   fileExtension = The file extension to use, excluding the '.' separator.
      *   mimeType = The mime type that will be assigned to the given file extension.
      * Returns: The handler, for method chaining.
      */
@@ -147,16 +148,25 @@ class FileResolvingHandler : HttpRequestHandler {
         assert(handler.sanitizeRequestPath("/") == buildPath(".", "index.txt"));
         std.file.rename("index.txt", "index");
         assert(handler.sanitizeRequestPath("/") == buildPath(".", "index"));
+
         // Check some basic files which exist.
-        assert(handler.sanitizeRequestPath("/dub.json") == buildPath(".", "dub.json"), handler.sanitizeRequestPath("/dub.json"));
-        // assert(handler.sanitizeRequestPath("/source/handy_httpd/package.d") == buildPath(".", "source", "handy_httpd", "package.d"));
+        assert(handler.sanitizeRequestPath("/dub.json") == buildPath("dub.json"));
+        assert(handler.sanitizeRequestPath("/source/handy_httpd/package.d") == buildPath("source", "handy_httpd", "package.d"));
         // Check that non-existent paths resolve to null.
         assert(handler.sanitizeRequestPath("/non-existent-path") is null);
         // Ensure that requests for resources outside the base path are ignored.
         assert(handler.sanitizeRequestPath("/../README.md") is null);
         assert(handler.sanitizeRequestPath("/../../data.txt") is null);
+        assert(handler.sanitizeRequestPath("/etc/profile") is null);
     }
 
+    /** 
+     * Tries to find a valid "index" file within a directory, to serve in case
+     * the file resolving handler gets a request for a directory.
+     * Params:
+     *   dir = The directory to look in.
+     * Returns: The string path to a valid index file, or null if none was found.
+     */
     private string findIndexFile(string dir) {
         import std.file : exists;
         import std.path : buildPath;
@@ -173,6 +183,37 @@ class FileResolvingHandler : HttpRequestHandler {
         return null;
     }
 
+    unittest {
+        import std.path;
+        import std.file;
+        import std.stdio;
+
+        // Set up a test directory.
+        string DIR_NAME = "tmp-findIndexFile";
+        mkdir(DIR_NAME);
+        scope (exit) {
+            if (exists(DIR_NAME)) std.file.rmdirRecurse(DIR_NAME);
+        }
+
+        // If no file exists, resolve to null.
+        FileResolvingHandler handler = new FileResolvingHandler(DIR_NAME);
+        assert(handler.findIndexFile(DIR_NAME) is null);
+
+        string[] possibleFiles = [
+            "index.html",
+            "index.htm",
+            "index.txt",
+            "index"
+        ];
+        foreach (filename; possibleFiles) {
+            auto f = File(buildPath(DIR_NAME, filename), "w");
+            f.writeln("<html><body>Hello world.</body></html>");
+            f.close();
+            assert(handler.findIndexFile(DIR_NAME) == buildPath(DIR_NAME, filename));
+            std.file.remove(buildPath(DIR_NAME, filename));
+        }
+    }
+
     /** 
     * Tries to determine the mime type of a file. Defaults to "text/html" for
     * files of an unknown type.
@@ -186,11 +227,30 @@ class FileResolvingHandler : HttpRequestHandler {
         import std.uni : toLower;
         auto p = filename.lastIndexOf('.');
         if (p == -1) return "text/html";
-        string extension = filename[p..$].toLower();
+        string extension = filename[(p + 1)..$].toLower();
         if (extension !in this.mimeTypes) {
             log.infoFV!"Warning: Unknown mime type for file extension %s"(extension);
-            return "text/plain";
+            return "text/html";
         }
         return this.mimeTypes[extension];
+    }
+
+    unittest {
+        import handy_httpd.components.config;
+        import handy_httpd.components.logger;
+        FileResolvingHandler handler = new FileResolvingHandler();
+        ServerConfig config = ServerConfig.defaultValues();
+        ServerLogger log = ServerLogger(&config);
+
+        // Check that known mime types work.
+        assert(handler.getMimeType("index.html", log) == "text/html");
+        assert(handler.getMimeType("profile.png", log) == "image/png");
+        assert(handler.getMimeType("vid.mp4", log) == "video/mp4");
+
+        // Check that unknown/missing types resolve to "text/html".
+        assert(handler.getMimeType("test.nonexistentextension", log) == "text/html");
+        assert(handler.getMimeType("test", log) == "text/html");
+        assert(handler.getMimeType(".gitignore", log) == "text/html");
+        assert(handler.getMimeType("test.", log) == "text/html");
     }
 }
