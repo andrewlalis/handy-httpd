@@ -133,12 +133,15 @@ class HttpServer {
 
         log.infoV("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
-            Socket clientSocket = this.serverSocket.accept();
-            this.requestQueue.insertBack(clientSocket);
-            this.requestSemaphore.notify();
+            try {
+                Socket clientSocket = this.serverSocket.accept();
+                this.requestQueue.insertBack(clientSocket);
+                this.requestSemaphore.notify();
+            } catch (SocketAcceptException acceptException) {
+                log.infoFV!"Socket accept failed: %s"(acceptException.msg);
+            }
         }
         this.ready = false;
-        
         shutdownWorkerThreads();
     }
 
@@ -153,6 +156,7 @@ class HttpServer {
     public void stop() {
         log.infoV("Stopping the server.");
         if (this.serverSocket !is null) {
+            this.serverSocket.shutdown(SocketShutdown.BOTH);
             this.serverSocket.close();
         }
     }
@@ -205,6 +209,7 @@ class HttpServer {
      */
     private void shutdownWorkerThreads() {
         for (int i = 0; i < this.config.workerPoolSize; i++) {
+            this.requestSemaphore.notify();
             this.requestSemaphore.notify();
         }
         this.workerThreadGroup.joinAll();

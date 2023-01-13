@@ -58,7 +58,7 @@ class ServerWorkerThread : Thread {
             HttpRequestContext ctx = nullableCtx.get();
 
             // Then handle the request using the server's handler.
-            this.server.getLogger.infoFV!"<- %s %s"(ctx.request.method, ctx.request.url);
+            this.server.getLogger.infoFV!"[%s] <- %s %s"(this.name, ctx.request.method, ctx.request.url);
             try {
                 this.server.getHandler.handle(ctx);
             } catch (Exception e) {
@@ -84,11 +84,12 @@ class ServerWorkerThread : Thread {
         size_t received = clientSocket.receive(receiveBuffer);
         if (received == 0 || received == Socket.ERROR) {
             if (received == 0) {
-                this.server.getLogger.infoFV!"Client %s closed the connection before a request was sent."(
+                this.server.getLogger.infoFV!"[%s] Client %s closed the connection before a request was sent."(
+                    this.name,
                     clientSocket.remoteAddress
                 );
             } else if (received == Socket.ERROR) {
-                this.server.getLogger.infoFV!"Socket receive() failed for client at %s."(clientSocket.remoteAddress);
+                this.server.getLogger.infoFV!"[%s] Socket receive() failed."(this.name);
             }
             return result; // Skip if we didn't receive valid data.
         }
