@@ -4,7 +4,6 @@
 module handy_httpd.server;
 
 import std.socket;
-import std.regex;
 import std.conv : to, ConvException;
 import std.container.dlist : DList;
 import std.typecons : Nullable;

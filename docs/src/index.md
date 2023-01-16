@@ -1,15 +1,15 @@
 ---
 home: true
-heroImage: https://v1.vuepress.vuejs.org/hero.png
-tagline: Documentation for handy_httpd
+heroImage: /images/icon_512.png
+tagline: The simplest HTTP server for your D project.
 actionText: Quick Start →
 actionLink: /guide/
 features:
-- title: Feature 1 Title
-  details: Feature 1 Description
-- title: Feature 2 Title
-  details: Feature 2 Description
-- title: Feature 3 Title
-  details: Feature 3 Description
-footer: Made by Andrew Lalis with ❤️
+- title: Simple Setup
+  details: It only takes seconds to set up your server.
+- title: High Performance
+  details: Custom parallelized worker pool for handling incoming requests.
+- title: Extensible
+  details: Built with extensibility in mind. Filters, complex request handlers, error handling, and more.
+footer: Made by Andrew Lalis
 ---

@@ -2,6 +2,8 @@
 
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
+[Check out the documentation here.](https://andrewlalis.github.io/handy-httpd/)
+
 ##### Table of Contents
 1. [Start Your Server](#start-your-server)
 2. [Request Handlers](#request-handlers)

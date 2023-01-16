@@ -1,14 +1,17 @@
 const { description } = require('../../package')
+const ddoc_link = require('../ddoc-link')
 
 module.exports = {
   /**
    * Ref：https://v1.vuepress.vuejs.org/config/#title
    */
-  title: 'Vuepress Docs Boilerplate',
+  title: 'Handy-Httpd',
   /**
    * Ref：https://v1.vuepress.vuejs.org/config/#description
    */
-  description: description,
+  description: 'Documentation for the Handy-Httpd server.',
+
+  base: '/handy-httpd/',
 
   /**
    * Extra tags to be injected to the page HTML `<head>`
@@ -16,7 +19,7 @@ module.exports = {
    * ref：https://v1.vuepress.vuejs.org/config/#head
    */
   head: [
-    ['meta', { name: 'theme-color', content: '#3eaf7c' }],
+    ['meta', { name: 'theme-color', content: '#ff3900' }],
     ['meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }],
     ['meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'black' }]
   ],
@@ -38,12 +41,12 @@ module.exports = {
         link: '/guide/',
       },
       {
-        text: 'Config',
-        link: '/config/'
+        text: 'GitHub',
+        link: 'https://github.com/andrewlalis/handy-httpd'
       },
       {
-        text: 'VuePress',
-        link: 'https://v1.vuepress.vuejs.org'
+        text: 'code.dlang.org',
+        link: 'https://code.dlang.org/packages/handy-httpd'
       }
     ],
     sidebar: {
@@ -53,7 +56,7 @@ module.exports = {
           collapsable: false,
           children: [
             '',
-            'using-vue',
+            'handling-requests',
           ]
         }
       ],
@@ -66,5 +69,15 @@ module.exports = {
   plugins: [
     '@vuepress/plugin-back-to-top',
     '@vuepress/plugin-medium-zoom',
+    ['vuepress-plugin-code-copy', {
+      backgroundTransition: false,
+      staticIcon: false,
+      color: '#ff3900',
+      successText: 'Copied to clipboard.'
+    }],
+    [ddoc_link({
+      version: '4.0.1',
+      moduleName: 'handy-httpd'
+    })]
   ]
 }
