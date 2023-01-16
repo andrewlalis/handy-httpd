@@ -61,9 +61,13 @@ class ServerWorkerThread : Thread {
             this.server.getLogger.infoFV!"[%s] <- %s %s"(this.name, ctx.request.method, ctx.request.url);
             try {
                 this.server.getHandler.handle(ctx);
+                if (!ctx.response.isFlushed) {
+                    ctx.response.flushHeaders();
+                }
             } catch (Exception e) {
                 this.server.getExceptionHandler.handle(ctx, e);
             }
+            clientSocket.shutdown(SocketShutdown.BOTH);
             clientSocket.close();
 
             // Reset the request parser so we're ready for the next request.
