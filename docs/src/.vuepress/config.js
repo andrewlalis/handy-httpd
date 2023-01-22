@@ -35,6 +35,8 @@ module.exports = {
     docsDir: '',
     editLinkText: '',
     lastUpdated: false,
+    sidebarDepth: 2,
+    displayAllHeaders: false,
     nav: [
       {
         text: 'Guide',
@@ -56,7 +58,10 @@ module.exports = {
           collapsable: false,
           children: [
             '',
+            'about',
             'handling-requests',
+            'configuration',
+            'pre-made-handlers'
           ]
         }
       ],
@@ -76,7 +81,7 @@ module.exports = {
       successText: 'Copied to clipboard.'
     }],
     [ddoc_link({
-      version: '4.0.1',
+      version: '4.0.2',
       moduleName: 'handy-httpd'
     })]
   ]

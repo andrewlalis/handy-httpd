@@ -285,6 +285,7 @@ unittest {
     assert(pathMatches("/?elp", "/help"));
     assert(pathMatches("/**/test", "/hello/world/test"));
     assert(pathMatches("/users/{id}", "/users/1"));
+    assert(pathMatches("/users/**", "/users/1"));
 
     assert(!pathMatches("/help", "/Help"));
     assert(!pathMatches("/help", "/help/other"));
