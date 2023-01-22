@@ -5,6 +5,7 @@ module handy_httpd.components.handler;
 
 import handy_httpd.components.request;
 import handy_httpd.components.response;
+import handy_httpd.components.worker;
 import handy_httpd.server;
 
 import std.socket;
@@ -14,6 +15,7 @@ import std.socket;
  * handling an HttpRequest. This includes:
  * - The HttpRequest.
  * - The HttpResponse.
+ * - Extra meta information.
  */
 struct HttpRequestContext {
     /**
@@ -35,6 +37,11 @@ struct HttpRequestContext {
      * The server from which this context was created.
      */
     public HttpServer server;
+
+    /** 
+     * The worker thread that's handling this request.
+     */
+    public ServerWorkerThread worker;
 }
 
 class HttpRequestContextBuilder {
@@ -60,7 +67,8 @@ class HttpRequestContextBuilder {
             this.requestBuilder.build(),
             HttpResponse(200, "OK", string[string].init, this.clientSocket, false),
             this.clientSocket,
-            this.server
+            this.server,
+            null
         );
     }
 }

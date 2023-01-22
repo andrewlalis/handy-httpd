@@ -64,30 +64,29 @@ public struct Msg {
  * Parses an HTTP request from a string.
  * Params:
  *   s = The raw HTTP request string.
- * Returns: An HttpRequest object which can be passed to a handler.
+ * Returns: A tuple containing the http request and the size of data read.
  */
-public HttpRequest parseRequest(MsgParser!Msg requestParser, string s) {
+public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string s) {
     int result = requestParser.parseRequest(s);
+    if (result < 1) {
+        throw new Exception("Couldn't parse header.");
+    }
+    
     string[string] headers;
     foreach (h; requestParser.headers) {
         headers[h.name] = cast(string) h.value;
     }
     string rawUrl = decode(cast(string) requestParser.uri);
     auto urlAndParams = parseUrlAndParams(rawUrl);
-    string bodyContent = null;
-    if (result < s.length) {
-        bodyContent = s[result .. $];
-    }
-
-    return HttpRequest(
+    HttpRequest request = HttpRequest(
         cast(string) requestParser.method,
         urlAndParams[0],
         requestParser.minorVer,
         headers,
         urlAndParams[1],
-        null,
-        bodyContent
+        null
     );
+    return tuple(request, result);
 }
 
 /** 

@@ -12,6 +12,7 @@ import httparsed : MsgParser, initParser;
 
 import handy_httpd.server;
 import handy_httpd.components.handler;
+import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
 
@@ -20,8 +21,9 @@ import handy_httpd.components.parse_utils;
  * an `HttpServer`.
  */
 class ServerWorkerThread : Thread {
+    private const(int) id;
     private MsgParser!Msg requestParser = initParser!Msg();
-    private char[] receiveBuffer;
+    private ubyte[] receiveBuffer;
     private HttpServer server;
 
     /** 
@@ -33,7 +35,8 @@ class ServerWorkerThread : Thread {
     this(HttpServer server, int id) {
         super(&run);
         super.name("handy-httpd_worker-" ~ id.to!string);
-        this.receiveBuffer = new char[server.config.receiveBufferSize];
+        this.id = id;
+        this.receiveBuffer = new ubyte[server.config.receiveBufferSize];
         this.server = server;
     }
 
@@ -93,37 +96,50 @@ class ServerWorkerThread : Thread {
             }
             return result; // Skip if we didn't receive valid data.
         }
-        string data = receiveBuffer[0..received].idup;
+        immutable ubyte[] data = receiveBuffer[0..received].idup;
 
         // Prepare the request context by parsing the HttpRequest, and preparing a default response.
-        HttpRequestContext ctx = HttpRequestContext(
-            parseRequest(requestParser, data),
-            HttpResponse()
-        );
-        ctx.server = this.server;
-        ctx.clientSocket = clientSocket;
-        ctx.response.clientSocket = clientSocket;
-        foreach (headerName, headerValue; this.server.config.defaultHeaders) {
-            ctx.response.addHeader(headerName, headerValue);
-        }
-        result = ctx;
-        
-        // Use the Content-Length header to try and continue reading the rest of the body.
-        const(string*) providedContentLength = "Content-Length" in ctx.request.headers;
-        if (providedContentLength !is null) {
-            try {
-                size_t contentLength = (*providedContentLength).to!size_t;
-                size_t receivedTotal = ctx.request.bodyContent.length;
-                while (receivedTotal < contentLength && received > 0) {
-                    received = clientSocket.receive(receiveBuffer);
-                    receivedTotal += received;
-                    ctx.request.bodyContent ~= receiveBuffer[0..received].idup;
-                }
-            } catch(ConvException e) {
-                this.server.getLogger.infoFV!"Content-Length is not a number: %s"(e.msg);
+        try {
+            auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
+            HttpRequest request = requestAndSize[0];
+            int size = requestAndSize[1];
+            request.clientSocket = clientSocket;
+            request.receiveBuffer = getReceiveBuffer();
+            request.receiveBufferOffset = size;
+            request.receivedByteCount = received;
+            HttpRequestContext ctx = HttpRequestContext(
+                request,
+                HttpResponse(),
+                clientSocket,
+                this.server,
+                this
+            );
+            ctx.response.clientSocket = clientSocket;
+            foreach (headerName, headerValue; this.server.config.defaultHeaders) {
+                ctx.response.addHeader(headerName, headerValue);
             }
+            result = ctx;
+            return result;
+        } catch (Exception e) {
+            this.server.getLogger.infoFV!"[%s] Failed to parse HTTP request: %s"(this.name, e.msg);
+            clientSocket.close();
+            return result;
         }
+    }
 
-        return result;
+    /** 
+     * Gets this worker's id.
+     * Returns: The worker id.
+     */
+    public int getId() {
+        return id;
+    }
+
+    /** 
+     * Gets a pointer to this worker's internal pre-allocated receive buffer.
+     * Returns: A pointer to the worker's receive buffer.
+     */
+    public ubyte[]* getReceiveBuffer() {
+        return &receiveBuffer;
     }
 }
