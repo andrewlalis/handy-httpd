@@ -52,12 +52,8 @@ module.exports = {
       },
       {
         text: 'ddoc',
-        link: '/ddoc/index.html',
+        link: '/handy-httpd/ddoc/index.html',
         target: '_blank'
-      },
-      {
-        text: 'Version: V',
-        link: 'bleh'
       }
     ],
     sidebar: {
