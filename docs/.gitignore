@@ -1,2 +1,3 @@
 node_modules/
 src/.vuepress/public/ddoc/
+ddoc-gen-src/

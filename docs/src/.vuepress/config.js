@@ -49,6 +49,15 @@ module.exports = {
       {
         text: 'code.dlang.org',
         link: 'https://code.dlang.org/packages/handy-httpd'
+      },
+      {
+        text: 'ddoc',
+        link: '/ddoc/index.html',
+        target: '_blank'
+      },
+      {
+        text: 'Version: V',
+        link: 'bleh'
       }
     ],
     sidebar: {

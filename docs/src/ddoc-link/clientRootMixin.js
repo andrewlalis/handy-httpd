@@ -7,7 +7,8 @@ export default {
             document.querySelectorAll('a').forEach(link => {
                 if (link.href.includes("ddoc-")) {
                     const symbol = link.href.substring(link.href.indexOf("ddoc-") + 5);
-                    const fullUrl = "https://" + moduleName + ".dpldocs.info/" + version + "/" + symbol + ".html";
+                    // const fullUrl = "https://" + moduleName + ".dpldocs.info/" + version + "/" + symbol + ".html";
+                    const fullUrl = "/ddoc/" + symbol + ".html";
                     link.href = fullUrl;
                     link.target = "_blank";
                     link.rel = "noopener noreferrer";
