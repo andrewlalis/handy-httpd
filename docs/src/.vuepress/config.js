@@ -35,7 +35,7 @@ module.exports = {
     docsDir: '',
     editLinkText: '',
     lastUpdated: false,
-    sidebarDepth: 2,
+    sidebarDepth: 3,
     displayAllHeaders: false,
     nav: [
       {

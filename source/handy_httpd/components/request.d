@@ -68,7 +68,8 @@ struct HttpRequest {
 
     /** 
      * Gets a URL parameter as the specified type, or returns the default value
-     * if the parameter with the given name doesn't exist.
+     * if the parameter with the given name doesn't exist or is of an invalid
+     * format.
      * Params:
      *   name = The name of the URL parameter.
      *   defaultValue = The default value to return if the URL parameter
@@ -76,9 +77,13 @@ struct HttpRequest {
      * Returns: The value of the URL parameter.
      */
     public T getParamAs(T)(string name, T defaultValue = T.init) {
-        import std.conv : to;
+        import std.conv : to, ConvException;
         if (name !in params) return defaultValue;
-        return params[name].to!T;
+        try {
+            return params[name].to!T;
+        } catch (ConvException e) {
+            return defaultValue;
+        }
     }
 
     unittest {
@@ -102,7 +107,8 @@ struct HttpRequest {
 
     /** 
      * Gets a path parameter as the specified type, or returns the default
-     * value if the path parameter with the given name doesn't exist.
+     * value if the path parameter with the given name doesn't exist or is
+     * of an invalid format.
      * Params:
      *   name = The name of the path parameter.
      *   defaultValue = The default value to return if the path parameter
@@ -110,9 +116,13 @@ struct HttpRequest {
      * Returns: The value of the path parameter.
      */
     public T getPathParamAs(T)(string name, T defaultValue = T.init) {
-        import std.conv : to;
+        import std.conv : to, ConvException;
         if (name !in pathParams) return defaultValue;
-        return pathParams[name].to!T;
+        try {
+            return pathParams[name].to!T;
+        } catch (ConvException e) {
+            return defaultValue;
+        }
     }
 
     unittest {
@@ -129,11 +139,25 @@ struct HttpRequest {
     }
 
     /** 
-     * Determines if this request has a body that can be read.
+     * Determines if this request has a body that can be read. A request is
+     * determined to have a body if we've received more bytes than were parsed
+     * as the request line and headers, OR if the request provided a `"Content-Length"`
+     * header that explicitly states that there is content.
      * Returns: True if the request has a body, or false otherwise.
      */
     public bool hasBody() {
-        return receivedByteCount > receiveBufferOffset;
+        if (receivedByteCount > receiveBufferOffset) return true;
+        if ("Content-Length" in headers) {
+            import std.conv : to, ConvException;
+            try {
+                ulong contentLength = headers["Content-Length"].to!ulong;
+                return contentLength > 0;
+            } catch (ConvException e) {
+                return false;
+            }
+        } else {
+            return false;
+        }
     }
 
     /** 
@@ -155,35 +179,93 @@ struct HttpRequest {
      * Reads the entirety of the request body, and passes it in chunks to the
      * given output range. This will use the request's client socket to keep
      * receiving chunks of data using the worker's receive buffer, until we've
-     * read the whole body.
+     * read the whole body. See `handy_httpd.components.config.ServerConfig.receiveBufferSize`
+     * for changing the buffer size when reading.
+     *
+     * An exception is thrown if the size of the request body differs from its
+     * declared "Content-Length" header, or if the socket is closed/broken
+     * before reading can complete.
+     *
      * Params:
      *   outputRange = The output range to use.
      */
     public void readBody(R)(R outputRange) if (isOutputRange!(R, ubyte[])) {
-        import std.conv : to;
+        import std.conv : to, ConvException;
         // If the request didn't specify content-length, stay safe and only
-        // output what we've already read.
+        // output what we've already read, so we don't keep reading infinitely.
         if ("Content-Length" !in headers) {
             outputRange.put(getStartOfBody());
             return;
         }
-        ulong contentLength = headers["Content-Length"].to!ulong;
+        // Try and read the integer value of the Content-Length header, or quit.
+        ulong contentLength;
+        try {
+            contentLength = headers["Content-Length"].to!ulong;
+        } catch (ConvException e) {
+            return;
+        }
         long bytesToRead = contentLength;
         ubyte[] start = getStartOfBody();
         outputRange.put(start);
         bytesToRead -= start.length;
         // If we weren't able to read the entire body in just the start.
-        if (bytesToRead > 0) {
-            while (bytesToRead > 0) {
-                size_t received = clientSocket.receive(*receiveBuffer);
-                if (received < 1) {
-                    throw new Exception("Socket receive failed.");
-                }
-                size_t bufferEndIdx = received > bytesToRead ? bytesToRead : received;
-                outputRange.put((*receiveBuffer)[0 .. bufferEndIdx]);
-                bytesToRead -= received;
+        while (bytesToRead > 0) {
+            size_t received = clientSocket.receive(*receiveBuffer);
+            if (received < 1) {
+                throw new Exception(
+                    "Failed to receive request body from socket. Needed to read " ~
+                    bytesToRead.to!string ~
+                    " more bytes, but received " ~ received.to!string ~ " bytes."
+                );
+            }
+            size_t bufferEndIdx = received > bytesToRead ? bytesToRead : received;
+            outputRange.put((*receiveBuffer)[0 .. bufferEndIdx]);
+            bytesToRead -= received;
+        }
+    }
+
+    /** 
+     * Convenience method for reading the entire request body as a string.
+     * Returns: The string contents of the request body.
+     */
+    public string readBodyAsString() {
+        Appender!string app = appender!string();
+        readBody(app);
+        return app[];
+    }
+
+    /** 
+     * Convenience method for reading the entire request body as a JSON node.
+     * An exception will be thrown if the body cannot be parsed as JSON.
+     * Returns: The request body as a JSON node.
+     */
+    public auto readBodyAsJson() {
+        import std.json;
+        return readBodyAsString().parseJSON();
+    }
+
+    /** 
+     * Convenience method for reading the entire request body to a file.
+     * Params:
+     *   filename = The name of the file to write to.
+     */
+    public void readBodyToFile(string filename) {
+        import std.stdio : File;
+
+        /** 
+         * Simple wrapper for a range that dumps chunks of data into a file.
+         */
+        struct FileOutputRange {
+            File file;
+            void put(ubyte[] data) {
+                file.rawWrite(data);
             }
         }
+
+        File file = File(filename, "wb");
+        FileOutputRange output = FileOutputRange(file);
+        readBody(output);
+        file.close();
     }
 }
 

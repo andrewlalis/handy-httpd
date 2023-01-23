@@ -4,8 +4,6 @@
 +/
 import handy_httpd;
 import std.stdio;
-import std.conv;
-import std.range;
 
 const indexContent = `
 <html>
@@ -19,16 +17,6 @@ const indexContent = `
 </html>
 `;
 
-class FileOutputRange : OutputRange!(ubyte[]) {
-    private File f;
-    this(File f) {
-        this.f = f;
-    }
-    void put(ubyte[] data) {
-        f.rawWrite(data);
-    }
-}
-
 void main() {
     ServerConfig cfg = ServerConfig.defaultValues();
     cfg.workerPoolSize = 5;
@@ -36,12 +24,9 @@ void main() {
     cfg.verbose = true;
     new HttpServer((ref ctx) {
         if (ctx.request.url == "/upload" && ctx.request.method == "POST") {
-            writeln(ctx.request);
             if (ctx.request.hasBody) {
-                File f = File("out.txt", "w");
-                auto r = new FileOutputRange(f);
-                ctx.request.readBody(r);
-                f.close();
+                writeln("User uploaded file:\n");
+                writeln(ctx.request.readBodyAsString());
             }
             ctx.response.status = 301;
             ctx.response.addHeader("Location", "/");
