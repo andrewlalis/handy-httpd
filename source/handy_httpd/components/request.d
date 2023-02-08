@@ -5,7 +5,7 @@ module handy_httpd.components.request;
 
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
-import std.socket : Socket;
+import std.socket : Socket, SocketException;
 import std.range;
 
 /** 
@@ -144,6 +144,8 @@ struct HttpRequest {
      * 
      * In that case, it is safe to continue using the receive buffer to receive
      * additional data from the socket.
+     * 
+     * Usually, you'll want to use the `readBody` function instead of this one.
      *
      * Returns: The bytes that contain the start of the request body.
      */
@@ -156,32 +158,68 @@ struct HttpRequest {
      * given output range. This will use the request's client socket to keep
      * receiving chunks of data using the worker's receive buffer, until we've
      * read the whole body.
+     * 
+     * Throws an exception if an error occurs while receiving content from the
+     * socket.
      * Params:
-     *   outputRange = The output range to use.
+     *   outputRange = An output range that accepts chunks of `ubyte[]`.
+     *   allowInfiniteRead = Whether to allow the function to read potentially
+     *                       infinitely if no Content-Length header is provided.
      */
-    public void readBody(R)(R outputRange) if (isOutputRange!(R, ubyte[])) {
-        import std.conv : to;
-        // If the request didn't specify content-length, stay safe and only
-        // output what we've already read.
-        if ("Content-Length" !in headers) {
+    public void readBody(R)(R outputRange, bool allowInfiniteRead = false) if (isOutputRange!(R, ubyte[])) {
+        import std.conv : to, ConvException;
+        bool hasContentLength = "Content-Length" in headers;
+        // If we're not allowed to read infinitely, and no content-length is given, just return what we've already read.
+        if (!allowInfiniteRead && !hasContentLength) {
             outputRange.put(getStartOfBody());
             return;
         }
-        ulong contentLength = headers["Content-Length"].to!ulong;
-        long bytesToRead = contentLength;
+        long contentLength = -1;
+        if (hasContentLength) {
+            try {
+                contentLength = headers["Content-Length"].to!long;
+            } catch (ConvException e) {
+                // Invalid formatting for content-length header.
+            }
+        }
+        this.readBody!(outputRange, contentLength);
+    }
+
+    /** 
+     * Internal helper method for reading the body of a request, using the
+     * worker's receive buffer.
+     * Params:
+     *   outputRange = The output range to supply chunks of `ubyte[]` to.
+     *   expectedLength = The expected size of the body to read. If this is
+     *                    set to -1, then we'll read until there's nothing
+     *                    left. Otherwise, we'll read as many bytes as given.
+     */
+    private void readBody(R)(R outputRange, long expectedLength) if (isOutputRange!(R, ubyte[])) {
+        bool hasExpectedLength = expectedLength != -1;
+        ulong bytesRead = 0;
         ubyte[] start = getStartOfBody();
         outputRange.put(start);
-        bytesToRead -= start.length;
-        // If we weren't able to read the entire body in just the start.
-        if (bytesToRead > 0) {
-            while (bytesToRead > 0) {
-                size_t received = clientSocket.receive(*receiveBuffer);
-                if (received < 1) {
-                    throw new Exception("Socket receive failed.");
+        bytesRead += start.length;
+        while (!hasExpectedLength || bytesRead < expectedLength) {
+            size_t received = clientSocket.receive(*receiveBuffer);
+            if (received == Socket.ERROR) {
+                throw new Exception("Socket read error.");
+            } else if (received == 0) {
+                // The client has closed the connection.
+                if (hasExpectedLength) {
+                    throw new Exception("Client closed the connection before the full request body could be read.");
+                } else {
+                    return; // If we aren't expecting a certain content-length, just stop reading here.
                 }
-                size_t bufferEndIdx = received > bytesToRead ? bytesToRead : received;
+            } else if (received > 0) {
+                size_t bufferEndIdx = received;
+                // If we're expecting a certain content-length, then make sure we don't take more bytes than we're expecting.
+                if (hasExpectedLength) {
+                    long bytesLeftToRead = expectedLength - bytesRead;
+                    bufferEndIdx = received > bytesLeftToRead ? bytesLeftToRead : received;
+                }
                 outputRange.put((*receiveBuffer)[0 .. bufferEndIdx]);
-                bytesToRead -= received;
+                bytesRead += received;
             }
         }
     }
