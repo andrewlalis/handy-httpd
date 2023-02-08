@@ -19,14 +19,22 @@ const indexContent = `
 
 void main() {
     ServerConfig cfg = ServerConfig.defaultValues();
-    cfg.workerPoolSize = 5;
+    cfg.workerPoolSize = 3;
     cfg.port = 8080;
     cfg.verbose = true;
     new HttpServer((ref ctx) {
         if (ctx.request.url == "/upload" && ctx.request.method == "POST") {
             if (ctx.request.hasBody) {
-                writeln("User uploaded file:\n");
-                writeln(ctx.request.readBodyAsString());
+                writeln("User uploaded file.\n");
+                try {
+                    import std.datetime.stopwatch;
+                    auto sw = StopWatch(AutoStart.yes);
+                    ulong bytesRead = ctx.request.readBodyToFile("latest-upload");
+                    sw.stop();
+                    writefln!"Read %d bytes in %d ms."(bytesRead, sw.peek.total!"msecs");
+                } catch (Exception e) {
+                    writeln("Error: " ~ e.msg);
+                }
             }
             ctx.response.status = 301;
             ctx.response.addHeader("Location", "/");
