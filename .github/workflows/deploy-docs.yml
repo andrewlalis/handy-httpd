@@ -3,8 +3,6 @@ name: Deploy Docs to Pages
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - docs/**
 
   workflow_dispatch:
 
@@ -27,6 +25,21 @@ jobs:
       - name: Install Dependencies
         working-directory: ./docs
         run: npm install
+
+      - name: Prepare D Runtime
+        uses: dlang-community/setup-dlang@4c99aa991ce7d19dd3064de0a4f2f6b2f152e2d7
+
+      - name: Checkout Ddoc generator
+        uses: actions/checkout@v3
+        with:
+          repository: adamdruppe/adrdox
+          path: './docs/ddoc-gen-src'
+
+      - name: Build Ddoc
+        working-directory: ./docs/ddoc-gen-src
+        run: |
+          make
+          ./doc2 -i -o ../src/.vuepress/public/ddoc ../../source
         
       - name: Build Static HTML Site
         working-directory: ./docs

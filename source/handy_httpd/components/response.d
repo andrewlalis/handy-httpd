@@ -122,6 +122,29 @@ struct HttpResponse {
     }
 
     /** 
+     * Writes the body of the response using data obtained from the given
+     * input range.
+     * Params:
+     *   inputRange = The input range to send data from.
+     *   size = The pre-computed size of the content.
+     *   contentType = The content type of the response.
+     */
+    public void writeBody(R)(R inputRange, ulong size, string contentType) if (isInputRange!(R, ubyte[])) {
+        if (!flushed) {
+            addHeader("Content-Length", size.to!string);
+            addHeader("Content-Type", contentType);
+        }
+        flushHeaders();
+        while (!inputRange.empty) {
+            ubyte[] data = inputRange.front();
+            ptrdiff_t sent = this.clientSocket.send(data);
+            if (sent == Socket.ERROR || sent != data.length) {
+                throw new Exception("Socket error occurred while writing body.");
+            }
+        }
+    }
+
+    /** 
      * Tells whether the header of this response has already been flushed.
      * Returns: Whether the response headers have been flushed.
      */

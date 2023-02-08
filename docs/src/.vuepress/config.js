@@ -35,7 +35,7 @@ module.exports = {
     docsDir: '',
     editLinkText: '',
     lastUpdated: false,
-    sidebarDepth: 2,
+    sidebarDepth: 3,
     displayAllHeaders: false,
     nav: [
       {
@@ -49,6 +49,11 @@ module.exports = {
       {
         text: 'code.dlang.org',
         link: 'https://code.dlang.org/packages/handy-httpd'
+      },
+      {
+        text: 'ddoc',
+        link: '/handy-httpd/ddoc/index.html',
+        target: '_blank'
       }
     ],
     sidebar: {
@@ -81,7 +86,7 @@ module.exports = {
       successText: 'Copied to clipboard.'
     }],
     [ddoc_link({
-      version: '4.0.2',
+      version: '5.0.0',
       moduleName: 'handy-httpd'
     })]
   ]

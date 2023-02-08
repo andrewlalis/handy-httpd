@@ -15,3 +15,4 @@ libhandy-httpd.a
 *.obj
 *.lst
 .DS_Store
+adrdox/
