@@ -6,13 +6,13 @@ module handy_httpd.components.request;
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
 import std.socket : Socket, SocketException;
-import std.range : isOutputRange, Appender, appender;
+import std.range : isInputRange, isOutputRange, Appender, appender;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
  * formulate a response.
  */
-struct HttpRequest {
+struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
     /** 
      * The HTTP method verb, such as GET, POST, PUT, etc.
      */
@@ -44,6 +44,12 @@ struct HttpRequest {
      * parse path parameters, such as with a PathDelegatingHandler.
      */
     public string[string] pathParams;
+
+    /** 
+     * The input range that can be used to read this request's body in chunks
+     * of `ubyte[]`.
+     */
+    public I inputRange;
 
     /** 
      * A reference to the socket that's used to read this request.
@@ -327,48 +333,5 @@ class BodyReadException : Exception {
     package this(string msg, ulong bytesRead) {
         super(msg);
         this.bytesRead = bytesRead;
-    }
-}
-
-/** 
- * A utility class for a fluent interface for building requests. This is useful
- * for testing.
- */
-class HttpRequestBuilder {
-    string method;
-    string url;
-    string[string] headers;
-    string[string] params;
-    string[string] pathParams;
-
-    this(string method, string url) {
-        this.method = method;
-        this.url = url;
-    }
-
-    HttpRequestBuilder withHeader(string name, string value) {
-        this.headers[name] = value;
-        return this;
-    }
-
-    HttpRequestBuilder withParam(string name, string value) {
-        this.params[name] = value;
-        return this;
-    }
-
-    HttpRequestBuilder withPathParam(string name, string value) {
-        this.pathParams[name] = value;
-        return this;
-    }
-
-    HttpRequest build() {
-        return HttpRequest(
-            this.method,
-            this.url,
-            1,
-            this.headers,
-            this.params,
-            this.pathParams
-        );
     }
 }

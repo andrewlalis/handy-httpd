@@ -44,35 +44,6 @@ struct HttpRequestContext {
     public ServerWorkerThread worker;
 }
 
-class HttpRequestContextBuilder {
-    import std.socket;
-    import handy_httpd.server;
-
-    private HttpServer server;
-    private Socket clientSocket;
-    private HttpRequestBuilder requestBuilder;
-
-    this(HttpServer server, Socket clientSocket) {
-        this.server = server;
-        this.clientSocket = clientSocket;
-    }
-
-    HttpRequestContextBuilder withRequest(string method, string url) {
-        this.requestBuilder = new HttpRequestBuilder(method, url);
-        return this;
-    }
-
-    HttpRequestContext build() {
-        return HttpRequestContext(
-            this.requestBuilder.build(),
-            HttpResponse(200, "OK", string[string].init, this.clientSocket, false),
-            this.clientSocket,
-            this.server,
-            null
-        );
-    }
-}
-
 /** 
  * An alias for the signature of a function capable of handling requests. It's
  * just a `void` function that takes a single `ref HttpRequestContext`
