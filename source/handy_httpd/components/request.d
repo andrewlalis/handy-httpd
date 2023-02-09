@@ -312,9 +312,19 @@ struct HttpRequest {
  * it also contains the `bytesRead` so far before the error occurred.
  */
 class BodyReadException : Exception {
+    /** 
+     * The number of bytes that have already been read before the error was
+     * encountered.
+     */
     public const ulong bytesRead;
 
-    public this(string msg, ulong bytesRead) {
+    /** 
+     * Constructs the exception.
+     * Params:
+     *   msg = The message.
+     *   bytesRead = The number of bytes read.
+     */
+    package this(string msg, ulong bytesRead) {
         super(msg);
         this.bytesRead = bytesRead;
     }
