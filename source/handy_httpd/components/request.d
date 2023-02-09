@@ -6,7 +6,7 @@ module handy_httpd.components.request;
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
 import std.socket : Socket, SocketException;
-import std.range;
+import std.range : isOutputRange, Appender, appender;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
@@ -183,8 +183,9 @@ struct HttpRequest {
      * receiving chunks of data using the worker's receive buffer, until we've
      * read the whole body.
      * 
-     * Throws an exception if an error occurs while receiving content from the
-     * socket.
+     * Throws a `BodyReadException` if an unrecoverable error occurs and the
+     * reading cannot continue (such as a socket error or closed connection).
+     *
      * Params:
      *   outputRange = An output range that accepts chunks of `ubyte[]`.
      *   allowInfiniteRead = Whether to allow the function to read potentially
@@ -236,11 +237,11 @@ struct HttpRequest {
         while (!hasExpectedLength || bytesRead < expectedLength) {
             size_t received = clientSocket.receive(*receiveBuffer);
             if (received == Socket.ERROR) {
-                throw new Exception("Socket read error.");
+                throw new BodyReadException("Socket read error.", bytesRead);
             } else if (received == 0) {
                 // The client has closed the connection.
                 if (hasExpectedLength) {
-                    throw new Exception("Client closed the connection before the full request body could be read.");
+                    throw new BodyReadException("Connection closed.", bytesRead);
                 } else {
                     return bytesRead; // If we aren't expecting a certain content-length, just stop reading here.
                 }
@@ -302,6 +303,20 @@ struct HttpRequest {
         ulong bytesRead = readBody(output);
         file.close();
         return bytesRead;
+    }
+}
+
+/** 
+ * An exception that's thrown when an error occurs while reading a request
+ * body, which causes reading to be canceled. Along with the standard `msg`
+ * it also contains the `bytesRead` so far before the error occurred.
+ */
+class BodyReadException : Exception {
+    public const ulong bytesRead;
+
+    public this(string msg, ulong bytesRead) {
+        super(msg);
+        this.bytesRead = bytesRead;
     }
 }
 

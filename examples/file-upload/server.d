@@ -32,7 +32,7 @@ void main() {
                     ulong bytesRead = ctx.request.readBodyToFile("latest-upload");
                     sw.stop();
                     writefln!"Read %d bytes in %d ms."(bytesRead, sw.peek.total!"msecs");
-                } catch (Exception e) {
+                } catch (BodyReadException e) {
                     writeln("Error: " ~ e.msg);
                 }
             }
