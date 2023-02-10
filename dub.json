@@ -13,18 +13,6 @@
 		{
 			"name": "library",
 			"targetType": "library"
-		},
-		{
-			"name": "unittest",
-			"targetType": "executable",
-			"preBuildCommands": [
-				"$DUB run --compiler=$$DC unit-threaded -c gen_ut_main -- -f bin/ut.d -d $DUB"
-			],
-			"mainSourceFile": "bin/ut.d",
-			"excludedSourceFiles": ["src/main.d"],
-			"dependencies": {
-				"unit-threaded": "*"
-			}
 		}
 	]
 }

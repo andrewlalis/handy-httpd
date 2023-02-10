@@ -29,7 +29,7 @@ void okResponse(ref HttpResponse response, string bodyContent, string contentTyp
     response.addHeader("Content-Type", contentType);
     response.addHeader("Content-Length", bodyContent.length.to!string);
     response.flushHeaders();
-    response.clientSocket.send(bodyContent);
+    response.writeBody(bodyContent, contentType);
 }
 
 /** 
@@ -47,15 +47,11 @@ void fileResponse(ref HttpResponse response, string filename, string type) {
         response.setStatus(404).setStatusText("Not Found")
             .addHeader("Content-Type", type).flushHeaders();
     } else {
-        response.setStatus(200).setStatusText("OK")
-            .addHeader("Content-Type", type);
+        response.setStatus(200).setStatusText("OK");
         auto file = File(filename, "r");
         ulong size = file.size();
-        response.addHeader("Content-Length", size.to!string).flushHeaders();
         // Flush the headers, and begin streaming the file directly.
-        foreach (ubyte[] buffer; file.byChunk(16_384)) {
-            response.clientSocket.send(buffer);
-        }
+        response.writeBody(file.byChunk(8192), size, type);
     }
 }
 

@@ -5,14 +5,14 @@ module handy_httpd.components.request;
 
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
-import std.socket : Socket, SocketException;
-import std.range : isInputRange, isOutputRange, Appender, appender;
+import std.range : InputRange, isOutputRange, Appender, appender;
+import std.exception;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
  * formulate a response.
  */
-struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
+struct HttpRequest {
     /** 
      * The HTTP method verb, such as GET, POST, PUT, etc.
      */
@@ -47,30 +47,10 @@ struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
 
     /** 
      * The input range that can be used to read this request's body in chunks
-     * of `ubyte[]`.
+     * of `ubyte[]`. It can be null, indicating that this request does not have
+     * a body. In practice, this will usually be a `SocketInputRange`.
      */
-    public I inputRange;
-
-    /** 
-     * A reference to the socket that's used to read this request.
-     */
-    public Socket clientSocket;
-
-    /** 
-     * A pointer to the internal receive buffer that the request was read from.
-     */
-    public ubyte[]* receiveBuffer;
-
-    /** 
-     * The offset in the receive buffer, that points to the start of the body
-     * of the request, or is equal to the receivedByteCount if there is no body.
-     */
-    public size_t receiveBufferOffset;
-
-    /** 
-     * The number of bytes that were received into the receive buffer.
-     */
-    public size_t receivedByteCount;
+    public InputRange!(ubyte[]) inputRange;
 
     /** 
      * Gets a URL parameter as the specified type, or returns the default value
@@ -132,7 +112,7 @@ struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
     }
 
     unittest {
-        HttpRequest req;
+        HttpRequest req = HttpRequest();
         req.pathParams = [
             "a": "123",
             "b": "c",
@@ -145,49 +125,8 @@ struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
     }
 
     /** 
-     * Determines if this request has a body that can be read. A request is
-     * determined to have a body if we've received more bytes than were parsed
-     * as the request line and headers, OR if the request provided a `"Content-Length"`
-     * header that explicitly states that there is content.
-     * Returns: True if the request has a body, or false otherwise.
-     */
-    public bool hasBody() {
-        if (receivedByteCount > receiveBufferOffset) return true;
-        if ("Content-Length" in headers) {
-            import std.conv : to, ConvException;
-            try {
-                ulong contentLength = headers["Content-Length"].to!ulong;
-                return contentLength > 0;
-            } catch (ConvException e) {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    /** 
-     * Gets the start of the request body. This is the part of the body which
-     * was present in the initial socket receive call. If the received byte
-     * count is greater than or equal to the receive buffer size, then you
-     * should continue reading from the socket with additional receive calls.
-     * 
-     * In that case, it is safe to continue using the receive buffer to receive
-     * additional data from the socket.
-     * 
-     * Usually, you'll want to use the `readBody` function instead of this one.
-     *
-     * Returns: The bytes that contain the start of the request body.
-     */
-    public ubyte[] getStartOfBody() {
-        return (*receiveBuffer)[receiveBufferOffset .. receivedByteCount];
-    }
-
-    /** 
      * Reads the entirety of the request body, and passes it in chunks to the
-     * given output range. This will use the request's client socket to keep
-     * receiving chunks of data using the worker's receive buffer, until we've
-     * read the whole body.
+     * given output range.
      * 
      * Throws a `BodyReadException` if an unrecoverable error occurs and the
      * reading cannot continue (such as a socket error or closed connection).
@@ -199,34 +138,66 @@ struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
      * Returns: The number of bytes that were read.
      */
     public ulong readBody(R)(R outputRange, bool allowInfiniteRead = false) if (isOutputRange!(R, ubyte[])) {
-        string contentLengthStr = headers["Content-Length"];
-        // If we're not allowed to read infinitely, and no content-length is given, just return what we've already read.
-        if (!allowInfiniteRead && contentLengthStr is null) {
-            ubyte[] start = getStartOfBody();
-            outputRange.put(start);
-            return start.length;
+        const string* contentLengthStrPtr = "Content-Length" in headers;
+        // If we're not allowed to read infinitely, and no content-length is given, don't attempt to read.
+        if (!allowInfiniteRead && contentLengthStrPtr is null) {
+            return 0;
         }
         long contentLength = -1;
-        if (contentLengthStr !is null) {
+        if (contentLengthStrPtr !is null) {
             import std.conv : to, ConvException;
             try {
-                contentLength = headers["Content-Length"].to!long;
+                contentLength = (*contentLengthStrPtr).to!long;
             } catch (ConvException e) {
                 // Invalid formatting for content-length header.
-                // If we don't allow infinite reading, quit early. Otherwise just use the default of -1.
+                // If we don't allow infinite reading, quit 0.
                 if (!allowInfiniteRead) {
-                    ubyte[] start = getStartOfBody();
-                    outputRange.put(start);
-                    return start.length;
+                    return 0;
                 }
             }
         }
         return this.readBody!(R)(outputRange, contentLength);
     }
 
+    unittest {
+        import std.conv;
+        import std.range;
+        import handy_httpd.util.builders;
+
+        // Test case 1: Simply reading a string.
+        string body1 = "Hello world!";
+        HttpRequest r1 = new HttpRequestBuilder()
+            .withHeader("Content-Length", body1.length)
+            .withInputRange(body1)
+            .build();
+        auto app1 = appender!(ubyte[][]);
+        ulong bytesRead1 = r1.readBody(app1);
+        assert(bytesRead1 == body1.length);
+        assert(app1[] == [cast(ubyte[]) body1]);
+
+        // Test case 2: Missing Content-Length header, so we don't read anything.
+        string body2 = "Goodbye, world.";
+        HttpRequest r2 = new HttpRequestBuilder()
+            .withInputRange(body2)
+            .build();
+        auto app2 = appender!(ubyte[][]);
+        ulong bytesRead2 = r2.readBody(app2);
+        assert(bytesRead2 == 0);
+        assert(app2[] == []);
+
+        // Test case 3: Missing Content-Length header but we allow infinite reading.
+        string body3 = "Hello moon!";
+        HttpRequest r3 = new HttpRequestBuilder()
+            .withInputRange(body3)
+            .build();
+        auto app3 = appender!(ubyte[][]);
+        ulong bytesRead3 = r3.readBody(app3, true);
+        assert(bytesRead3 == body3.length);
+        assert(app3[] == [cast(ubyte[]) body3]);
+    }
+
     /** 
-     * Internal helper method for reading the body of a request, using the
-     * worker's receive buffer.
+     * Internal helper method for reading the body of a request.
      * Params:
      *   outputRange = The output range to supply chunks of `ubyte[]` to.
      *   expectedLength = The expected size of the body to read. If this is
@@ -235,63 +206,69 @@ struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
      * Returns: The number of bytes that were read.
      */
     private ulong readBody(R)(R outputRange, long expectedLength) if (isOutputRange!(R, ubyte[])) {
+        import std.algorithm : min;
         bool hasExpectedLength = expectedLength != -1;
         ulong bytesRead = 0;
-        ubyte[] start = getStartOfBody();
-        outputRange.put(start);
-        bytesRead += start.length;
-        while (!hasExpectedLength || bytesRead < expectedLength) {
-            size_t received = clientSocket.receive(*receiveBuffer);
-            if (received == Socket.ERROR) {
-                throw new BodyReadException("Socket read error.", bytesRead);
-            } else if (received == 0) {
-                // The client has closed the connection.
-                if (hasExpectedLength) {
-                    throw new BodyReadException("Connection closed.", bytesRead);
-                } else {
-                    return bytesRead; // If we aren't expecting a certain content-length, just stop reading here.
-                }
-            } else if (received > 0) {
-                size_t bufferEndIdx = received;
-                // If we're expecting a certain content-length, then make sure we don't take more bytes than we're expecting.
-                if (hasExpectedLength) {
-                    long bytesLeftToRead = expectedLength - bytesRead;
-                    bufferEndIdx = received > bytesLeftToRead ? bytesLeftToRead : received;
-                }
-                outputRange.put((*receiveBuffer)[0 .. bufferEndIdx]);
-                bytesRead += received;
-            }
+
+        while (!this.inputRange.empty() && (!hasExpectedLength || bytesRead < expectedLength)) {
+            ubyte[] data = this.inputRange.front();
+            ulong bytesLeftToRead = expectedLength - bytesRead;
+            size_t bytesToConsume = min(bytesLeftToRead, data.length);
+            outputRange.put(data[0 .. bytesToConsume]);
+            bytesRead += bytesToConsume;
+            this.inputRange.popFront();
+        }
+        if (hasExpectedLength && bytesRead < expectedLength) {
+            throw new Exception("Connection closed before all data could be read.");
         }
         return bytesRead;
     }
 
     /** 
+     * Convenience method for reading the entire request body as an array of
+     * bytes.
+     * Params:
+     *   allowInfiniteRead = Whether to read until no more data is available.
+     * Returns: The byte content of the request body.
+     */
+    public ubyte[] readBodyAsBytes(bool allowInfiniteRead = false) {
+        Appender!(ubyte[]) app = appender!(ubyte[])();
+        readBody(app, allowInfiniteRead);
+        return app[];
+    }
+
+    /** 
      * Convenience method for reading the entire request body as a string.
+     * Params:
+     *   allowInfiniteRead = Whether to read until no more data is available.
      * Returns: The string contents of the request body.
      */
-    public string readBodyAsString() {
+    public string readBodyAsString(bool allowInfiniteRead = false) {
         Appender!string app = appender!string();
-        readBody(app);
+        readBody(app, allowInfiniteRead);
         return app[];
     }
 
     /** 
      * Convenience method for reading the entire request body as a JSON node.
      * An exception will be thrown if the body cannot be parsed as JSON.
+     * Params:
+     *   allowInfiniteRead = Whether to read until no more data is available.
      * Returns: The request body as a JSON node.
      */
-    public auto readBodyAsJson() {
+    public auto readBodyAsJson(bool allowInfiniteRead = false) {
         import std.json;
-        return readBodyAsString().parseJSON();
+        return readBodyAsString(allowInfiniteRead).parseJSON();
     }
 
     /** 
      * Convenience method for reading the entire request body to a file.
      * Params:
      *   filename = The name of the file to write to.
+     *   allowInfiniteRead = Whether to read until no more data is available.
      * Returns: The size of the received file, in bytes.
      */
-    public ulong readBodyToFile(string filename) {
+    public ulong readBodyToFile(string filename, bool allowInfiniteRead = false) {
         import std.stdio : File;
 
         /** 
@@ -306,32 +283,8 @@ struct HttpRequest(I) if (isInputRange!(I, ubyte[])){
 
         File file = File(filename, "wb");
         FileOutputRange output = FileOutputRange(file);
-        ulong bytesRead = readBody(output);
+        ulong bytesRead = readBody(output, allowInfiniteRead);
         file.close();
         return bytesRead;
-    }
-}
-
-/** 
- * An exception that's thrown when an error occurs while reading a request
- * body, which causes reading to be canceled. Along with the standard `msg`
- * it also contains the `bytesRead` so far before the error occurred.
- */
-class BodyReadException : Exception {
-    /** 
-     * The number of bytes that have already been read before the error was
-     * encountered.
-     */
-    public const ulong bytesRead;
-
-    /** 
-     * Constructs the exception.
-     * Params:
-     *   msg = The message.
-     *   bytesRead = The number of bytes read.
-     */
-    package this(string msg, ulong bytesRead) {
-        super(msg);
-        this.bytesRead = bytesRead;
     }
 }

@@ -3,10 +3,13 @@
  */
 module handy_httpd.components.response;
 
+import handy_httpd.util.range;
+
 import std.array;
 import std.string : format, representation;
 import std.conv;
 import std.socket : Socket;
+import std.range;
 
 /** 
  * The data that the HTTP server will send back to clients.
@@ -28,11 +31,15 @@ struct HttpResponse {
     public string[string] headers;
 
     /** 
-     * The socket that's used to send data to the client.
+     * Internal flag used to determine if we've already flushed the headers.
      */
-    public Socket clientSocket;
-
     private bool flushed = false;
+
+    /** 
+     * The output range that the response body will be written to. In practice
+     * this will usually be a `SocketOutputRange`.
+     */
+    public OutputRange!(ubyte[]) outputRange;
 
     /** 
      * Sets the status of the response. This can only be done before headers
@@ -75,8 +82,8 @@ struct HttpResponse {
     }
 
     /** 
-     * Flushes the headers for this request, sending them on the socket to the
-     * client. Once this is done, header information can no longer be modified.
+     * Flushes the headers for this request. Once this is done, header
+     * information can no longer be modified.
      */
     public void flushHeaders() {
         if (flushed) return;
@@ -86,20 +93,35 @@ struct HttpResponse {
             app ~= format!"%s: %s\r\n"(name, value);
         }
         app ~= "\r\n";
-        ubyte[] data = cast(ubyte[]) app[];
-        auto sent = this.clientSocket.send(data);
-        if (sent == Socket.ERROR) throw new Exception("Socket error occurred while writing status and headers.");
+        this.outputRange.put(cast(ubyte[]) app[]);
         flushed = true;
     }
 
     /** 
-     * Writes the given text to the body of the response. It's a simple wrapper
-     * around `writeBody(ubyte[], string)`.
+     * Writes the body of the response using data obtained from the given
+     * input range. Note that it is required to specify the size of the data
+     * to write beforehand, since we should always send a Content-Length header
+     * to the client.
      * Params:
-     *   text = The text to write.
+     *   inputRange = The input range to send data from.
+     *   size = The pre-computed size of the content.
+     *   contentType = The content type of the response.
      */
-    public void writeBody(string text) {
-        writeBody(cast(ubyte[]) text, "text/plain; charset=utf-8");
+    public void writeBody(R)(R inputRange, ulong size, string contentType) if (isInputRangeOf!(R, ubyte[])) {
+        if (!flushed) {
+            addHeader("Content-Length", size.to!string);
+            addHeader("Content-Type", contentType);
+        }
+        flushHeaders();
+        ulong bytesWritten = 0;
+        while (!inputRange.empty) {
+            ulong bytesToWrite = size - bytesWritten;
+            ubyte[] data = inputRange.front();
+            size_t idx = data.length > bytesToWrite ? bytesToWrite : data.length;
+            this.outputRange.put(data[0 .. idx]);
+            bytesWritten += idx;
+            inputRange.popFront();
+        }
     }
 
     /** 
@@ -107,41 +129,22 @@ struct HttpResponse {
      * response has not yet written its status line and headers, it will do
      * that first.
      * Params:
-     *   body = The content to write.
-     *   contentType = The mime type of the body content. Defaults to
-     *                 `application/octet-stream`.
+     *   data = The data to write.
+     *   contentType = The content type of the data.
      */
-    public void writeBody(ubyte[] body, string contentType = "application/octet-stream") {
-        if (!flushed) {
-            addHeader("Content-Length", body.length.to!string);
-            addHeader("Content-Type", contentType);
-        }
-        flushHeaders();
-        auto sent = this.clientSocket.send(body);
-        if (sent == Socket.ERROR) throw new Exception("Socket error occurred while writing body.");
+    public void writeBody(ubyte[] data, string contentType = "application/octet-stream") {
+        this.writeBody([data], data.length, contentType);
     }
 
     /** 
-     * Writes the body of the response using data obtained from the given
-     * input range.
+     * Writes the given text to the body of the response. It's a simple wrapper
+     * around `writeBody(ubyte[], string)`.
      * Params:
-     *   inputRange = The input range to send data from.
-     *   size = The pre-computed size of the content.
-     *   contentType = The content type of the response.
+     *   text = The text to write.
+     *   contentType = The content type of the text. Defaults to text/plain.
      */
-    public void writeBody(R)(R inputRange, ulong size, string contentType) if (isInputRange!(R, ubyte[])) {
-        if (!flushed) {
-            addHeader("Content-Length", size.to!string);
-            addHeader("Content-Type", contentType);
-        }
-        flushHeaders();
-        while (!inputRange.empty) {
-            ubyte[] data = inputRange.front();
-            ptrdiff_t sent = this.clientSocket.send(data);
-            if (sent == Socket.ERROR || sent != data.length) {
-                throw new Exception("Socket error occurred while writing body.");
-            }
-        }
+    public void writeBody(string text, string contentType = "text/plain; charset=utf-8") {
+        writeBody(cast(ubyte[]) text, contentType);
     }
 
     /** 

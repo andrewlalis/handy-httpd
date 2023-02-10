@@ -8,6 +8,8 @@ import std.socket;
 import std.typecons;
 import std.conv;
 import core.thread;
+import std.datetime;
+import std.datetime.stopwatch;
 import httparsed : MsgParser, initParser;
 
 import handy_httpd.server;
@@ -15,6 +17,7 @@ import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
+import handy_httpd.util.range;
 
 /** 
  * The server worker thread is a thread that processes incoming requests from
@@ -55,13 +58,21 @@ class ServerWorkerThread : Thread {
             if (nullableSocket.isNull) continue;
             Socket clientSocket = nullableSocket.get();
 
+            StopWatch sw = StopWatch(AutoStart.yes);
+
             // Then try and parse their request and obtain a request context.
             Nullable!HttpRequestContext nullableCtx = receiveRequest(clientSocket);
             if (nullableCtx.isNull) continue;
             HttpRequestContext ctx = nullableCtx.get();
 
             // Then handle the request using the server's handler.
-            this.server.getLogger.infoFV!"[%s] <- %s %s"(this.name, ctx.request.method, ctx.request.url);
+            SysTime now = Clock.currTime();
+            this.server.getLogger.infoFV!"[%s] %s %s %s"(
+                this.name,
+                now.toSimpleString(),
+                ctx.request.method,
+                ctx.request.url
+            );
             try {
                 this.server.getHandler.handle(ctx);
                 if (!ctx.response.isFlushed) {
@@ -73,8 +84,20 @@ class ServerWorkerThread : Thread {
             clientSocket.shutdown(SocketShutdown.BOTH);
             clientSocket.close();
 
+            sw.stop();
+            this.server.getLogger.infoFV!"[%s] %d %s (took %d μs)"(
+                this.name,
+                ctx.response.status,
+                ctx.response.statusText,
+                sw.peek.total!"usecs"
+            );
+
             // Reset the request parser so we're ready for the next request.
             requestParser.msg.reset();
+            
+            // Destroy the request context's allocated objects.
+            destroy!(false)(ctx.request.inputRange);
+            destroy!(false)(ctx.response.outputRange);
         }
     }
 
@@ -106,19 +129,20 @@ class ServerWorkerThread : Thread {
         try {
             auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
             HttpRequest request = requestAndSize[0];
-            int size = requestAndSize[1];
-            request.clientSocket = clientSocket;
-            request.receiveBuffer = getReceiveBuffer();
-            request.receiveBufferOffset = size;
-            request.receivedByteCount = received;
+            SocketInputRange inputRange = new SocketInputRange(
+                clientSocket,
+                getReceiveBuffer(),
+                requestAndSize[1],
+                received
+            );
+            request.inputRange = inputRange;
             HttpRequestContext ctx = HttpRequestContext(
                 request,
                 HttpResponse(),
-                clientSocket,
                 this.server,
                 this
             );
-            ctx.response.clientSocket = clientSocket;
+            ctx.response.outputRange = new SocketOutputRange(clientSocket);
             foreach (headerName, headerValue; this.server.config.defaultHeaders) {
                 ctx.response.addHeader(headerName, headerValue);
             }

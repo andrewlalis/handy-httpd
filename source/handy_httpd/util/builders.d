@@ -1,12 +1,17 @@
-module handy_httpd.utils;
+/** 
+ * This module contains builder classes for a variety of components. These
+ * builders are not intended for performance uses; mostly testing.
+ */
+module handy_httpd.util.builders;
 
 import handy_httpd.server;
 import handy_httpd.components.worker;
 import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
-import std.socket;
+import handy_httpd.util.range;
 import std.range;
+
 
 /** 
  * A fluent-style builder for helping to create request contexts for unit
@@ -18,7 +23,6 @@ class HttpRequestContextBuilder {
     private HttpResponseBuilder responseBuilder;
     private HttpServer server;
     private ServerWorkerThread worker;
-    private Socket socket;
 
     this() {
         this.requestBuilder = new HttpRequestBuilder();
@@ -33,11 +37,6 @@ class HttpRequestContextBuilder {
         return this.responseBuilder;
     }
 
-    public HttpRequestContextBuilder withSocket(Socket socket) {
-        this.socket = socket;
-        return this;
-    }
-
     public HttpRequestContextBuilder withServer(HttpServer server) {
         this.server = server;
         return this;
@@ -49,14 +48,9 @@ class HttpRequestContextBuilder {
     }
 
     public HttpRequestContext build() {
-        if (this.socket !is null) {
-            this.requestBuilder.withSocket(this.socket);
-            this.responseBuilder.withSocket(this.socket);
-        }
         return HttpRequestContext(
             this.requestBuilder.build(),
             this.responseBuilder.build(),
-            this.socket,
             this.server,
             this.worker
         );
@@ -73,7 +67,7 @@ class HttpRequestBuilder {
     private string[string] headers;
     private string[string] params;
     private string[string] pathParams;
-    private Socket socket;
+    private InputRange!(ubyte[]) inputRange;
 
     this() {
         this.method = "GET";
@@ -85,8 +79,24 @@ class HttpRequestBuilder {
         this.url = url;
     }
 
+    HttpRequestBuilder withMethod(string method) {
+        this.method = method;
+        return this;
+    }
+
+    HttpRequestBuilder withUrl(string url) {
+        this.url = url;
+        return this;
+    }
+
     HttpRequestBuilder withHeader(string name, string value) {
         this.headers[name] = value;
+        return this;
+    }
+
+    HttpRequestBuilder withHeader(V)(string name, V value) {
+        import std.conv : to;
+        this.headers[name] = value.to!string;
         return this;
     }
 
@@ -100,9 +110,13 @@ class HttpRequestBuilder {
         return this;
     }
 
-    HttpRequestBuilder withSocket(Socket socket) {
-        this.socket = socket;
+    HttpRequestBuilder withInputRange(InputRange!(ubyte[]) inputRange) {
+        this.inputRange = inputRange;
         return this;
+    }
+
+    HttpRequestBuilder withInputRange(string input) {
+        return this.withInputRange(inputRangeObject([cast(ubyte[]) input.dup]));
     }
 
     HttpRequest build() {
@@ -113,7 +127,7 @@ class HttpRequestBuilder {
             this.headers,
             this.params,
             this.pathParams,
-            this.socket
+            this.inputRange
         );
     }
 }
@@ -122,7 +136,7 @@ class HttpResponseBuilder {
     private ushort status = 200;
     private string statusText = "OK";
     private string[string] headers;
-    private Socket socket;
+    private OutputRange!(ubyte[]) outputRange = new DiscardingOutputRange();
 
     HttpResponseBuilder withStatus(ushort code, string text = "") {
         this.status = code;
@@ -135,8 +149,8 @@ class HttpResponseBuilder {
         return this;
     }
 
-    HttpResponseBuilder withSocket(Socket socket) {
-        this.socket = socket;
+    HttpResponseBuilder withOutputRange(OutputRange!(ubyte[]) outputRange) {
+        this.outputRange = outputRange;
         return this;
     }
 
@@ -145,8 +159,8 @@ class HttpResponseBuilder {
             status,
             statusText,
             headers,
-            socket,
-            false
+            false,
+            outputRange
         );
     }
 }

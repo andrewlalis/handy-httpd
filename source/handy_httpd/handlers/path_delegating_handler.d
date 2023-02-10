@@ -149,6 +149,16 @@ class PathDelegatingHandler : HttpRequestHandler {
         return this;
     }
 
+    unittest {
+        import std.exception;
+        auto handler = new PathDelegatingHandler();
+        assertThrown!Exception(handler.setNotFoundHandler(null));
+        auto notFoundHandler = toHandler((ref ctx) {
+            ctx.response.status = 404;
+        });
+        assertNotThrown!Exception(handler.setNotFoundHandler(notFoundHandler));
+    }
+
     /** 
      * Handles an incoming request by delegating to the first registered
      * handler that matches the request's url path. If no handler is found,
@@ -184,11 +194,10 @@ class PathDelegatingHandler : HttpRequestHandler {
 
     unittest {
         import handy_httpd.server;
-        import handy_httpd.components.config;
         import handy_httpd.components.responses;
-        import std.socket;
+        import handy_httpd.util.builders;
+        import handy_httpd.util.range;
         import std.stdio;
-        import unit_threaded;
 
         auto handler = new PathDelegatingHandler()
             .addMapping("GET", "/home", (ref ctx) {ctx.response.okResponse();})
@@ -202,16 +211,12 @@ class PathDelegatingHandler : HttpRequestHandler {
         see how the handler changes them.
         */
         HttpRequestContext generateHandledCtx(string method, string url) {
-            Socket[2] sockets = socketPair();
-            scope (exit) {
-                sockets[0].close();
-                sockets[1].close();
-            }
-            Socket clientSocket = sockets[1];
-            HttpServer server = new HttpServer(handler);
-            auto ctx = new HttpRequestContextBuilder(server, clientSocket)
-                .withRequest(method, url)
-                .build();
+            auto builder = new HttpRequestContextBuilder();
+            builder.withServer(new HttpServer());
+            builder.request()
+                .withMethod(method)
+                .withUrl(url);
+            auto ctx = builder.build();
             handler.handle(ctx);
             return ctx;
         }

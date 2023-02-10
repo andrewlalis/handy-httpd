@@ -7,8 +7,10 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.worker;
 import handy_httpd.server;
+import handy_httpd.util.range;
 
 import std.socket;
+import std.range;
 
 /**
  * A simple container for the components that are available in the context of
@@ -29,11 +31,6 @@ struct HttpRequestContext {
     public HttpResponse response;
 
     /** 
-     * The internal socket that is used to communicate with the client.
-     */
-    public Socket clientSocket;
-
-    /** 
      * The server from which this context was created.
      */
     public HttpServer server;
@@ -46,8 +43,8 @@ struct HttpRequestContext {
 
 /** 
  * An alias for the signature of a function capable of handling requests. It's
- * just a `void` function that takes a single `ref HttpRequestContext`
- * parameter. It is acceptable to throw exceptions from the function.
+ * just a `void` function that takes a single `HttpRequestContext` parameter.
+ * It is acceptable to throw exceptions from the function.
  */
 alias HttpRequestHandlerFunction = void function(ref HttpRequestContext);
 
@@ -57,7 +54,8 @@ alias HttpRequestHandlerFunction = void function(ref HttpRequestContext);
 interface HttpRequestHandler {
     /** 
      * Handles an HTTP request. Note that this method may be called from
-     * multiple threads, as requests may be processed in parallel.
+     * multiple threads, as requests may be processed in parallel, so you
+     * should avoid performing actions which are not thread-safe.
      * Params:
      *   ctx = The request context.
      */
