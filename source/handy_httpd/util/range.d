@@ -1,3 +1,11 @@
+/** 
+ * This module contains some components that help in dealing with ranges,
+ * especially with respect to request input and response output.
+ * 
+ * Of particular note is the `SocketInputRange` and `SocketOutputRange`. These
+ * ranges are used in the normal implementation of Handy-Httpd when a request
+ * context is initialized for a client.
+ */
 module handy_httpd.util.range;
 
 import std.socket;
@@ -17,6 +25,11 @@ template isInputRangeOf(R, E) {
  * has been read. It offers support for an initial buffer offset and received
  * count, which is needed to pick up reading immediately after consuming an
  * HTTP request header.
+ *
+ * Note: This input range is **not** threadsafe.
+ *
+ * Calling `popFront()` may produce a `SocketException` if an error occurs
+ * while receiving data from the socket.
  */
 class SocketInputRange : InputRange!(ubyte[]) {
     private Socket socket;
@@ -30,13 +43,16 @@ class SocketInputRange : InputRange!(ubyte[]) {
         this.receiveBuffer = receiveBuffer;
         this.bufferOffset = initialBufferOffset;
         this.receivedCount = initialReceivedCount;
+        this.inputEnded = initialBufferOffset == initialReceivedCount && initialBufferOffset < receiveBuffer.length;
     }
 
     public ubyte[] front() {
+        if (inputEnded) return [];
         return (*receiveBuffer)[bufferOffset .. receivedCount];
     }
 
     public void popFront() {
+        if (inputEnded) return;
         bufferOffset = 0;
         receivedCount = socket.receive(*receiveBuffer);
         if (receivedCount == Socket.ERROR) {
@@ -59,11 +75,16 @@ class SocketInputRange : InputRange!(ubyte[]) {
     }
 
     public int opApply(scope int delegate(ubyte[]) dg) {
-        throw new UnsupportedRangeMethod("Not implemented.");
+        dg(front());
+        popFront();
+        return inputEnded ? 1 : 0;
     }
 
     public int opApply(scope int delegate(size_t, ubyte[]) dg) {
-        throw new UnsupportedRangeMethod("Not implemented.");
+        ubyte[] data = front();
+        dg(data.length, data);
+        popFront();
+        return inputEnded ? 1 : 0;
     }
 }
 
@@ -73,7 +94,42 @@ unittest {
 }
 
 /** 
+ * A simple input range that is always empty. Useful for testing.
+ */
+class EmptyInputRange : InputRange!(ubyte[]) {
+    public ubyte[] front() {
+        return [];
+    }
+
+    public void popFront() {
+        // Do nothing.
+    }
+
+    public bool empty() {
+        return true;
+    }
+
+    public ubyte[] moveFront() {
+        return [];
+    }
+
+    public int opApply(scope int delegate(ubyte[]) dg) {
+        dg([]);
+        return 1;
+    }
+
+    public int opApply(scope int delegate(size_t, ubyte[]) dg) {
+        dg(0, []);
+        return 1;
+    }
+}
+
+/** 
  * An output range that writes chunks of `ubyte[]` to a Socket.
+ *
+ * Note that calling `put` may throw a `SocketException` if the given data
+ * could not be written to the socket. For best performance, it's recommended
+ * to write amounts of data in chunks.
  */
 class SocketOutputRange : OutputRange!(ubyte[]) {
     private Socket socket;

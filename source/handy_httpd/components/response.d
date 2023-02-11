@@ -107,7 +107,7 @@ struct HttpResponse {
      *   size = The pre-computed size of the content.
      *   contentType = The content type of the response.
      */
-    public void writeBody(R)(R inputRange, ulong size, string contentType) if (isInputRangeOf!(R, ubyte[])) {
+    public void writeBodyRange(R)(R inputRange, ulong size, string contentType) if (isInputRangeOf!(R, ubyte[])) {
         if (!flushed) {
             addHeader("Content-Length", size.to!string);
             addHeader("Content-Type", contentType);
@@ -132,8 +132,8 @@ struct HttpResponse {
      *   data = The data to write.
      *   contentType = The content type of the data.
      */
-    public void writeBody(ubyte[] data, string contentType = "application/octet-stream") {
-        this.writeBody([data], data.length, contentType);
+    public void writeBodyBytes(ubyte[] data, string contentType = "application/octet-stream") {
+        this.writeBodyRange([data], data.length, contentType);
     }
 
     /** 
@@ -143,8 +143,8 @@ struct HttpResponse {
      *   text = The text to write.
      *   contentType = The content type of the text. Defaults to text/plain.
      */
-    public void writeBody(string text, string contentType = "text/plain; charset=utf-8") {
-        writeBody(cast(ubyte[]) text, contentType);
+    public void writeBodyString(string text, string contentType = "text/plain; charset=utf-8") {
+        writeBodyBytes(cast(ubyte[]) text, contentType);
     }
 
     /** 

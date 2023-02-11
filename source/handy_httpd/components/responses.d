@@ -23,13 +23,13 @@ void okResponse(ref HttpResponse response) {
  *   bodyContent = The body of the response.
  *   contentType = The content type of the body.
  */
-void okResponse(ref HttpResponse response, string bodyContent, string contentType = "text/plain") {
+void okResponse(ref HttpResponse response, string bodyContent, string contentType = "text/plain; charset=utf-8") {
     import std.conv : to;
     response.setStatus(200).setStatusText("OK");
     response.addHeader("Content-Type", contentType);
     response.addHeader("Content-Length", bodyContent.length.to!string);
     response.flushHeaders();
-    response.writeBody(bodyContent, contentType);
+    response.writeBodyString(bodyContent, contentType);
 }
 
 /** 
@@ -51,7 +51,7 @@ void fileResponse(ref HttpResponse response, string filename, string type) {
         auto file = File(filename, "r");
         ulong size = file.size();
         // Flush the headers, and begin streaming the file directly.
-        response.writeBody(file.byChunk(8192), size, type);
+        response.writeBodyRange(file.byChunk(8192), size, type);
     }
 }
 

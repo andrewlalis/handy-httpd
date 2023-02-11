@@ -8,13 +8,14 @@ void main() {
     ServerConfig cfg = ServerConfig.defaultValues();
     cfg.workerPoolSize = 5;
     cfg.port = 8080;
-    cfg.verbose = true;
+    cfg.serverLogLevel = LogLevel.DEBUG;
     new HttpServer((ref ctx) {
         if (ctx.request.url == "/stop") {
-            ctx.response.writeBody("Shutting down the server.");
+            ctx.response.writeBodyString("Shutting down the server.");
             ctx.server.stop();
         } else if (ctx.request.url == "/hello") {
-            ctx.response.writeBody("Hello world!");
+            ctx.log.infoF!"Responding to request: %s"(ctx.request.url);
+            ctx.response.writeBodyString("Hello world!");
         } else {
             ctx.response.notFound();
         }

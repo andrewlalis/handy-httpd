@@ -74,9 +74,9 @@ class HttpServer {
     private ThreadGroup workerThreadGroup;
 
     /** 
-     * The server's logger.
+     * The logger that's used for this server's log messages.
      */
-    private ServerLogger log;
+    private const ContextLogger log;
 
     /** 
      * Constructs a new server using the supplied handler to handle all
@@ -92,7 +92,7 @@ class HttpServer {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
-        this.log = ServerLogger(&this.config);
+        this.log = ContextLogger("Server", config.serverLogLevel);
         this.exceptionHandler = new BasicServerExceptionHandler();
     }
 
@@ -125,27 +125,23 @@ class HttpServer {
             socketConfigFunction(this.serverSocket);
         }
         this.serverSocket.bind(this.address);
-        log.infoFV!"Bound to address %s"(this.address);
+        log.info("Bound to address ", this.address);
         this.serverSocket.listen(this.config.connectionQueueSize);
         initWorkerThreads();
         this.ready = true;
 
-        log.infoV("Now accepting connections.");
+        log.info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
             try {
                 Socket clientSocket = this.serverSocket.accept();
                 this.requestQueue.insertBack(clientSocket);
                 this.requestSemaphore.notify();
             } catch (SocketAcceptException acceptException) {
-                log.infoFV!"Socket accept failed: %s"(acceptException.msg);
+                log.warn("Socket accept failed: ", acceptException.msg);
             }
         }
         this.ready = false;
         shutdownWorkerThreads();
-    }
-
-    unittest {
-        
     }
 
     /** 
@@ -153,7 +149,7 @@ class HttpServer {
      * will block until all pending requests have been fulfilled.
      */
     public void stop() {
-        log.infoV("Stopping the server.");
+        log.info("Stopping the server.");
         if (this.serverSocket !is null) {
             this.serverSocket.shutdown(SocketShutdown.BOTH);
             this.serverSocket.close();
@@ -229,13 +225,5 @@ class HttpServer {
      */
     public ServerExceptionHandler getExceptionHandler() {
         return exceptionHandler;
-    }
-
-    /** 
-     * Gets the server's logger.
-     * Returns: The server's logger.
-     */
-    public ServerLogger getLogger() {
-        return log;
     }
 }

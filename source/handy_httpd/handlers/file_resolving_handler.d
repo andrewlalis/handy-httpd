@@ -72,13 +72,12 @@ class FileResolvingHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequestContext ctx) {
-        auto log = ctx.server.getLogger();
-        log.infoF!"Resolving file for url %s..."(ctx.request.url);
+        ctx.log.debugF!"Resolving file for url %s..."(ctx.request.url);
         string path = sanitizeRequestPath(ctx.request.url);
         if (path !is null) {
-            ctx.response.fileResponse(path, getMimeType(path, log));
+            ctx.response.fileResponse(path, getMimeType(path, ctx.log));
         } else {
-            log.infoFV!"Could not resolve file for url %s."(ctx.request.url);
+            ctx.log.debugF!"Could not resolve file for url %s."(ctx.request.url);
             ctx.response.notFound();
         }
     }
@@ -237,14 +236,14 @@ class FileResolvingHandler : HttpRequestHandler {
     *   log = The logger to use, in case of errors.
     * Returns: A mime type string.
     */
-    private string getMimeType(string filename, ServerLogger log) {
+    private string getMimeType(string filename, ContextLogger log) {
         import std.string : lastIndexOf;
         import std.uni : toLower;
         auto p = filename.lastIndexOf('.');
         if (p == -1) return "text/html";
         string extension = filename[(p + 1)..$].toLower();
         if (extension !in this.mimeTypes) {
-            log.infoFV!"Warning: Unknown mime type for file extension %s"(extension);
+            log.warnF!"Unknown mime type for file extension \"%s\"."(extension);
             return "text/html";
         }
         return this.mimeTypes[extension];
@@ -255,7 +254,7 @@ class FileResolvingHandler : HttpRequestHandler {
         import handy_httpd.components.logger;
         FileResolvingHandler handler = new FileResolvingHandler();
         ServerConfig config = ServerConfig.defaultValues();
-        ServerLogger log = ServerLogger(&config);
+        auto log = ContextLogger("Testing", LogLevel.ERROR);
 
         // Check that known mime types work.
         assert(handler.getMimeType("index.html", log) == "text/html");

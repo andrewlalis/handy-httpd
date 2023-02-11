@@ -12,7 +12,13 @@ Usually, to correctly respond to a request, you need to:
 
 ## The Request Context
 
-The HttpRequestContext that's provided to the handler contains all the information needed to respond to the request.
+The HttpRequestContext that's provided to the handler contains all the information needed to respond to the request. This includes:
+
+- The [HttpRequest](ddoc-handy_httpd.components.request.HttpRequest) that was received.
+- The [HttpResponse](ddoc-handy_httpd.components.response.HttpResponse) that will be sent.
+- The [HttpServer](ddoc-handy_httpd.server.Server) that received the request.
+- The [ServerWorkerThread](ddoc-handy_httpd.components.worker.ServerWorkerThread) that's processing the request.
+- A [ContextLogger](ddoc-handy_httpd.components.logger.ContextLogger) for logging any information about the request as it's handled.
 
 ### Request
 
@@ -68,35 +74,17 @@ void handle(ref HttpRequestContext ctx) {
 
 #### Body Content
 
-Some requests that your server receives may include a body, which is any content that comes after the URL and headers of the request. The request offers a few low-level attributes to enable you to manually process the request body if you'd like, or you can use one of the available helper methods.
+Some requests that your server receives may include a body, which is any content that comes after the URL and headers of the request. The [HttpRequest](ddoc-handy_httpd.components.request.HttpRequest) offers the following methods for reading the body of the request:
 
-To see if a request contains a body that should be read, you can call `request.hasBody()`, which returns **`true`** if we detect that there's content to be read.
-> A request is determined to have a body if the number of bytes received exceeds the `receiveBufferOffset`, or if a `"Content-Length"` header with a positive integer value is present. See [Low-Level Reading](#low-level-reading) for more info.
+| Method | Description |
+|---     |---          |
+| [readBody](ddoc-handy_httpd.components.request.HttpRequest.readBody) | Reads the request body, and passes it in chunks to the given output range. Unless you explicitly enable *infinite reading*, it will respect the request's `Content-Length` header, and if no such header is present, nothing will be read. |
+| [readBodyAsBytes](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsBytes) | Reads the entire request body to a byte array. |
+| [readBodyAsString](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsString) | Reads the entire request body to a string. |
+| [readBodyAsJson](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsJson) | Reads the entire request body as a [`JSONValue`](https://dlang.org/phobos/std_json.html#.JSONValue). |
+| [readBodyToFile](ddoc-handy_httpd.components.request.HttpRequest.readBodyToFile) | Reads the entire request body and writes it to a given file. |
 
-To read the request body, you can call the `request.readBody` method, passing an [Output range](https://dlang.org/phobos/std_range_primitives.html#isOutputRange) that accepts chunks of `ubyte[]` that are produced as the body is read. Let's see how that could work with a simple example that prints each chunk to stdout as it's read:
-
-```d
-struct StdoutPrinter {
-    void put(ubyte[] data) {
-        import std.stdio : writeln;
-        string s = cast(string) data;
-        writeln(s);
-    }
-}
-
-StdoutPrinter p;
-request.readBody(p);
-```
-
-To make your life easier, we've included a number of pre-defined helper methods that read the request body to common output formats.
-
-- `readBodyAsString()` will read the entire request body into a `string`.
-- `readBodyAsJson()` will read the request body into a [JSONValue](https://dlang.org/phobos/std_json.html#.JSONValue), or throw a [JSONException](https://dlang.org/phobos/std_json.html#JSONException) or [ConvException](https://dlang.org/phobos/std_json.html#ConvException) if the body's content is not valid JSON, or if a number in the input can't be represented with a D type.
-- `readBodyToFile(string filename)` will read the request body and write it to the given file. If a file already exists at `filename`, it will be overwritten.
-
-##### Low-Level Reading
-
-For low-level access, you can read from the request's `clientSocket`. The request provides a `ubyte[]* receiveBuffer`, which is a pointer to the receive buffer belonging to the worker thread that's processing the request. It's highly recommended to use this to receive additional data, instead of creating a separate buffer. When a request is first parsed, we read as much data as can fit into the receive buffer (its size is configured via the [receiveBufferSize](./configuration.md#receivebuffersize) property). This means that part (or all) of the request body might have been read in the first attempt to receive data. In order to retrieve this data, the request contains the `size_t receiveBufferOffset` and `size_t receivedByteCount` attributes which specify the offset in the buffer where the body would start (1 past the end of the headers), and the number of bytes that were received in total, respectively.
+> Note: While Handy-Httpd doesn't force you to limit the amount of data you read, please be careful when reading an entire request body at once, like with `readBodyAsString`. This will load the entire request body into memory, and **will** crash your program if the body is too large.
 
 ### Response
 
@@ -120,22 +108,16 @@ void handle(ref HttpRequestContext ctx) {
 
 The first thing you should do when responding to a request is to send a status, and headers. The response's `ushort status` can be set to one of the [valid HTTP response statuses](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status), depending on the situation. You may also want to set the request's `string statusText` to something like `"Not Found"` if you return a 404 status, for example.
 
-You can add headers via `request.addHeader(string name, string value)`.
+You can add headers via [addHeader(string name, string value)](ddoc-handy_httpd.components.response.HttpResponse.addHeader).
 
 > Note that setting the status, statusText, and headers is only possible before they've been flushed, i.e. before any body content is sent.
 
 #### Writing the Response Body
 
-After setting a status and headers, you can write the response body to the response's `clientSocket`. This can be done manually by invoking `response.clientSocket.send`, or with one of the helper methods provided by the response.
+After setting a status and headers, you can write the response body. This can be done with one of the methods provided by the response:
 
-- `writeBody(inputRange, ulong size, string contentType)` will write the response body using data taken from an input range that supplies `ubyte[]` chunks. The size and content type are used to set headers before the actual data is sent.
-- `writeBody(ubyte[] body, string contentType)` will write the given content to the response body.
-- `writeBody(string text)` will write plain text to the response body.
-
-### Socket and Server
-
-While you'll normally only use the request and response components of the request context, it also contains a reference to the underlying [Socket](https://dlang.org/phobos/std_socket.html#.Socket) that's used for communication, as well as a reference to the [HttpServer](ddoc-handy_httpd.server.HttpServer) that's handling the request. Feel free to use these components if you need, but if you do, be aware of some implementation details of Handy-httpd:
-
-- The socket is a classic TCP socket, and when passed to a handler via a context, the request has already been read from the socket's input stream.
-- When a response's status and headers are flushed to the socket's output stream, an internal `flushed` flag is set to **true**. If the response hasn't been flushed by the time that a handler has finished with the context, it'll be flushed by the worker thread handling the request. Therefore, if you plan to write content to the socket, be sure to flush the headers beforehand, to avoid having them dumped at the end of the socket's output. You may use [HttpResponse.flushHeaders](ddoc-handy_httpd.components.response.HttpResponse.flushHeaders).
-- The request context passed to a server is local to the current worker thread. However, the server reference in that context refers to the single server to which all worker threads belong. Therefore, be aware of the potential concurrency issues if you decide to operate on the shared server instance.
+| Method | Description |
+|---     |---          |
+| [writeBodyRange](ddoc-handy_httpd.components.response.HttpResponse.writeBodyRange) | Writes the response body using data taken from an input range that supplies `ubyte[]` chunks. The size and content type must be explicitly specified before anything is written. |
+| [writeBodyBytes](ddoc-handy_httpd.components.response.HttpResponse.writeBodyBytes) | Writes the given bytes to the response body. You can optionally specify a content type, or it'll default to `application/octet-stream`. |
+| [writeBodyString](ddoc-handy_httpd.components.response.HttpResponse.writeBodyString) | Writes the given text to the response body. You can optionally specify a content type, or it'll default to `text/plain; charset=utf-8`. |

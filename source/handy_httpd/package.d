@@ -6,6 +6,7 @@ module handy_httpd;
 
 public import handy_httpd.server;
 public import handy_httpd.components.config;
+public import handy_httpd.components.logger;
 public import handy_httpd.components.request;
 public import handy_httpd.components.response;
 public import handy_httpd.components.handler;

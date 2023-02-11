@@ -3,6 +3,7 @@
  */
 module handy_httpd.components.config;
 
+import handy_httpd.components.logger;
 import std.socket : Socket;
 
 /** 
@@ -30,11 +31,6 @@ struct ServerConfig {
     int connectionQueueSize;
 
     /** 
-     * Whether to show verbose output.
-     */
-    bool verbose;
-
-    /** 
      * The number of worker threads for processing requests.
      */
     size_t workerPoolSize;
@@ -59,6 +55,17 @@ struct ServerConfig {
      */
     string[string] defaultHeaders;
 
+    /** 
+     * The log level to use for server-specific logs.
+     */
+    LogLevel serverLogLevel;
+
+    /** 
+     * The default log level to use for logging within the context of request
+     * handlers.
+     */
+    LogLevel defaultHandlerLogLevel;
+
     static ServerConfig defaultValues() {
         ServerConfig cfg;
         cfg.hostname = "127.0.0.1";
@@ -66,8 +73,9 @@ struct ServerConfig {
         cfg.receiveBufferSize = 8192;
         cfg.connectionQueueSize = 100;
         cfg.reuseAddress = true;
-        cfg.verbose = false;
         cfg.workerPoolSize = 25;
+        cfg.serverLogLevel = LogLevel.ERROR;
+        cfg.defaultHandlerLogLevel = LogLevel.INFO;
         return cfg;
     }
 }

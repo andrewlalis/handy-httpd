@@ -67,7 +67,7 @@ class HttpRequestBuilder {
     private string[string] headers;
     private string[string] params;
     private string[string] pathParams;
-    private InputRange!(ubyte[]) inputRange;
+    private InputRange!(ubyte[]) inputRange = new EmptyInputRange();
 
     this() {
         this.method = "GET";

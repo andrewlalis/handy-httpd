@@ -6,18 +6,19 @@ module handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.worker;
+import handy_httpd.components.logger;
 import handy_httpd.server;
 import handy_httpd.util.range;
 
-import std.socket;
-import std.range;
+import std.range : InputRange, OutputRange;
 
 /**
  * A simple container for the components that are available in the context of
  * handling an HttpRequest. This includes:
  * - The HttpRequest.
  * - The HttpResponse.
- * - Extra meta information.
+ * - The HttpServer.
+ * - The worker thread.
  */
 struct HttpRequestContext {
     /**
@@ -39,6 +40,11 @@ struct HttpRequestContext {
      * The worker thread that's handling this request.
      */
     public ServerWorkerThread worker;
+
+    /** 
+     * A logger that can be used to log messages when handling this request.
+     */
+    public const ContextLogger log;
 }
 
 /** 
@@ -56,6 +62,10 @@ interface HttpRequestHandler {
      * Handles an HTTP request. Note that this method may be called from
      * multiple threads, as requests may be processed in parallel, so you
      * should avoid performing actions which are not thread-safe.
+     *
+     * The context `ctx` is passed as a `ref` because the context ultimately
+     * belongs to the worker that's handling the request.
+     *
      * Params:
      *   ctx = The request context.
      */
@@ -83,15 +93,13 @@ interface ServerExceptionHandler {
  */
 class BasicServerExceptionHandler : ServerExceptionHandler {
     void handle(ref HttpRequestContext ctx, Exception e) {
-        auto log = ctx.server.getLogger();
-        log.infoF!"An error occurred while handling a request: %s"(e.msg);
+        // ctx.log.error("An error occurred while handling a request: ", e.msg);
         if (!ctx.response.isFlushed) {
             ctx.response.setStatus(500);
             ctx.response.setStatusText("Internal Server Error");
-            ctx.response.addHeader("Content-Type", "text/plain");
-            ctx.response.writeBody("An error occurred while handling your request.");
+            ctx.response.writeBodyString("An error occurred while handling your request.");
         } else {
-            log.infoV("The response has already been sent; cannot send 500 error.");
+            // ctx.log.error("The response has already been sent; cannot send 500 error.");
         }
     }
 }

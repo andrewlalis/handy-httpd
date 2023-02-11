@@ -58,14 +58,28 @@ An associative array of headers that will be added to every response the server 
 
 These options can be used to configure the general server behavior.
 
-### `verbose`
-| Type | Default Value |
-|---   |---            |
-| `bool` | `false` |
-Whether to print verbose output to stdout. If true, the server will send more detailed information about its operations to the standard output stream.
-
 ### `workerPoolSize`
 | Type | Default Value |
 |---   |---            |
 | `size_t` | `25` |
 The number of worker threads to use to process incoming requests. Increasing this number can improve performance for servers where the bottleneck is in the number of concurrent requests.
+
+### `serverLogLevel`
+| Type | Default Value |
+|---   |---            |
+| [LogLevel](ddoc-handy_httpd.components.logger.LogLevel) | `LogLevel.ERROR` |
+The log level for the server's own internal logging. Can be one of the following values:
+- `LogLevel.DEBUG`
+- `LogLevel.INFO`
+- `LogLevel.WARNING`
+- `LogLevel.ERROR`
+
+### `defaultHandlerLogLevel`
+| Type | Default Value |
+|---   |---            |
+| [LogLevel](ddoc-handy_httpd.components.logger.LogLevel) | `LogLevel.INFO` |
+The default log level to use for any request handler's logging output. Can be one of the following values:
+- `LogLevel.DEBUG`
+- `LogLevel.INFO`
+- `LogLevel.WARNING`
+- `LogLevel.ERROR`

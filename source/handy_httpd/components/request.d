@@ -101,7 +101,7 @@ struct HttpRequest {
      *                  doesn't exist.
      * Returns: The value of the path parameter.
      */
-    public T getPathParamAs(T)(string name, T defaultValue = T.init) {
+    public T getPathParamAs(T)(string name, T defaultValue = T.init) const {
         import std.conv : to, ConvException;
         if (name !in pathParams) return defaultValue;
         try {

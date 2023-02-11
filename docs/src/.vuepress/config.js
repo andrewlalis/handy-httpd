@@ -65,6 +65,7 @@ module.exports = {
             '',
             'about',
             'handling-requests',
+            'logging',
             'configuration',
             'pre-made-handlers'
           ]

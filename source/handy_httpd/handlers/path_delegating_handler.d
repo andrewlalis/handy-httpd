@@ -168,7 +168,6 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     void handle(ref HttpRequestContext ctx) {
         import std.algorithm : canFind;
-        auto log = ctx.server.getLogger();
         foreach (mapping; handlerMappings) {
             if (
                 pathMatches(mapping.pathPattern, ctx.request.url) &&
@@ -178,7 +177,7 @@ class PathDelegatingHandler : HttpRequestHandler {
                     canFind(mapping.methods, ctx.request.method)
                 )
             ) {
-                log.infoFV!"Found matching handler for %s %s (pattern: %s)"(
+                ctx.log.debugF!"Found matching handler for %s %s (pattern: %s)"(
                     ctx.request.method,
                     ctx.request.url,
                     mapping.pathPattern
@@ -188,7 +187,7 @@ class PathDelegatingHandler : HttpRequestHandler {
                 return; // Exit once we handle the request.
             }
         }
-        log.infoFV!"No matching handler found for url %s"(ctx.request.url);
+        ctx.log.debugF!"No matching handler found for url %s"(ctx.request.url);
         notFoundHandler.handle(ctx);
     }
 

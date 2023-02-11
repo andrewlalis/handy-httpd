@@ -16,6 +16,7 @@ import handy_httpd.server;
 import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
+import handy_httpd.components.logger;
 import handy_httpd.components.parse_utils;
 import handy_httpd.util.range;
 
@@ -28,6 +29,7 @@ class ServerWorkerThread : Thread {
     private MsgParser!Msg requestParser = initParser!Msg();
     private ubyte[] receiveBuffer;
     private HttpServer server;
+    private ContextLogger log;
 
     /** 
      * Constructs this worker thread for the given server, with the given id.
@@ -41,6 +43,7 @@ class ServerWorkerThread : Thread {
         this.id = id;
         this.receiveBuffer = new ubyte[server.config.receiveBufferSize];
         this.server = server;
+        this.log = ContextLogger(this.name, server.config.serverLogLevel);
     }
 
     /** 
@@ -66,13 +69,7 @@ class ServerWorkerThread : Thread {
             HttpRequestContext ctx = nullableCtx.get();
 
             // Then handle the request using the server's handler.
-            SysTime now = Clock.currTime();
-            this.server.getLogger.infoFV!"[%s] %s %s %s"(
-                this.name,
-                now.toSimpleString(),
-                ctx.request.method,
-                ctx.request.url
-            );
+            log.infoF!"%s %s"(ctx.request.method, ctx.request.url);
             try {
                 this.server.getHandler.handle(ctx);
                 if (!ctx.response.isFlushed) {
@@ -85,12 +82,7 @@ class ServerWorkerThread : Thread {
             clientSocket.close();
 
             sw.stop();
-            this.server.getLogger.infoFV!"[%s] %d %s (took %d μs)"(
-                this.name,
-                ctx.response.status,
-                ctx.response.statusText,
-                sw.peek.total!"usecs"
-            );
+            log.infoF!"%d %s (took %d μs)"(ctx.response.status, ctx.response.statusText, sw.peek.total!"usecs");
 
             // Reset the request parser so we're ready for the next request.
             requestParser.msg.reset();
@@ -114,45 +106,56 @@ class ServerWorkerThread : Thread {
         size_t received = clientSocket.receive(receiveBuffer);
         if (received == 0 || received == Socket.ERROR) {
             if (received == 0) {
-                this.server.getLogger.infoFV!"[%s] Client %s closed the connection before a request was sent."(
-                    this.name,
-                    clientSocket.remoteAddress
-                );
+                log.infoF!"Client %s closed the connection before a request was sent."(clientSocket.remoteAddress);
             } else if (received == Socket.ERROR) {
-                this.server.getLogger.infoFV!"[%s] Socket receive() failed."(this.name);
+                log.errorF!"Socket receive failed. Received %d."(received);
             }
+            clientSocket.close();
             return result; // Skip if we didn't receive valid data.
         }
         immutable ubyte[] data = receiveBuffer[0..received].idup;
 
-        // Prepare the request context by parsing the HttpRequest, and preparing a default response.
+        // Prepare the request context by parsing the HttpRequest, and preparing the context.
         try {
             auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
-            HttpRequest request = requestAndSize[0];
-            SocketInputRange inputRange = new SocketInputRange(
-                clientSocket,
-                getReceiveBuffer(),
-                requestAndSize[1],
-                received
-            );
-            request.inputRange = inputRange;
-            HttpRequestContext ctx = HttpRequestContext(
-                request,
-                HttpResponse(),
-                this.server,
-                this
-            );
-            ctx.response.outputRange = new SocketOutputRange(clientSocket);
-            foreach (headerName, headerValue; this.server.config.defaultHeaders) {
-                ctx.response.addHeader(headerName, headerValue);
-            }
-            result = ctx;
+            result = prepareRequestContext(requestAndSize[0], requestAndSize[1], received, clientSocket);
             return result;
         } catch (Exception e) {
-            this.server.getLogger.infoFV!"[%s] Failed to parse HTTP request: %s"(this.name, e.msg);
+            log.warnF!"Failed to parse HTTP request: %s"(e.msg);
             clientSocket.close();
             return result;
         }
+    }
+
+    /** 
+     * Helper method to build the request context from the basic components
+     * obtained from parsing a request.
+     * Params:
+     *   parsedRequest = The parsed request.
+     *   bytesRead = The number of bytes read during request parsing.
+     *   bytesReceived = The number of bytes initially received.
+     *   socket = The socket that connected.
+     * Returns: A request context that is ready handling.
+     */
+    private HttpRequestContext prepareRequestContext(
+        HttpRequest parsedRequest,
+        size_t bytesRead,
+        size_t bytesReceived,
+        Socket socket
+    ) {
+        HttpRequestContext ctx = HttpRequestContext(
+            parsedRequest,
+            HttpResponse(),
+            this.server,
+            this,
+            ContextLogger.forWorkerThread(this)
+        );
+        ctx.request.inputRange = new SocketInputRange(socket, getReceiveBuffer(), bytesRead, bytesReceived);
+        ctx.response.outputRange = new SocketOutputRange(socket);
+        foreach (headerName, headerValue; this.server.config.defaultHeaders) {
+            ctx.response.addHeader(headerName, headerValue);
+        }
+        return ctx;
     }
 
     /** 
@@ -169,5 +172,13 @@ class ServerWorkerThread : Thread {
      */
     public ubyte[]* getReceiveBuffer() {
         return &receiveBuffer;
+    }
+
+    /** 
+     * Gets the server that this worker was created for.
+     * Returns: The server.
+     */
+    public HttpServer getServer() {
+        return server;
     }
 }
