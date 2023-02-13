@@ -9,7 +9,7 @@
 module handy_httpd.util.range;
 
 import std.socket;
-import std.range.interfaces : InputRange, OutputRange, UnsupportedRangeMethod;
+import std.range.interfaces : InputRange, OutputRange;
 
 /** 
  * Helper static function to check if a type is an input range that supplies

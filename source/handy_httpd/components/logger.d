@@ -14,11 +14,35 @@ enum LogLevel {
     ERROR     = 40
 }
 
+/** 
+ * Helper to get the current log level as a human-readable string.
+ * Params:
+ *   level = The log level.
+ * Returns: The log level's name.
+ */
 private string getLogLevelName(LogLevel level) {
     if (level <= LogLevel.DEBUG) return "DEBUG";
     if (level <= LogLevel.INFO) return "INFO";
     if (level <= LogLevel.WARNING) return "WARNING";
     return "ERROR";
+}
+
+/** 
+ * Helper method to get an ISO-8601 local datetime string.
+ * Returns: The current timestamp.
+ */
+private string getCurrentTimestampISO() {
+    import std.datetime;
+    import std.format;
+    SysTime now = Clock.currTime();
+    return format!"%04d-%02d-%02dT%02d:%02d:%02d"(
+        now.year,
+        now.month,
+        now.day,
+        now.hour,
+        now.minute,
+        now.second
+    );
 }
 
 /** 
@@ -31,7 +55,6 @@ struct ContextLogger {
     import std.traits;
     import std.string;
     import std.stdio;
-    import std.datetime;
 
     /** 
      * The name of this logger, which will appear in log messages.
@@ -86,12 +109,10 @@ struct ContextLogger {
         if (level >= LogLevel.WARNING) {
             outputStream = stderr;
         }
-
-        SysTime now = Clock.currTime();
         string logPrefix = format!"[%s %s] %s: "(
             this.name,
             getLogLevelName(level),
-            now.toISOExtString(0)
+            getCurrentTimestampISO()
         );
         outputStream.writeln(logPrefix, args);
     }

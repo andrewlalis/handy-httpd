@@ -117,7 +117,11 @@ struct HttpResponse {
         while (!inputRange.empty) {
             ulong bytesToWrite = size - bytesWritten;
             ubyte[] data = inputRange.front();
-            size_t idx = data.length > bytesToWrite ? bytesToWrite : data.length;
+            // We can safely cast the length to an integer, since it is a buffer size.
+            uint idx = cast(uint) data.length;
+            if (idx > bytesToWrite) {
+                idx = cast(uint) bytesToWrite; // This is safe since we know that bytesToWrite is small.
+            }
             this.outputRange.put(data[0 .. idx]);
             bytesWritten += idx;
             inputRange.popFront();
