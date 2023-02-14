@@ -29,9 +29,9 @@ import handy_httpd;
 void main() {
 	new HttpServer((ref ctx) {
 		if (ctx.request.url == "/hello") {
-			response.writeBodyString("Hello world!");
+			ctx.response.writeBodyString("Hello world!");
 		} else {
-			response.notFound();
+			ctx.response.notFound();
 		}
 	}).start();
 }
