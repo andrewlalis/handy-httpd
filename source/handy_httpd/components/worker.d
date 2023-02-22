@@ -11,12 +11,12 @@ import core.thread;
 import std.datetime;
 import std.datetime.stopwatch;
 import httparsed : MsgParser, initParser;
+import slf4d;
 
 import handy_httpd.server;
 import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
-import handy_httpd.components.logger;
 import handy_httpd.components.parse_utils;
 import handy_httpd.util.range;
 
@@ -29,7 +29,6 @@ class ServerWorkerThread : Thread {
     private MsgParser!Msg requestParser = initParser!Msg();
     private ubyte[] receiveBuffer;
     private HttpServer server;
-    private ContextLogger log;
 
     /** 
      * Constructs this worker thread for the given server, with the given id.
@@ -43,7 +42,6 @@ class ServerWorkerThread : Thread {
         this.id = id;
         this.receiveBuffer = new ubyte[server.config.receiveBufferSize];
         this.server = server;
-        this.log = ContextLogger(this.name, server.config.serverLogLevel);
     }
 
     /** 
@@ -55,6 +53,7 @@ class ServerWorkerThread : Thread {
      * 3. Handle the request using the server's handler.
      */
     private void run() {
+        auto log = getLogger();
         while (server.isReady) {
             // First try and get a socket to the client.
             Nullable!Socket nullableSocket = server.waitForNextClient();
@@ -102,14 +101,17 @@ class ServerWorkerThread : Thread {
      * beyond closing the socket.
      */
     private Nullable!HttpRequestContext receiveRequest(Socket clientSocket) {
+        auto log = getLogger();
         Nullable!HttpRequestContext result;
         size_t received = clientSocket.receive(receiveBuffer);
+        log.debugF!"Initially received %d bytes from the client."(received);
         if (received == 0 || received == Socket.ERROR) {
             if (received == 0) {
                 log.infoF!"Client %s closed the connection before a request was sent."(clientSocket.remoteAddress);
             } else if (received == Socket.ERROR) {
                 log.errorF!"Socket receive failed. Received %d."(received);
             }
+            log.debug_("Closing the connection to the client early.");
             clientSocket.close();
             return result; // Skip if we didn't receive valid data.
         }
@@ -118,6 +120,7 @@ class ServerWorkerThread : Thread {
         // Prepare the request context by parsing the HttpRequest, and preparing the context.
         try {
             auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
+            log.debugF!"Parsed first %d bytes as the HTTP request."(requestAndSize[1]);
             result = prepareRequestContext(requestAndSize[0], requestAndSize[1], received, clientSocket);
             return result;
         } catch (Exception e) {
@@ -147,8 +150,7 @@ class ServerWorkerThread : Thread {
             parsedRequest,
             HttpResponse(),
             this.server,
-            this,
-            ContextLogger.forWorkerThread(this)
+            this
         );
         ctx.request.inputRange = new SocketInputRange(socket, getReceiveBuffer(), bytesRead, bytesReceived);
         ctx.response.outputRange = new SocketOutputRange(socket);

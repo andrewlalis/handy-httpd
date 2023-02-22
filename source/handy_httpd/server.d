@@ -16,10 +16,10 @@ import handy_httpd.components.response;
 import handy_httpd.components.handler;
 import handy_httpd.components.config;
 import handy_httpd.components.parse_utils : parseRequest, Msg;
-import handy_httpd.components.logger;
 import handy_httpd.components.worker;
 
 import httparsed : MsgParser, initParser;
+import slf4d;
 
 /** 
  * A simple HTTP server that accepts requests on a given port and address, and
@@ -74,11 +74,6 @@ class HttpServer {
     private ThreadGroup workerThreadGroup;
 
     /** 
-     * The logger that's used for this server's log messages.
-     */
-    private const ContextLogger log;
-
-    /** 
      * Constructs a new server using the supplied handler to handle all
      * incoming requests.
      * Params:
@@ -92,7 +87,6 @@ class HttpServer {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
-        this.log = ContextLogger("Server", config.serverLogLevel);
         this.exceptionHandler = new BasicServerExceptionHandler();
     }
 
@@ -117,6 +111,7 @@ class HttpServer {
      * calling `stop()`.
      */
     public void start() {
+        auto log = getLogger();
         this.serverSocket = new TcpSocket();
         if (this.config.reuseAddress) {
             this.serverSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
@@ -125,7 +120,7 @@ class HttpServer {
             socketConfigFunction(this.serverSocket);
         }
         this.serverSocket.bind(this.address);
-        log.info("Bound to address ", this.address);
+        log.infoF!"Bound to address %s"(this.address);
         this.serverSocket.listen(this.config.connectionQueueSize);
         initWorkerThreads();
         this.ready = true;
@@ -149,6 +144,7 @@ class HttpServer {
      * will block until all pending requests have been fulfilled.
      */
     public void stop() {
+        auto log = getLogger();
         log.info("Stopping the server.");
         if (this.serverSocket !is null) {
             this.serverSocket.shutdown(SocketShutdown.BOTH);

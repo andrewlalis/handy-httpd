@@ -4,6 +4,8 @@
 +/
 import handy_httpd;
 import std.stdio;
+import slf4d;
+import slf4d.default_provider;
 
 const indexContent = `
 <html>
@@ -18,28 +20,25 @@ const indexContent = `
 `;
 
 void main() {
+    configureLoggingProvider(new shared DefaultProvider(Levels.TRACE));
     ServerConfig cfg = ServerConfig.defaultValues();
     cfg.workerPoolSize = 3;
     cfg.port = 8080;
-    cfg.verbose = true;
     new HttpServer((ref ctx) {
+        auto log = getLogger();
         if (ctx.request.url == "/upload" && ctx.request.method == "POST") {
-            if (ctx.request.hasBody) {
-                writeln("User uploaded file.\n");
-                try {
-                    import std.datetime.stopwatch;
-                    auto sw = StopWatch(AutoStart.yes);
-                    ulong bytesRead = ctx.request.readBodyToFile("latest-upload");
-                    sw.stop();
-                    writefln!"Read %d bytes in %d ms."(bytesRead, sw.peek.total!"msecs");
-                } catch (BodyReadException e) {
-                    writeln("Error: " ~ e.msg);
-                }
+            log.info("User uploaded file.");
+            try {
+                import std.datetime.stopwatch;
+                auto sw = StopWatch(AutoStart.yes);
+                ulong bytesRead = ctx.request.readBodyToFile("latest-upload");
+                sw.stop();
+                log.infoF!"Read %d bytes in %d ms."(bytesRead, sw.peek.total!"msecs");
+            } catch (Exception e) {
+                log.error("Error: " ~ e.msg);
             }
-            ctx.response.status = 301;
-            ctx.response.addHeader("Location", "/");
         } else if (ctx.request.url == "/" || ctx.request.url == "" || ctx.request.url == "/index.html") {
-            ctx.response.writeBody(cast(ubyte[]) indexContent, "text/html; charset=utf-8");
+            ctx.response.writeBodyString(indexContent, "text/html; charset=utf-8");
         } else {
             ctx.response.notFound();
         }

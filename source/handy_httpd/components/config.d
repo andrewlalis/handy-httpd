@@ -3,8 +3,8 @@
  */
 module handy_httpd.components.config;
 
-import handy_httpd.components.logger;
 import std.socket : Socket;
+import slf4d;
 
 /** 
  * Configuration properties for the HttpServer.
@@ -55,17 +55,6 @@ struct ServerConfig {
      */
     string[string] defaultHeaders;
 
-    /** 
-     * The log level to use for server-specific logs.
-     */
-    LogLevel serverLogLevel;
-
-    /** 
-     * The default log level to use for logging within the context of request
-     * handlers.
-     */
-    LogLevel defaultHandlerLogLevel;
-
     static ServerConfig defaultValues() {
         ServerConfig cfg;
         cfg.hostname = "127.0.0.1";
@@ -74,8 +63,6 @@ struct ServerConfig {
         cfg.connectionQueueSize = 100;
         cfg.reuseAddress = true;
         cfg.workerPoolSize = 25;
-        cfg.serverLogLevel = LogLevel.ERROR;
-        cfg.defaultHandlerLogLevel = LogLevel.INFO;
         return cfg;
     }
 }

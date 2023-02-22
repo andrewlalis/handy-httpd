@@ -10,6 +10,7 @@ module handy_httpd.util.range;
 
 import std.socket;
 import std.range.interfaces : InputRange, OutputRange;
+import slf4d;
 
 /** 
  * Helper static function to check if a type is an input range that supplies
@@ -52,20 +53,29 @@ class SocketInputRange : InputRange!(ubyte[]) {
     }
 
     public void popFront() {
-        if (inputEnded) return;
-        bufferOffset = 0;
-        receivedCount = socket.receive(*receiveBuffer);
-        if (receivedCount == Socket.ERROR) {
+        auto log = getLogger();
+        // If we've reached the end of input, quit.
+        if (this.inputEnded) return;
+        // If we initially received less data than could fit into the receive buffer,
+        // then we know there's no more, so we can quit now.
+        if (this.receivedCount < (*this.receiveBuffer).length) {
+            this.inputEnded = true;
+            return;
+        }
+        this.bufferOffset = 0;
+        this.receivedCount = socket.receive(*this.receiveBuffer);
+        log.debugF!"Received %d bytes from the socket."(this.receivedCount);
+        if (this.receivedCount == Socket.ERROR) {
             import std.string : format;
-            string msg = format!"Error while receiving data. Received %d."(receivedCount);
+            string msg = format!"Error while receiving data. Received %d."(this.receivedCount);
             throw new SocketException(msg);
-        } else if (receivedCount == 0) {
-            inputEnded = true;
+        } else if (this.receivedCount == 0) {
+            this.inputEnded = true;
         }
     }
 
     public bool empty() {
-        return !inputEnded;
+        return inputEnded;
     }
 
     public ubyte[] moveFront() {
@@ -91,6 +101,11 @@ class SocketInputRange : InputRange!(ubyte[]) {
 unittest {
     import std.range;
     assert(isInputRangeOf!(SocketInputRange, ubyte[]));
+
+    Socket[2] sockets = socketPair();
+    Socket inSocket = sockets[0];
+    Socket outSocket = sockets[1];
+    
 }
 
 /** 

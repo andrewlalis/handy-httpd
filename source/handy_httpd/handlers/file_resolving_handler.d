@@ -8,7 +8,7 @@ import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.responses;
-import handy_httpd.components.logger;
+import slf4d;
 
 /** 
  * Request handler that resolves files within a given base path. This handler
@@ -72,12 +72,13 @@ class FileResolvingHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequestContext ctx) {
-        ctx.log.debugF!"Resolving file for url %s..."(ctx.request.url);
+        auto log = getLogger();
+        log.debugF!"Resolving file for url %s..."(ctx.request.url);
         string path = sanitizeRequestPath(ctx.request.url);
         if (path !is null) {
-            ctx.response.fileResponse(path, getMimeType(path, ctx.log));
+            ctx.response.fileResponse(path, getMimeType(path));
         } else {
-            ctx.log.debugF!"Could not resolve file for url %s."(ctx.request.url);
+            log.debugF!"Could not resolve file for url %s."(ctx.request.url);
             ctx.response.notFound();
         }
     }
@@ -233,10 +234,10 @@ class FileResolvingHandler : HttpRequestHandler {
     * files of an unknown type.
     * Params:
     *   filename = The name of the file to determine mime type for.
-    *   log = The logger to use, in case of errors.
     * Returns: A mime type string.
     */
-    private string getMimeType(string filename, ContextLogger log) {
+    private string getMimeType(string filename) {
+        auto log = getLogger();
         import std.string : lastIndexOf;
         import std.uni : toLower;
         auto p = filename.lastIndexOf('.');
@@ -250,21 +251,23 @@ class FileResolvingHandler : HttpRequestHandler {
     }
 
     unittest {
+        // Setup SLF4D to discard log messages, since some will be emitted by this function.
+        import slf4d;
+        import slf4d.noop_provider;
+        configureLoggingProvider(new NoOpProvider());
+
         import handy_httpd.components.config;
-        import handy_httpd.components.logger;
         FileResolvingHandler handler = new FileResolvingHandler();
-        ServerConfig config = ServerConfig.defaultValues();
-        auto log = ContextLogger("Testing", LogLevel.ERROR);
 
         // Check that known mime types work.
-        assert(handler.getMimeType("index.html", log) == "text/html");
-        assert(handler.getMimeType("profile.png", log) == "image/png");
-        assert(handler.getMimeType("vid.mp4", log) == "video/mp4");
+        assert(handler.getMimeType("index.html") == "text/html");
+        assert(handler.getMimeType("profile.png") == "image/png");
+        assert(handler.getMimeType("vid.mp4") == "video/mp4");
 
         // Check that unknown/missing types resolve to "text/html".
-        assert(handler.getMimeType("test.nonexistentextension", log) == "text/html");
-        assert(handler.getMimeType("test", log) == "text/html");
-        assert(handler.getMimeType(".gitignore", log) == "text/html");
-        assert(handler.getMimeType("test.", log) == "text/html");
+        assert(handler.getMimeType("test.nonexistentextension") == "text/html");
+        assert(handler.getMimeType("test") == "text/html");
+        assert(handler.getMimeType(".gitignore") == "text/html");
+        assert(handler.getMimeType("test.") == "text/html");
     }
 }

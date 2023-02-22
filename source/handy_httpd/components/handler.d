@@ -6,7 +6,6 @@ module handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.worker;
-import handy_httpd.components.logger;
 import handy_httpd.server;
 import handy_httpd.util.range;
 
@@ -40,11 +39,6 @@ struct HttpRequestContext {
      * The worker thread that's handling this request.
      */
     public ServerWorkerThread worker;
-
-    /** 
-     * A logger that can be used to log messages when handling this request.
-     */
-    public const ContextLogger log;
 }
 
 /** 

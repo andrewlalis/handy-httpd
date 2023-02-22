@@ -1,6 +1,7 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"httparsed": "1.2.1"
+		"httparsed": "1.2.1",
+		"slf4d": "0.0.4"
 	}
 }

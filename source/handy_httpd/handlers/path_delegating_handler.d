@@ -8,6 +8,7 @@ import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.responses;
+import slf4d;
 
 /** 
  * A request handler that delegates handling of requests to other handlers,
@@ -168,6 +169,7 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     void handle(ref HttpRequestContext ctx) {
         import std.algorithm : canFind;
+        auto log = getLogger();
         foreach (mapping; handlerMappings) {
             if (
                 pathMatches(mapping.pathPattern, ctx.request.url) &&
@@ -177,7 +179,7 @@ class PathDelegatingHandler : HttpRequestHandler {
                     canFind(mapping.methods, ctx.request.method)
                 )
             ) {
-                ctx.log.debugF!"Found matching handler for %s %s (pattern: %s)"(
+                log.debugF!"Found matching handler for %s %s (pattern: %s)"(
                     ctx.request.method,
                     ctx.request.url,
                     mapping.pathPattern
@@ -187,7 +189,7 @@ class PathDelegatingHandler : HttpRequestHandler {
                 return; // Exit once we handle the request.
             }
         }
-        ctx.log.debugF!"No matching handler found for url %s"(ctx.request.url);
+        log.debugF!"No matching handler found for url %s"(ctx.request.url);
         notFoundHandler.handle(ctx);
     }
 

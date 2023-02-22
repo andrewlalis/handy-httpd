@@ -2,17 +2,18 @@
 	"authors": [
 		"Andrew Lalis <andrewlalisofficial@gmail.com>"
 	],
-	"name": "handy-httpd",
-	"description": "Extremely lightweight HTTP server for D.",
-	"copyright": "Copyright © 2022, Andrew Lalis",
-	"license": "MIT",
-	"dependencies": {
-		"httparsed": "~>1.2.1"
-	},
 	"configurations": [
 		{
 			"name": "library",
 			"targetType": "library"
 		}
-	]
+	],
+	"copyright": "Copyright © 2022, Andrew Lalis",
+	"dependencies": {
+		"httparsed": "~>1.2.1",
+		"slf4d": "~>0.0.4"
+	},
+	"description": "Extremely lightweight HTTP server for D.",
+	"license": "MIT",
+	"name": "handy-httpd"
 }

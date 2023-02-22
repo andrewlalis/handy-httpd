@@ -7,6 +7,7 @@ import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
 import std.range : InputRange, isOutputRange, Appender, appender;
 import std.exception;
+import slf4d;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
@@ -128,8 +129,11 @@ struct HttpRequest {
      * Reads the entirety of the request body, and passes it in chunks to the
      * given output range.
      * 
-     * Throws a `BodyReadException` if an unrecoverable error occurs and the
+     * Throws a `SocketException` if an unrecoverable error occurs and the
      * reading cannot continue (such as a socket error or closed connection).
+     *
+     * Throws an exception if the connection is closed before the expected
+     * data can be read (if a Content-Length header is given).
      *
      * Params:
      *   outputRange = An output range that accepts chunks of `ubyte[]`.
@@ -206,18 +210,24 @@ struct HttpRequest {
      * Returns: The number of bytes that were read.
      */
     private ulong readBody(R)(R outputRange, long expectedLength) if (isOutputRange!(R, ubyte[])) {
+        auto log = getLogger();
+        log.debugF!"Reading request body. Expected length: %d"(expectedLength);
         import std.algorithm : min;
         bool hasExpectedLength = expectedLength != -1;
         ulong bytesRead = 0;
 
+        log.debugF!"Input range empty: %s, has expected length: %s"(this.inputRange.empty, hasExpectedLength);
         while (!this.inputRange.empty() && (!hasExpectedLength || bytesRead < expectedLength)) {
             ubyte[] data = this.inputRange.front();
             ulong bytesLeftToRead = expectedLength - bytesRead;
             size_t bytesToConsume = min(bytesLeftToRead, data.length);
             outputRange.put(data[0 .. bytesToConsume]);
             bytesRead += bytesToConsume;
+            log.debug_("Pop...");
             this.inputRange.popFront();
+            log.debugF!"Consumed %d bytes."(bytesToConsume);
         }
+        log.debugF!"Reading completed. Expected length: %d, Bytes read: %d"(expectedLength, bytesRead);
         if (hasExpectedLength && bytesRead < expectedLength) {
             throw new Exception("Connection closed before all data could be read.");
         }
