@@ -251,11 +251,6 @@ class FileResolvingHandler : HttpRequestHandler {
     }
 
     unittest {
-        // Setup SLF4D to discard log messages, since some will be emitted by this function.
-        import slf4d;
-        import slf4d.noop_provider;
-        configureLoggingProvider(new NoOpProvider());
-
         import handy_httpd.components.config;
         FileResolvingHandler handler = new FileResolvingHandler();
 

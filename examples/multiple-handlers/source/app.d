@@ -1,5 +1,6 @@
 import handy_httpd;
 import handy_httpd.handlers.path_delegating_handler;
+import slf4d;
 
 void main() {
 	auto pathHandler = new PathDelegatingHandler();
@@ -15,8 +16,9 @@ void handleUsers(ref HttpRequestContext ctx) {
 }
 
 void handleUser(ref HttpRequestContext ctx) {
+	auto log = getLogger();
 	ulong userId = ctx.request.getPathParamAs!ulong("userId");
-	ctx.log.infoF!"User %d visited the page."(userId);
+	log.infoF!"User %d visited the page."(userId);
 	ctx.response.writeBodyString("Hello user!");
 }
 
