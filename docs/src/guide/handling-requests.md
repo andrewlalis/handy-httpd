@@ -18,7 +18,6 @@ The HttpRequestContext that's provided to the handler contains all the informati
 - The [HttpResponse](ddoc-handy_httpd.components.response.HttpResponse) that will be sent.
 - The [HttpServer](ddoc-handy_httpd.server.Server) that received the request.
 - The [ServerWorkerThread](ddoc-handy_httpd.components.worker.ServerWorkerThread) that's processing the request.
-- A [ContextLogger](ddoc-handy_httpd.components.logger.ContextLogger) for logging any information about the request as it's handled.
 
 ### Request
 
