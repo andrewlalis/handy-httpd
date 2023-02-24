@@ -8,6 +8,8 @@ import std.conv : to, ConvException;
 import std.container.dlist : DList;
 import std.typecons : Nullable;
 import core.sync.semaphore : Semaphore;
+import core.sync.exception;
+import core.sync.rwmutex;
 import core.atomic : atomicLoad;
 import core.thread.threadgroup : ThreadGroup;
 
@@ -69,9 +71,26 @@ class HttpServer {
     private DList!Socket requestQueue;
 
     /** 
+     * A mutex for controlling multi-threaded access to the request queue. This
+     * is primarily used when adding Sockets to the request queue, and removing
+     * them when a worker has been notified.
+     */
+    private ReadWriteMutex requestQueueMutex;
+
+    /** 
      * The group of worker threads that will process requests.
      */
     private ThreadGroup workerThreadGroup;
+
+    /** 
+     * The list of worker threads.
+     */
+    private ServerWorkerThread[] workers;
+
+    /** 
+     * The next id to use for a worker thread.
+     */
+    private int nextWorkerId = 1;
 
     /** 
      * Constructs a new server using the supplied handler to handle all
@@ -87,6 +106,8 @@ class HttpServer {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
+        this.requestSemaphore = new Semaphore();
+        this.requestQueueMutex = new ReadWriteMutex();
         this.exceptionHandler = new BasicServerExceptionHandler();
     }
 
@@ -113,30 +134,38 @@ class HttpServer {
     public void start() {
         auto log = getLogger();
         this.serverSocket = new TcpSocket();
+        log.trace("Initialized server socket.");
         if (this.config.reuseAddress) {
             this.serverSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+            log.debug_("Enabled REUSEADDR socket option.");
         }
+        log.trace("Calling preBindCallbacks.");
         foreach (socketConfigFunction; this.config.preBindCallbacks) {
             socketConfigFunction(this.serverSocket);
         }
         this.serverSocket.bind(this.address);
         log.infoF!"Bound to address %s"(this.address);
         this.serverSocket.listen(this.config.connectionQueueSize);
-        initWorkerThreads();
+        log.debug_("Started listening for connections.");
         this.ready = true;
+        initWorkerThreads();
 
         log.info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
             try {
                 Socket clientSocket = this.serverSocket.accept();
-                this.requestQueue.insertBack(clientSocket);
+                synchronized(requestQueueMutex.writer) {
+                    this.requestQueue.insertBack(clientSocket);
+                }
                 this.requestSemaphore.notify();
             } catch (SocketAcceptException acceptException) {
                 log.warn("Socket accept failed: ", acceptException.msg);
             }
         }
         this.ready = false;
+        log.debug_("Shutting down worker threads.");
         shutdownWorkerThreads();
+        log.info("Server shut down.");
     }
 
     /** 
@@ -172,10 +201,20 @@ class HttpServer {
      * ready for request processing.
      */
     public Nullable!Socket waitForNextClient() {
-        this.requestSemaphore.wait();
+        import std.datetime : seconds;
+        auto log = getLogger();
         Nullable!Socket result;
-        if (!this.requestQueue.empty) {
-            result = this.requestQueue.removeAny();
+        try {
+            bool notified = this.requestSemaphore.wait(seconds(10));
+            if (notified) {
+                synchronized(requestQueueMutex.writer) {
+                    if (!this.requestQueue.empty) {
+                        result = this.requestQueue.removeAny();
+                    }
+                }
+            }
+        } catch (SyncError e) {
+            log.errorF!"SyncError occurred while waiting for the next client: %s"(e.msg);
         }
         return result;
     }
@@ -185,12 +224,12 @@ class HttpServer {
      * semaphore that they will use to be notified of work to do.
      */
     private void initWorkerThreads() {
-        this.requestSemaphore = new Semaphore();
         this.workerThreadGroup = new ThreadGroup();
-        for (int i = 1; i <= this.config.workerPoolSize; i++) {
-            ServerWorkerThread worker = new ServerWorkerThread(this, i);
+        while (this.workers.length < this.config.workerPoolSize) {
+            ServerWorkerThread worker = new ServerWorkerThread(this, this.nextWorkerId++);
             worker.start();
             this.workerThreadGroup.add(worker);
+            this.workers ~= worker;
         }
     }
 
@@ -204,6 +243,7 @@ class HttpServer {
             this.requestSemaphore.notify();
         }
         this.workerThreadGroup.joinAll();
+        this.workers = [];
     }
 
     /** 

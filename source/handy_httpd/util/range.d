@@ -99,13 +99,24 @@ class SocketInputRange : InputRange!(ubyte[]) {
 }
 
 unittest {
+    import std.stdio;
     import std.range;
     assert(isInputRangeOf!(SocketInputRange, ubyte[]));
 
     Socket[2] sockets = socketPair();
     Socket inSocket = sockets[0];
     Socket outSocket = sockets[1];
-    
+
+    // outSocket.send([0, 1, 2, 3, 4, 5, 6, 7]);
+    // outSocket.close();
+    // ubyte[] buffer = new ubyte[8];
+    // inSocket.receive(buffer);
+    // // Construct an input range where we haven't read anything yet, and we received a full buffer.
+    // SocketInputRange sir = new SocketInputRange(inSocket, &buffer, 0, buffer.length);
+    // assert(!sir.empty);
+    // assert(sir.front == [0, 1, 2, 3, 4, 5, 6, 7]);
+    // sir.popFront();
+    // assert(sir.empty);
 }
 
 /** 
@@ -154,10 +165,13 @@ class SocketOutputRange : OutputRange!(ubyte[]) {
     }
 
     public void put(ubyte[] data) {
-        size_t bytesSent = socket.send(data);
+        ptrdiff_t bytesSent = socket.send(data);
         if (bytesSent == Socket.ERROR || bytesSent != data.length) {
             import std.string : format;
-            string msg = format!"Error while sending data. Expected to send %d bytes, but only sent %d."(data.length, bytesSent);
+            string errorText = lastSocketError();
+            string msg = format!
+                "Error while sending data. Expected to send %d bytes, but only sent %d. Last socket error: %s"
+                (data.length, bytesSent, errorText);
             throw new SocketException(msg);
         }
     }
