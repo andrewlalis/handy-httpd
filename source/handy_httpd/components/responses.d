@@ -72,3 +72,12 @@ void notFound(ref HttpResponse response) {
 void methodNotAllowed(ref HttpResponse response) {
     response.setStatus(405).setStatusText("Method Not Allowed").flushHeaders();
 }
+
+/** 
+ * Convenience method to send an internal server error response.
+ * Params:
+ *   response = The response to write to.
+ */
+void internalServerError(ref HttpResponse response) {
+    response.setStatus(500).setStatusText("Internal Server Errror").flushHeaders();
+}

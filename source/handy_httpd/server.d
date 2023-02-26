@@ -224,12 +224,14 @@ class HttpServer {
      * semaphore that they will use to be notified of work to do.
      */
     private void initWorkerThreads() {
+        auto log = getLogger();
         this.workerThreadGroup = new ThreadGroup();
         while (this.workers.length < this.config.workerPoolSize) {
             ServerWorkerThread worker = new ServerWorkerThread(this, this.nextWorkerId++);
             worker.start();
             this.workerThreadGroup.add(worker);
             this.workers ~= worker;
+            log.debugF!"Started worker-%d"(worker.id);
         }
     }
 

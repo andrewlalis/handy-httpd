@@ -59,6 +59,7 @@ class ServerWorkerThread : Thread {
         try {
             while (server.isReady) {
                 // First try and get a socket to the client.
+                log.debugF!"Worker-%d waiting for the next client."(this.id);
                 Nullable!Socket nullableSocket = server.waitForNextClient();
                 if (nullableSocket.isNull) {
                     continue;
@@ -117,18 +118,15 @@ class ServerWorkerThread : Thread {
      */
     private Nullable!HttpRequestContext receiveRequest(Socket clientSocket) {
         auto log = getLogger();
-        Nullable!HttpRequestContext result;
         ptrdiff_t received = clientSocket.receive(receiveBuffer);
         log.debugF!"Worker-%d received %d bytes from the client."(this.id, received);
         if (received == 0 || received == Socket.ERROR) {
-            if (received == 0) {
-                log.warn("Received 0 bytes. Client closed the connection before a request was sent.");
-            } else if (received == Socket.ERROR) {
+            if (received == Socket.ERROR) {
                 string errorText = lastSocketError();
                 log.errorF!"Worker-%d encountered socket receive failure: %s"(this.id, errorText);
             }
             clientSocket.close();
-            return result; // Skip if we didn't receive valid data.
+            return Nullable!HttpRequestContext.init; // Skip if we didn't receive valid data.
         }
         immutable ubyte[] data = receiveBuffer[0..received].idup;
 
@@ -136,12 +134,11 @@ class ServerWorkerThread : Thread {
         try {
             auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
             log.debugF!"Worker-%d parsed first %d bytes as the HTTP request."(this.id, requestAndSize[1]);
-            result = prepareRequestContext(requestAndSize[0], requestAndSize[1], received, clientSocket);
-            return result;
+            return nullable(prepareRequestContext(requestAndSize[0], requestAndSize[1], received, clientSocket));
         } catch (Exception e) {
             log.warnF!"Worker-%d failed to parse HTTP request: %s"(this.id, e.msg);
             clientSocket.close();
-            return result;
+            return Nullable!HttpRequestContext.init;
         }
     }
 
@@ -173,14 +170,6 @@ class ServerWorkerThread : Thread {
             ctx.response.addHeader(headerName, headerValue);
         }
         return ctx;
-    }
-
-    /** 
-     * Gets this worker's id.
-     * Returns: The worker id.
-     */
-    public int getId() {
-        return id;
     }
 
     /** 

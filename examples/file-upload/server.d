@@ -1,12 +1,10 @@
 #!/usr/bin/env dub
 /+ dub.sdl:
     dependency "handy-httpd" path="../../"
-    dependency "slf4d" version="~>1.0.0"
 +/
 import handy_httpd;
 import std.stdio;
 import slf4d;
-import slf4d.default_provider;
 
 const indexContent = `
 <html>

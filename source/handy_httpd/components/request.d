@@ -216,14 +216,12 @@ struct HttpRequest {
         bool hasExpectedLength = expectedLength != -1;
         ulong bytesRead = 0;
 
-        log.debugF!"Input range empty: %s, has expected length: %s"(this.inputRange.empty, hasExpectedLength);
         while (!this.inputRange.empty() && (!hasExpectedLength || bytesRead < expectedLength)) {
             ubyte[] data = this.inputRange.front();
             ulong bytesLeftToRead = expectedLength - bytesRead;
             size_t bytesToConsume = min(bytesLeftToRead, data.length);
             outputRange.put(data[0 .. bytesToConsume]);
             bytesRead += bytesToConsume;
-            log.debug_("Pop...");
             this.inputRange.popFront();
             log.debugF!"Consumed %d bytes."(bytesToConsume);
         }

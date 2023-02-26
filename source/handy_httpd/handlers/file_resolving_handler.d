@@ -237,14 +237,12 @@ class FileResolvingHandler : HttpRequestHandler {
     * Returns: A mime type string.
     */
     private string getMimeType(string filename) {
-        auto log = getLogger();
         import std.string : lastIndexOf;
         import std.uni : toLower;
         auto p = filename.lastIndexOf('.');
         if (p == -1) return "text/html";
         string extension = filename[(p + 1)..$].toLower();
         if (extension !in this.mimeTypes) {
-            log.warnF!"Unknown mime type for file extension \"%s\"."(extension);
             return "text/html";
         }
         return this.mimeTypes[extension];

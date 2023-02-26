@@ -10,6 +10,7 @@ import handy_httpd.server;
 import handy_httpd.util.range;
 
 import std.range : InputRange, OutputRange;
+import slf4d;
 
 /**
  * A simple container for the components that are available in the context of
@@ -87,13 +88,14 @@ interface ServerExceptionHandler {
  */
 class BasicServerExceptionHandler : ServerExceptionHandler {
     void handle(ref HttpRequestContext ctx, Exception e) {
-        // ctx.log.error("An error occurred while handling a request: ", e.msg);
+        auto log = getLogger();
+        log.errorF!"An error occurred while handling a request: %s"(e.msg);
         if (!ctx.response.isFlushed) {
             ctx.response.setStatus(500);
             ctx.response.setStatusText("Internal Server Error");
             ctx.response.writeBodyString("An error occurred while handling your request.");
         } else {
-            // ctx.log.error("The response has already been sent; cannot send 500 error.");
+            log.error("The response has already been sent; cannot send 500 error.");
         }
     }
 }
