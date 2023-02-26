@@ -7,6 +7,9 @@ name: D
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - source/**
+      - examples/**
   pull_request:
     branches: [ "main" ]
 
