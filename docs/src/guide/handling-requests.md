@@ -98,8 +98,8 @@ void handle(ref HttpRequestContext ctx) {
     ctx.response.status = 201;
     ctx.response.statusText = "Created";
     ctx.response.addHeader("X-MY-TOKEN", "abc");
-    // Calling `writeBody` will automatically flush the status and headers to the socket.
-    ctx.writeBody("{\"id\": 1}", "application/json");
+    // Calling `writeBodyString` will automatically flush the status and headers to the socket.
+    ctx.response.writeBodyString("{\"id\": 1}", "application/json");
 }
 ```
 
