@@ -3,6 +3,10 @@ name: Deploy Docs to Pages
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - source/**
+      - docs/**
+      - examples/**
 
   workflow_dispatch:
 
