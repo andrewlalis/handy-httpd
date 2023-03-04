@@ -66,8 +66,6 @@ class ServerWorkerThread : Thread {
                 }
                 Socket clientSocket = nullableSocket.get();
 
-                StopWatch sw = StopWatch(AutoStart.yes);
-
                 // Then try and parse their request and obtain a request context.
                 Nullable!HttpRequestContext nullableCtx = receiveRequest(clientSocket);
                 if (nullableCtx.isNull) {
@@ -83,18 +81,17 @@ class ServerWorkerThread : Thread {
                         ctx.response.flushHeaders();
                     }
                 } catch (Exception e) {
-                    log.debugF!"Encountered exception while handling request: %s"(e.msg);
+                    log.debugF!"Encountered exception %s while handling request: %s"(e.classinfo.name, e.msg);
                     try {
                         this.server.getExceptionHandler.handle(ctx, e);
                     } catch (Exception e2) {
-                        log.errorF!"Exception occurred in the server's exception handler: %s\n%s"(e2.msg, e2.info);
+                        log.error("Exception occurred in the server's exception handler.", e2);
                     }
                 }
                 clientSocket.shutdown(SocketShutdown.BOTH);
                 clientSocket.close();
 
-                sw.stop();
-                log.infoF!"%d %s (took %d μs)"(ctx.response.status, ctx.response.statusText, sw.peek.total!"usecs");
+                log.infoF!"%d %s"(ctx.response.status, ctx.response.statusText);
 
                 // Reset the request parser so we're ready for the next request.
                 requestParser.msg.reset();
@@ -104,7 +101,7 @@ class ServerWorkerThread : Thread {
                 destroy!(false)(ctx.response.outputRange);
             }
         } catch (Exception e) {
-            log.errorF!"Worker-%d encountered a fatal error: %s, trace:\n%s"(this.id, e.message, e.info);
+            log.error(e);
         }
     }
 

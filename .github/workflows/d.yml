@@ -29,19 +29,39 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: dlang-community/setup-dlang@v1
-      with:
-        compiler: ${{ matrix.compiler }}
+      - uses: actions/checkout@v3
+      - uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.compiler }}
 
-    - name: 'Build & Test'
-      run: |
-        # Build the project, with its main file included, without unittests
-        dub -q build
-        # Build and run tests, as defined by `unittest` configuration
-        # In this mode, `mainSourceFile` is excluded and `version (unittest)` are included
-        # See https://dub.pm/package-format-json.html#configurations
-        dub -q test
+      - name: 'Build & Test'
+        run: |
+          # Build the project, with its main file included, without unittests
+          dub -q build
+          # Build and run tests, as defined by `unittest` configuration
+          # In this mode, `mainSourceFile` is excluded and `version (unittest)` are included
+          # See https://dub.pm/package-format-json.html#configurations
+          dub -q test
+
+  integration-tests:
+    name: Integration Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        compiler: [dmd-2.099.1, dmd-latest, ldc-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.compiler }}
+      
+      - name: Run speed-test
+        working-directory: integration-tests/speed-test
+        run: dub -q run
+
 
   # Job that builds each example to ensure that they all compile properly.
   build-examples:
@@ -55,23 +75,23 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: dlang-community/setup-dlang@v1
-      with:
-        compiler: ${{ matrix.compiler }}
-    
-    - name: Build file-upload
-      working-directory: examples/file-upload
-      run: dub -q build --single server.d
+      - uses: actions/checkout@v3
+      - uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.compiler }}
+      
+      - name: Build file-upload
+        working-directory: examples/file-upload
+        run: dub -q build --single server.d
 
-    - name: Build multiple-handlers
-      working-directory: examples/multiple-handlers
-      run: dub -q build
-    
-    - name: Build single-file-server
-      working-directory: examples/single-file-server
-      run: dub -q build --single hello.d
+      - name: Build multiple-handlers
+        working-directory: examples/multiple-handlers
+        run: dub -q build
+      
+      - name: Build single-file-server
+        working-directory: examples/single-file-server
+        run: dub -q build --single hello.d
 
-    - name: Build static-content-server
-      working-directory: examples/static-content-server
-      run: dub -q build --single content_server.d
+      - name: Build static-content-server
+        working-directory: examples/static-content-server
+        run: dub -q build --single content_server.d

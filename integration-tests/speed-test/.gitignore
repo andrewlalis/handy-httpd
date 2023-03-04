@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/speed-test
+speed-test.so
+speed-test.dylib
+speed-test.dll
+speed-test.a
+speed-test.lib
+speed-test-test-*
+*.exe
+*.o
+*.obj
+*.lst

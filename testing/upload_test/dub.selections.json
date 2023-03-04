@@ -1,7 +1,0 @@
-{
-	"fileVersion": 1,
-	"versions": {
-		"handy-httpd": {"path":"../../"},
-		"httparsed": "1.2.1"
-	}
-}

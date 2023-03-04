@@ -159,7 +159,9 @@ class HttpServer {
                 }
                 this.requestSemaphore.notify();
             } catch (SocketAcceptException acceptException) {
-                log.warn("Socket accept failed: ", acceptException.msg);
+                if (this.serverSocket.isAlive()) {
+                    log.warnF!"Socket accept failed: %s"(acceptException.msg);
+                }
             }
         }
         this.ready = false;
