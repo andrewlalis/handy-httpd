@@ -1,5 +1,5 @@
 /** 
- * Contains the core HTTP server components.
+ * Contains the core HTTP server implementation.
  */
 module handy_httpd.server;
 

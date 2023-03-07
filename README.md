@@ -8,7 +8,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 - HTTP/1.1
 - Worker pool for request handling
 - Simple configuration
-- High performance (low GC usage)
+- High performance
 - Beginner friendly
 - Extensible with custom handlers, exception handlers, and filters
 - Well-documented

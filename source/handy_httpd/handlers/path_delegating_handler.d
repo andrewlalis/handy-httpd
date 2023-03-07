@@ -1,6 +1,21 @@
 /** 
  * This module defines a handler that delegates to other handlers, depending on
- * the request URL path and/or request method.
+ * the request URL path and/or request method. Matching is done based on a
+ * provided "path pattern". The following are examples of valid path patterns:
+ * - "/hello-world"  -> matches just the URL "/hello-world".
+ * - "/settings/*"   -> matches any single URL segment under "/settings", like "/settings/privacy".
+ * - "/users/**"     -> matches any zero or more segments under "/users", like "/users/42/data/name".
+ * - "/events/{id}"  -> matches any URL starting with "/events", followed by a single "id" segment.
+ * - "/data?/info"   -> matches any URL where "?" can be any single character, like "/datax/info".
+ *
+ * When a mapping is added to the PathDelegatingHandler via one of its
+ * `addMapping` methods, the given path pattern is compiled to a regular
+ * expression that's used to match request URLs at runtime.
+ *
+ * At runtime, if a PathDelegatingHandler receives a request for which no
+ * mapping matches, then a configurable `notFoundHandler` is called to handle
+ * request. By default, it just applies `handy_httpd.components.responses.notFound`
+ * to it, setting the status code to 404 and adding a "Not Found" status text.
  */
 module handy_httpd.handlers.path_delegating_handler;
 
@@ -9,6 +24,8 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.responses;
 import slf4d;
+
+import std.regex;
 
 /** 
  * A request handler that delegates handling of requests to other handlers,
@@ -23,9 +40,15 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     private HttpRequestHandler notFoundHandler;
 
+    private string[string] pathVariableTypePatterns;
+
     this() {
         this.handlerMappings = [];
         this.notFoundHandler = toHandler((ref ctx) {ctx.response.notFound();});
+        this.pathVariableTypePatterns = [
+            "int": `-?[0-9]+`,
+            "string": `\w+`
+        ];
     }
 
     /** 
@@ -198,7 +221,6 @@ class PathDelegatingHandler : HttpRequestHandler {
         import handy_httpd.components.responses;
         import handy_httpd.util.builders;
         import handy_httpd.util.range;
-        import std.stdio;
 
         auto handler = new PathDelegatingHandler()
             .addMapping("GET", "/home", (ref ctx) {ctx.response.okResponse();})
@@ -266,7 +288,6 @@ struct HandlerMapping {
  * Returns: True if the given url matches the pattern, or false otherwise.
  */
 private bool pathMatches(string pattern, string url) {
-    import std.regex;
     auto multiSegmentRegex = ctRegex!(`\*\*`);
     auto singleSegmentRegex = ctRegex!(`(?<!\.)\*`);
     auto singleCharRegex = ctRegex!(`\?`);
@@ -313,7 +334,6 @@ unittest {
  * Returns: An associative array containing the path parameters.
  */
 private string[string] parsePathParams(string pattern, string url) {
-    import std.regex;
     import std.container.dlist;
 
     // First collect an ordered list of the names of all path parameters to look for.
@@ -351,4 +371,145 @@ unittest {
     assert(parsePathParams("/{a}/b/{c}", "/one/b/two") == ["a": "one", "c": "two"]);
     // Check that if two path params have the same name, the last value is used.
     assert(parsePathParams("/{first}/{second}/{first}", "/a/b/c") == ["first": "c", "second": "b"]);
+}
+
+/** 
+ * Compiles a "path pattern" into a Regex that can be used at runtime for
+ * matching against request URLs. For the path pattern specification, please
+ * see this module's documentation.
+ * Params:
+ *   pattern = The path pattern to compile.
+ * Returns: A regex that matches URLs that match the given path pattern.
+ */
+public Regex!char compilePathPattern(string pattern) {
+    import std.algorithm : canFind;
+    import std.format : format;
+    import std.array : replaceFirst;
+
+    auto multiSegmentWildcardRegex = ctRegex!(`\*\*`);
+    auto singleSegmentWildcardRegex = ctRegex!(`\*`);
+    auto singleCharWildcardRegex = ctRegex!(`\?`);
+    auto pathParamRegex = ctRegex!(`\{(?P<name>[a-zA-Z][a-zA-Z0-9_-]*)(?::(?P<type>[^}]+))?\}`);
+
+    string originalPattern = pattern;
+
+    // First pass, where we tag all wildcards for replacement on a second pass.
+    pattern = replaceAll(pattern, multiSegmentWildcardRegex, "--<<MULTI_SEGMENT>>--");
+    pattern = replaceAll(pattern, singleSegmentWildcardRegex, "--<<SINGLE_SEGMENT>>--");
+    pattern = replaceAll(pattern, singleCharWildcardRegex, "--<<SINGLE_CHAR>>--");
+
+    // Replace each path parameter expression with a named capture group for it.
+    auto pathParamMatches = matchAll(pattern, pathParamRegex);
+    string[] pathParamNames;
+    foreach (capture; pathParamMatches) {
+        string paramName = capture["name"];
+        if (canFind(pathParamNames, paramName)) {
+            throw new Exception(
+                format!"Duplicate path parameter with name \"%s\" in pattern \"%s\"."(paramName, originalPattern)
+            );
+        }
+        pathParamNames ~= paramName;
+
+        string paramType = capture["type"];
+        string paramPattern = "[^/]+";
+        if (paramType !is null) {
+            if (paramType == "int") {
+                paramPattern = "-?[0-9]+";
+            } else if (paramType == "string") {
+                paramPattern = `\w+`;
+            } else {
+                paramPattern = paramType;
+            }
+        }
+        pattern = replaceFirst(pattern, capture.hit, format!"(?P<%s>%s)"(paramName, paramPattern));
+    }
+
+    // Finally, second pass where wildcard placeholders are swapped for their regex pattern.
+    pattern = replaceAll(pattern, ctRegex!(`--<<MULTI_SEGMENT>>--`), ".*");
+    pattern = replaceAll(pattern, ctRegex!(`--<<SINGLE_SEGMENT>>--`), "[^/]+");
+    pattern = replaceAll(pattern, ctRegex!(`--<<SINGLE_CHAR>>--`), "[^/]");
+
+    // Add anchors to start and end of string.
+    pattern = "^" ~ pattern ~ "$";
+
+    return regex(pattern);
+}
+
+unittest {
+    import std.format : format;
+
+    void assertMatches(string pattern, string[] examples) {
+        if (examples.length == 0) assert(false, "No examples.");
+        auto r = compilePathPattern(pattern);
+        foreach (example; examples) {
+            auto captures = matchFirst(example, r);
+            assert(!captures.empty, format!"Example \"%s\" doesn't match pattern: \"%s\"."(example, pattern));
+        }
+    }
+
+    void assertNotMatches(string pattern, string[] examples) {
+        if (examples.length == 0) assert(false, "No examples.");
+        auto r = compilePathPattern(pattern);
+        foreach (example; examples) {
+            auto captures = matchFirst(example, r);
+            assert(captures.empty, format!"Example \"%s\" matches pattern: \"%s\"."(example, pattern));
+        }
+    }
+
+    // Test multi-segment wildcard patterns.
+    assertMatches("/users/**", [
+        "/users/andrew",
+        "/users/",
+        "/users/123",
+        "/users/123/john"
+    ]);
+    assertNotMatches("/users/**", [
+        "/user",
+        "/users",
+        "/user-not"
+    ]);
+
+    // Test single-segment wildcard patterns.
+    assertMatches("/users/*", [
+        "/users/andrew",
+        "/users/john",
+        "/users/wilson",
+        "/users/123"
+    ]);
+    assertNotMatches("/users/*", [
+        "/users",
+        "/users/",
+        "/users/andrew/john",
+        "/user"
+    ]);
+
+    // Test single-char wildcard patterns.
+    assertMatches("/data?", ["/datax", "/datay", "/dataa"]);
+    assertNotMatches("/data?", ["/data/x", "/dataxy", "/data"]);
+
+    // Test complex combined patterns.
+    assertMatches("/users/{userId}/*/settings/**", [
+        "/users/123/username/settings/abc/123",
+        "/users/john/pw/settings/test"
+    ]);
+    assertNotMatches("/users/{userId}/*/settings/**", [
+        "/users",
+        "/users/settings/123",
+        "/users/andrew",
+        "/users/john/pw/settings"
+    ]);
+
+    // Test path param patterns.
+    assertMatches("/users/{userId:int}", ["/users/123", "/users/001", "/users/-42"]);
+    assertNotMatches("/users/{userId:int}", ["/users/andrew", "/users", "/users/-", "/users/123a3"]);
+    assertMatches("/{path:string}", ["/andrew", "/john"]);
+    assertMatches("/digit/{d:[0-9]}", ["/digit/0", "/digit/8"]);
+    assertNotMatches("/digit/{d:[0-9]}", ["/digit", "/digit/a", "/digit/123"]);
+    
+    // Test path param named capture groups.
+    auto r1 = compilePathPattern("/users/{userId:int}/settings/{settingName:string}");
+    auto m = matchFirst("/users/123/settings/brightness", r1);
+    assert(!m.empty);
+    assert(m["userId"] == "123");
+    assert(m["settingName"] == "brightness");
 }
