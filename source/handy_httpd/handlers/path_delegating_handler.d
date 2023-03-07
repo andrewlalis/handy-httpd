@@ -12,6 +12,10 @@
  * `addMapping` methods, the given path pattern is compiled to a regular
  * expression that's used to match request URLs at runtime.
  *
+ * Mapping a request to a handler requires both a matching URL, and an
+ * acceptable HTTP method. For example, a handler may be registered to handle
+ * GET requests to "/home", or POST and PUT requests to "/users".
+ *
  * At runtime, if a PathDelegatingHandler receives a request for which no
  * mapping matches, then a configurable `notFoundHandler` is called to handle
  * request. By default, it just applies `handy_httpd.components.responses.notFound`
@@ -26,6 +30,7 @@ import handy_httpd.components.responses;
 import slf4d;
 
 import std.regex;
+import std.typecons;
 
 /** 
  * A request handler that delegates handling of requests to other handlers,
@@ -40,15 +45,9 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     private HttpRequestHandler notFoundHandler;
 
-    private string[string] pathVariableTypePatterns;
-
     this() {
         this.handlerMappings = [];
         this.notFoundHandler = toHandler((ref ctx) {ctx.response.notFound();});
-        this.pathVariableTypePatterns = [
-            "int": `-?[0-9]+`,
-            "string": `\w+`
-        ];
     }
 
     /** 
@@ -95,7 +94,14 @@ class PathDelegatingHandler : HttpRequestHandler {
             }
         }
         sort(methods);
-        this.handlerMappings ~= HandlerMapping(pathPattern, methods, handler);
+        auto t = compilePathPattern(pathPattern);
+        this.handlerMappings ~= HandlerMapping(
+            pathPattern,
+            cast(immutable(string[])) methods.idup,
+            handler,
+            cast(immutable) t.regex,
+            cast(immutable) t.pathParamNames
+        );
         return this;
     }
 
@@ -194,25 +200,30 @@ class PathDelegatingHandler : HttpRequestHandler {
         import std.algorithm : canFind;
         auto log = getLogger();
         foreach (mapping; handlerMappings) {
-            if (
-                pathMatches(mapping.pathPattern, ctx.request.url) &&
-                (
-                    mapping.methods.length == 0 ||
-                    mapping.methods[0] == "*" ||
-                    canFind(mapping.methods, ctx.request.method)
-                )
+            if ( // Check that the mapping's method configuration matches the request's method.
+                mapping.methods.length == 0 ||
+                mapping.methods[0] == "*" ||
+                canFind(mapping.methods, ctx.request.method)
             ) {
-                log.debugF!"Found matching handler for %s %s (pattern: %s)"(
-                    ctx.request.method,
-                    ctx.request.url,
-                    mapping.pathPattern
-                );
-                ctx.request.pathParams = parsePathParams(mapping.pathPattern, ctx.request.url);
-                mapping.handler.handle(ctx);
-                return; // Exit once we handle the request.
+                // Now check if the URL matches.
+                log.traceF!"Checking if pattern %s matches url %s"(mapping.pathPattern, ctx.request.url);
+                Captures!string captures = matchFirst(ctx.request.url, mapping.compiledPattern);
+                if (!captures.empty) {
+                    log.debugF!"Found matching handler for %s %s (pattern: \"%s\")"(
+                        ctx.request.method,
+                        ctx.request.url,
+                        mapping.pathPattern
+                    );
+                    log.traceF!"Captures: %s"(captures);
+                    foreach (paramName; mapping.pathParamNames) {
+                        ctx.request.pathParams[paramName] = captures[paramName];
+                    }
+                    mapping.handler.handle(ctx);
+                    return; // Exit once the request is handled.
+                }
             }
         }
-        log.debugF!"No matching handler found for url %s"(ctx.request.url);
+        log.debugF!"No matching handler found for %s %s"(ctx.request.method, ctx.request.url);
         notFoundHandler.handle(ctx);
     }
 
@@ -221,6 +232,12 @@ class PathDelegatingHandler : HttpRequestHandler {
         import handy_httpd.components.responses;
         import handy_httpd.util.builders;
         import handy_httpd.util.range;
+
+        // import slf4d;
+        // import slf4d.default_provider;
+        // auto logProvider = new shared DefaultProvider();
+        // logProvider.getLoggerFactory().setRootLevel(Levels.TRACE);
+        // configureLoggingProvider(logProvider);
 
         auto handler = new PathDelegatingHandler()
             .addMapping("GET", "/home", (ref ctx) {ctx.response.okResponse();})
@@ -260,117 +277,33 @@ class PathDelegatingHandler : HttpRequestHandler {
  * Represents a mapping of a specific request handler to a subset of URLs
  * and/or request methods.
  */
-struct HandlerMapping {
+private struct HandlerMapping {
     /** 
-     * The pattern used to match against URLs.
+     * The original pattern used to match against URLs.
      */
-    string pathPattern;
+    private immutable string pathPattern;
 
     /** 
      * The set of methods that this handler mapping can be used for.
      */
-    string[] methods;
+    private immutable string[] methods;
 
     /** 
      * The handler to apply to requests whose URL and method match this
      * mapping's path pattern and methods list.
      */
-    HttpRequestHandler handler;
-}
+    private HttpRequestHandler handler;
 
-/** 
- * Checks if a url matches an Ant-style path pattern. We do this by doing some
- * pre-processing on the pattern to convert it to a regular expression that can
- * be matched against the given url.
- * Params:
- *   pattern = The url pattern to check for a match with.
- *   url = The url to check against.
- * Returns: True if the given url matches the pattern, or false otherwise.
- */
-private bool pathMatches(string pattern, string url) {
-    auto multiSegmentRegex = ctRegex!(`\*\*`);
-    auto singleSegmentRegex = ctRegex!(`(?<!\.)\*`);
-    auto singleCharRegex = ctRegex!(`\?`);
-    auto pathParamRegex = ctRegex!(`\{[^/]+\}`);
+    /** 
+     * The compiled regular expression used to match URLs.
+     */
+    private immutable Regex!char compiledPattern;
 
-    string s = pattern.replaceAll(multiSegmentRegex, ".*")
-        .replaceAll(singleSegmentRegex, "[^/]+")
-        .replaceAll(singleCharRegex, "[^/]")
-        .replaceAll(pathParamRegex, "[^/]+");
-    Captures!string c = matchFirst(url, s);
-    return !c.empty() && c.front() == url;
-}
-
-unittest {
-    assert(pathMatches("/**", "/help"));
-    assert(pathMatches("/**", "/"));
-    assert(pathMatches("/*", "/help"));
-    assert(pathMatches("/help", "/help"));
-    assert(pathMatches("/help/*", "/help/other"));
-    assert(pathMatches("/help/**", "/help/other"));
-    assert(pathMatches("/help/**", "/help/other/another"));
-    assert(pathMatches("/?elp", "/help"));
-    assert(pathMatches("/**/test", "/hello/world/test"));
-    assert(pathMatches("/users/{id}", "/users/1"));
-    assert(pathMatches("/users/**", "/users/1"));
-
-    assert(!pathMatches("/help", "/Help"));
-    assert(!pathMatches("/help", "/help/other"));
-    assert(!pathMatches("/*", "/"));
-    assert(!pathMatches("/help/*", "/help/other/other"));
-    assert(!pathMatches("/users/{id}", "/users"));
-    assert(!pathMatches("/users/{id}", "/users/1/2/3"));
-}
-
-/** 
- * Parses a set of named path parameters from a url, according to a given path
- * pattern where named path parameters are indicated by curly braces.
- *
- * For example, the pattern string "/users/{id}" can be used to parse the url
- * "/users/123" to obtain ["id": "123"] as the path parameters.
- * Params:
- *   pattern = The path pattern to use to parse params from.
- *   url = The url to parse parameters from.
- * Returns: An associative array containing the path parameters.
- */
-private string[string] parsePathParams(string pattern, string url) {
-    import std.container.dlist;
-
-    // First collect an ordered list of the names of all path parameters to look for.
-    auto pathParamRegex = ctRegex!(`\{([^/]+)\}`);
-    DList!string pathParams = DList!string();
-    auto m = matchAll(pattern, pathParamRegex);
-    while (!m.empty) {
-        auto c = m.front();
-        pathParams.insertFront(c[1]);
-        m.popFront();
-    }
-
-    string[string] params;
-
-    // Now parse all path parameters in order, and add them to the array.
-    string preparedPathPattern = replaceAll(pattern, pathParamRegex, "([^/]+)");
-    auto c = matchFirst(url, regex(preparedPathPattern));
-    if (c.empty) return params; // If there's complete no matching, just exit.
-    c.popFront(); // Pop the first capture group, which contains the full match.
-    while (!c.empty) {
-        if (pathParams.empty()) break;
-        string expectedParamName = pathParams.back();
-        pathParams.removeBack();
-        params[expectedParamName] = c.front();
-        c.popFront();
-    }
-    return params;
-}
-
-unittest {
-    assert(parsePathParams("/users/{id}", "/users/1") == ["id": "1"]);
-    assert(parsePathParams("/users/{id}/{name}", "/users/123/andrew") == ["id": "123", "name": "andrew"]);
-    assert(parsePathParams("/users/{id}", "/users") == null);
-    assert(parsePathParams("/users", "/users") == null);
-    assert(parsePathParams("/{a}/b/{c}", "/one/b/two") == ["a": "one", "c": "two"]);
-    // Check that if two path params have the same name, the last value is used.
-    assert(parsePathParams("/{first}/{second}/{first}", "/a/b/c") == ["first": "c", "second": "b"]);
+    /** 
+     * A cached list of all expected path parameter names, which are used to
+     * get path params from a regex match.
+     */
+    private immutable string[] pathParamNames;
 }
 
 /** 
@@ -381,7 +314,7 @@ unittest {
  *   pattern = The path pattern to compile.
  * Returns: A regex that matches URLs that match the given path pattern.
  */
-public Regex!char compilePathPattern(string pattern) {
+public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPattern(string pattern) {
     import std.algorithm : canFind;
     import std.format : format;
     import std.array : replaceFirst;
@@ -392,6 +325,7 @@ public Regex!char compilePathPattern(string pattern) {
     auto pathParamRegex = ctRegex!(`\{(?P<name>[a-zA-Z][a-zA-Z0-9_-]*)(?::(?P<type>[^}]+))?\}`);
 
     string originalPattern = pattern;
+    auto log = getLogger();
 
     // First pass, where we tag all wildcards for replacement on a second pass.
     pattern = replaceAll(pattern, multiSegmentWildcardRegex, "--<<MULTI_SEGMENT>>--");
@@ -431,8 +365,9 @@ public Regex!char compilePathPattern(string pattern) {
 
     // Add anchors to start and end of string.
     pattern = "^" ~ pattern ~ "$";
+    log.debugF!"Compiled path pattern \"%s\" to regex \"%s\""(originalPattern, pattern);
 
-    return regex(pattern);
+    return tuple!("regex", "pathParamNames")(regex(pattern), pathParamNames);
 }
 
 unittest {
@@ -440,7 +375,7 @@ unittest {
 
     void assertMatches(string pattern, string[] examples) {
         if (examples.length == 0) assert(false, "No examples.");
-        auto r = compilePathPattern(pattern);
+        auto r = compilePathPattern(pattern).regex;
         foreach (example; examples) {
             auto captures = matchFirst(example, r);
             assert(!captures.empty, format!"Example \"%s\" doesn't match pattern: \"%s\"."(example, pattern));
@@ -449,7 +384,7 @@ unittest {
 
     void assertNotMatches(string pattern, string[] examples) {
         if (examples.length == 0) assert(false, "No examples.");
-        auto r = compilePathPattern(pattern);
+        auto r = compilePathPattern(pattern).regex;
         foreach (example; examples) {
             auto captures = matchFirst(example, r);
             assert(captures.empty, format!"Example \"%s\" matches pattern: \"%s\"."(example, pattern));
@@ -507,8 +442,8 @@ unittest {
     assertNotMatches("/digit/{d:[0-9]}", ["/digit", "/digit/a", "/digit/123"]);
     
     // Test path param named capture groups.
-    auto r1 = compilePathPattern("/users/{userId:int}/settings/{settingName:string}");
-    auto m = matchFirst("/users/123/settings/brightness", r1);
+    auto t = compilePathPattern("/users/{userId:int}/settings/{settingName:string}");
+    auto m = matchFirst("/users/123/settings/brightness", t.regex);
     assert(!m.empty);
     assert(m["userId"] == "123");
     assert(m["settingName"] == "brightness");
