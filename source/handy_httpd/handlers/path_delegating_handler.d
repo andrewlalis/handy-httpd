@@ -84,7 +84,7 @@ class PathDelegatingHandler : HttpRequestHandler {
         if (handler is null) throw new Exception("Cannot add a mapping for a null handler.");
 
         ushort methodsMask = methodMaskFromNames(methods);
-        if (methods.empty) methodsMask = methodMaskFromAll();
+        if (methods.length == 0) methodsMask = methodMaskFromAll();
         foreach (mapping; this.handlerMappings) {
             // TODO: Actually parse and check if path patterns overlap.
             if (mapping.pathPattern == pathPattern && (mapping.methodsMask & methodsMask) > 0) {
@@ -150,7 +150,7 @@ class PathDelegatingHandler : HttpRequestHandler {
      * Returns: This path delegating handler.
      */
     public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandler handler) {
-        return this.addMapping([], pathPattern, handler);
+        return this.addMapping(new string[0], pathPattern, handler);
     }
 
     /** 
@@ -162,7 +162,7 @@ class PathDelegatingHandler : HttpRequestHandler {
      * Returns: This path delegating handler.
      */
     public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandlerFunction handler) {
-        return this.addMapping([], pathPattern, handler);
+        return this.addMapping(new string[0], pathPattern, handler);
     }
 
     /** 
