@@ -29,12 +29,12 @@ Every HTTP request has a string `url` and `method`; for example, `GET http://exa
 
 ```d
 void handle(ref HttpRequestContext ctx) {
-    if (ctx.request.url == "/users" && ctx.request.method == "GET") {
+    if (ctx.request.url == "/users" && ctx.request.method == Method.GET) {
         // Retrieve list of users.
     }
 }
 ```
-A request's `method` will **always** be capitalized. Also, the `url` is relative to the base hostname of the server, so if you do `GET http://localhost:8080/data`, the request's `url` will be `/data`.
+The `url` is relative to the base hostname of the server, so if you do `GET http://localhost:8080/data`, the request's `url` will be `/data`.
 
 #### Headers and Parameters
 
@@ -70,6 +70,8 @@ void handle(ref HttpRequestContext ctx) {
     // Do stuff for this user...
 }
 ```
+
+For more information about the PathDelegatingHandler, please see the [dedicated page on this topic](../useful-handlers/path-delegating-handler.md).
 
 #### Body Content
 

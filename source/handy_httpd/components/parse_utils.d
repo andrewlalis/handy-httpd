@@ -12,7 +12,7 @@ import std.uri;
 import std.range;
 import httparsed;
 
-import handy_httpd.components.request : HttpRequest;
+import handy_httpd.components.request : HttpRequest, methodFromName;
 
 /** 
  * The header struct to use when parsing data.
@@ -79,8 +79,9 @@ public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string
     }
     string rawUrl = decode(cast(string) requestParser.uri);
     auto urlAndParams = parseUrlAndParams(rawUrl);
+    string method = cast(string) requestParser.method;
     HttpRequest request = HttpRequest(
-        cast(string) requestParser.method,
+        methodFromName(method),
         urlAndParams[0],
         requestParser.minorVer,
         headers,

@@ -67,7 +67,7 @@ module.exports = {
             'handling-requests',
             'logging',
             'configuration',
-            'pre-made-handlers'
+            'path-delegating-handler'
           ]
         }
       ],

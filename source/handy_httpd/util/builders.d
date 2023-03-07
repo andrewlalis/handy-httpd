@@ -62,7 +62,7 @@ class HttpRequestContextBuilder {
  * for testing.
  */
 class HttpRequestBuilder {
-    private string method;
+    private Method method;
     private string url;
     private string[string] headers;
     private string[string] params;
@@ -70,17 +70,17 @@ class HttpRequestBuilder {
     private InputRange!(ubyte[]) inputRange = new EmptyInputRange();
 
     this() {
-        this.method = "GET";
+        this.method = Method.GET;
         this.url = "/";
     }
 
     this(string method, string url) {
-        this.method = method;
+        this.method = methodFromName(method);
         this.url = url;
     }
 
     HttpRequestBuilder withMethod(string method) {
-        this.method = method;
+        this.method = methodFromName(method);
         return this;
     }
 

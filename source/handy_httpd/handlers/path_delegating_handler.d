@@ -64,10 +64,10 @@ class PathDelegatingHandler : HttpRequestHandler {
      * ```
      *
      * To let a handler apply to any request method, you can also simply supply
-     * `["*"]` as the `methods` argument.
+     * `[]` as the `methods` argument.
      * ```d
      * new PathDelegatingHandler()
-     *     .addMapping(["*"], "/users/{name}", myHandler);
+     *     .addMapping([], "/users/{name}", myHandler);
      * ```
      *
      * Params:
@@ -77,27 +77,26 @@ class PathDelegatingHandler : HttpRequestHandler {
      * Returns: This path delegating handler.
      */
     public PathDelegatingHandler addMapping(string[] methods, string pathPattern, HttpRequestHandler handler) {
-        import std.algorithm;
-        import std.string;
-        import std.array;
+        import std.algorithm : map, sort, uniq;
+        import std.string : format, toUpper;
+        import std.array : array;
 
         if (handler is null) throw new Exception("Cannot add a mapping for a null handler.");
-        methods = methods
-            .map!(m => toUpper(m)).array
-            .sort!((a, b) => a < b).array;
+
+        ushort methodsMask = methodMaskFromNames(methods);
+        if (methods.empty) methodsMask = methodMaskFromAll();
         foreach (mapping; this.handlerMappings) {
             // TODO: Actually parse and check if path patterns overlap.
-            if (mapping.pathPattern == pathPattern && mapping.methods == methods) {
+            if (mapping.pathPattern == pathPattern && (mapping.methodsMask & methodsMask) > 0) {
                 throw new Exception(
                     format!"A mapping already exists for methods %s and path %s."(methods, pathPattern)
                 );
             }
         }
-        sort(methods);
         auto t = compilePathPattern(pathPattern);
         this.handlerMappings ~= HandlerMapping(
             pathPattern,
-            cast(immutable(string[])) methods.idup,
+            methodsMask,
             handler,
             cast(immutable) t.regex,
             cast(immutable) t.pathParamNames
@@ -151,7 +150,7 @@ class PathDelegatingHandler : HttpRequestHandler {
      * Returns: This path delegating handler.
      */
     public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandler handler) {
-        return this.addMapping(["*"], pathPattern, handler);
+        return this.addMapping([], pathPattern, handler);
     }
 
     /** 
@@ -163,7 +162,7 @@ class PathDelegatingHandler : HttpRequestHandler {
      * Returns: This path delegating handler.
      */
     public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandlerFunction handler) {
-        return this.addMapping(["*"], pathPattern, handler);
+        return this.addMapping([], pathPattern, handler);
     }
 
     /** 
@@ -201,9 +200,8 @@ class PathDelegatingHandler : HttpRequestHandler {
         auto log = getLogger();
         foreach (mapping; handlerMappings) {
             if ( // Check that the mapping's method configuration matches the request's method.
-                mapping.methods.length == 0 ||
-                mapping.methods[0] == "*" ||
-                canFind(mapping.methods, ctx.request.method)
+                mapping.methodsMask == 0 ||
+                (mapping.methodsMask & ctx.request.method) > 0
             ) {
                 // Now check if the URL matches.
                 log.traceF!"Checking if pattern %s matches url %s"(mapping.pathPattern, ctx.request.url);
@@ -284,9 +282,9 @@ private struct HandlerMapping {
     private immutable string pathPattern;
 
     /** 
-     * The set of methods that this handler mapping can be used for.
+     * A bitmask that contains a 1 for each HTTP method this mapping applies to.
      */
-    private immutable string[] methods;
+    private immutable ushort methodsMask;
 
     /** 
      * The handler to apply to requests whose URL and method match this
@@ -312,7 +310,8 @@ private struct HandlerMapping {
  * see this module's documentation.
  * Params:
  *   pattern = The path pattern to compile.
- * Returns: A regex that matches URLs that match the given path pattern.
+ * Returns: A tuple containing a regex to match the given pattern, and a list
+ * of path parameter names that were parsed from the pattern.
  */
 public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPattern(string pattern) {
     import std.algorithm : canFind;
@@ -349,6 +348,8 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
         if (paramType !is null) {
             if (paramType == "int") {
                 paramPattern = "-?[0-9]+";
+            } else if (paramType == "uint") {
+                paramPattern = "[0-9]+";
             } else if (paramType == "string") {
                 paramPattern = `\w+`;
             } else {
@@ -443,6 +444,7 @@ unittest {
     
     // Test path param named capture groups.
     auto t = compilePathPattern("/users/{userId:int}/settings/{settingName:string}");
+    assert(t.pathParamNames == ["userId", "settingName"]);
     auto m = matchFirst("/users/123/settings/brightness", t.regex);
     assert(!m.empty);
     assert(m["userId"] == "123");

@@ -15,9 +15,11 @@ import slf4d;
  */
 struct HttpRequest {
     /** 
-     * The HTTP method verb, such as GET, POST, PUT, etc.
+     * The HTTP method verb, such as GET, POST, PUT, etc. This is internally
+     * defined as a bit-shifted 1, for efficient matching logic. See the
+     * `Method` enum in this module for more information.
      */
-    public const string method;
+    public const Method method;
 
     /** 
      * The url of the request, excluding query parameters.
@@ -75,7 +77,7 @@ struct HttpRequest {
 
     unittest {
         HttpRequest req = HttpRequest(
-            "GET",
+            Method.GET,
             "/api",
             1,
             string[string].init,
@@ -295,4 +297,142 @@ struct HttpRequest {
         file.close();
         return bytesRead;
     }
+}
+
+/** 
+ * Enumeration of all possible HTTP request methods as unsigned integer values
+ * for efficient logic.
+ * 
+ * https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
+ */
+enum Method : ushort {
+    GET     = 1 << 0,
+    HEAD    = 1 << 1,
+    POST    = 1 << 2,
+    PUT     = 1 << 3,
+    DELETE  = 1 << 4,
+    CONNECT = 1 << 5,
+    OPTIONS = 1 << 6,
+    TRACE   = 1 << 7,
+    PATCH   = 1 << 8
+}
+
+/** 
+ * Gets a Method enum value from a string. Defaults to GET for unknown names.
+ * Params:
+ *   name = The string representation of the method.
+ * Returns: The method enum value.
+ */
+public Method methodFromName(string name) {
+    import std.string : toUpper, strip;
+    name = toUpper(strip(name));
+    switch (name) {
+        case "GET":
+            return Method.GET;
+        case "HEAD":
+            return Method.HEAD;
+        case "POST":
+            return Method.POST;
+        case "PUT":
+            return Method.PUT;
+        case "DELETE":
+            return Method.DELETE;
+        case "CONNECT":
+            return Method.CONNECT;
+        case "OPTIONS":
+            return Method.OPTIONS;
+        case "TRACE":
+            return Method.TRACE;
+        case "PATCH":
+            return Method.PATCH;
+        default:
+            return Method.GET;
+    }
+}
+
+/** 
+ * Gets the string representation of a Method enum value.
+ * Params:
+ *   method = The method enum value.
+ * Returns: The string representation.
+ */
+public string methodToName(const Method method) {
+    final switch (method) {
+        case Method.GET:
+            return "GET";
+        case Method.HEAD:
+            return "HEAD";
+        case Method.POST:
+            return "POST";
+        case Method.PUT:
+            return "PUT";
+        case Method.DELETE:
+            return "DELETE";
+        case Method.CONNECT:
+            return "CONNECT";
+        case Method.OPTIONS:
+            return "OPTIONS";
+        case Method.TRACE:
+            return "TRACE";
+        case Method.PATCH:
+            return "PATCH";
+    }
+}
+
+/** 
+ * Builds a bitmask from the given list of method names.
+ * Params:
+ *   names = The method names to use.
+ * Returns: A bitmask where bits are active for each method in the given list.
+ */
+public ushort methodMaskFromNames(string[] names) {
+    ushort mask = 0;
+    foreach (name; names) mask |= methodFromName(name);
+    return mask;
+}
+
+unittest {
+    assert(methodMaskFromNames([]) == 0);
+    assert((methodMaskFromNames(["GET"]) & Method.GET) > 0);
+    auto m1 = methodMaskFromNames(["GET", "POST", "PATCH"]);
+    assert((m1 & Method.GET) > 0);
+    assert((m1 & Method.POST) > 0);
+    assert((m1 & Method.PATCH) > 0);
+    assert((m1 & Method.CONNECT) == 0);
+}
+
+/** 
+ * Gets a mask that contains every method.
+ * Returns: The bit mask.
+ */
+public ushort methodMaskFromAll() {
+    import std.traits : EnumMembers;
+    ushort mask;
+    static foreach (member; EnumMembers!Method) {
+        mask |= member;
+    }
+    return mask;
+}
+
+/** 
+ * Converts a method mask to a list of strings representing method names.
+ * Params:
+ *   mask = The mask to convert.
+ * Returns: A list of method names.
+ */
+public string[] methodMaskToStrings(const ushort mask) {
+    import std.traits : EnumMembers;
+    string[] names;
+    static foreach (member; EnumMembers!Method) {
+        if ((mask & member) > 0) names ~= methodToName(member);
+    }
+    return names;
+}
+
+unittest {
+    assert(methodMaskToStrings(0) == []);
+    assert(methodMaskToStrings(methodMaskFromNames(["GET"])) == ["GET"]);
+    assert(methodMaskToStrings(methodMaskFromNames(["GET", "PUT"])) == ["GET", "PUT"]);
+    // The resulting list should always be in enum order.
+    assert(methodMaskToStrings(methodMaskFromNames(["PUT", "POST"])) == ["POST", "PUT"]);
 }
