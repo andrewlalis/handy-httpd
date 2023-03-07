@@ -24,7 +24,7 @@ void main() {
     cfg.port = 8080;
     new HttpServer((ref ctx) {
         auto log = getLogger();
-        if (ctx.request.url == "/upload" && ctx.request.method == "POST") {
+        if (ctx.request.url == "/upload" && ctx.request.method == Method.POST) {
             log.info("User uploaded file.");
             try {
                 import std.datetime.stopwatch;

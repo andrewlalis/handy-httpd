@@ -5,7 +5,7 @@ import slf4d;
 void main() {
 	auto pathHandler = new PathDelegatingHandler();
 	pathHandler.addMapping("/users", &handleUsers);
-	pathHandler.addMapping("/users/{userId}", &handleUser);
+	pathHandler.addMapping("/users/{userId:uint}", &handleUser);
 	pathHandler.addMapping("/items", &handleItems);
 	auto server = new HttpServer(pathHandler);
 	server.start();
