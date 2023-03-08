@@ -1,6 +1,6 @@
 # File Resolving Handler
 
-If you just want to serve plain files from directory, look no further than the [FileResolvingHandler](ddoc-handy_httpd.handlers.file_resolving_handler._File_Resolving_Handler). It is a pre-made request handler that you can use in your server to serve files for a specified directory.
+If you just want to serve plain files from directory, look no further than the [FileResolvingHandler](ddoc-handy_httpd.handlers.file_resolving_handler.FileResolvingHandler). It is a pre-made request handler that you can use in your server to serve files for a specified directory.
 
 In the example below, we create a new FileResolvingHandler that will serve content from a `static-content` directory, relative to where the program's working directory.
 
