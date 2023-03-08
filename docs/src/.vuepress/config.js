@@ -59,15 +59,22 @@ module.exports = {
     sidebar: {
       '/guide/': [
         {
-          title: 'Guide',
+          title: 'Basics',
           collapsable: false,
           children: [
             '',
             'about',
             'handling-requests',
             'logging',
-            'configuration',
-            'path-delegating-handler'
+            'configuration'
+          ]
+        },
+        {
+          title: 'Useful Handlers',
+          collapsable: false,
+          children: [
+            'handlers/path-delegating-handler',
+            'handlers/file-resolving-handler',
           ]
         }
       ],

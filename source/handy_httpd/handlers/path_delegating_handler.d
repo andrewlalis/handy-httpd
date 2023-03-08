@@ -199,10 +199,7 @@ class PathDelegatingHandler : HttpRequestHandler {
         import std.algorithm : canFind;
         auto log = getLogger();
         foreach (mapping; handlerMappings) {
-            if ( // Check that the mapping's method configuration matches the request's method.
-                mapping.methodsMask == 0 ||
-                (mapping.methodsMask & ctx.request.method) > 0
-            ) {
+            if ((mapping.methodsMask & ctx.request.method) > 0) {
                 // Now check if the URL matches.
                 log.traceF!"Checking if pattern %s matches url %s"(mapping.pathPattern, ctx.request.url);
                 Captures!string captures = matchFirst(ctx.request.url, mapping.compiledPattern);
@@ -318,8 +315,8 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
     import std.format : format;
     import std.array : replaceFirst;
 
-    auto multiSegmentWildcardRegex = ctRegex!(`\*\*`);
-    auto singleSegmentWildcardRegex = ctRegex!(`\*`);
+    auto multiSegmentWildcardRegex = ctRegex!(`/\*\*`);
+    auto singleSegmentWildcardRegex = ctRegex!(`/\*`);
     auto singleCharWildcardRegex = ctRegex!(`\?`);
     auto pathParamRegex = ctRegex!(`\{(?P<name>[a-zA-Z][a-zA-Z0-9_-]*)(?::(?P<type>[^}]+))?\}`);
 
@@ -360,9 +357,9 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
     }
 
     // Finally, second pass where wildcard placeholders are swapped for their regex pattern.
-    pattern = replaceAll(pattern, ctRegex!(`--<<MULTI_SEGMENT>>--`), ".*");
-    pattern = replaceAll(pattern, ctRegex!(`--<<SINGLE_SEGMENT>>--`), "[^/]+");
-    pattern = replaceAll(pattern, ctRegex!(`--<<SINGLE_CHAR>>--`), "[^/]");
+    pattern = replaceAll(pattern, ctRegex!(`--<<MULTI_SEGMENT>>--`), `(?:/[^/]+)*/?`);
+    pattern = replaceAll(pattern, ctRegex!(`--<<SINGLE_SEGMENT>>--`), `/[^/]+`);
+    pattern = replaceAll(pattern, ctRegex!(`--<<SINGLE_CHAR>>--`), `[^/]`);
 
     // Add anchors to start and end of string.
     pattern = "^" ~ pattern ~ "$";
@@ -379,7 +376,10 @@ unittest {
         auto r = compilePathPattern(pattern).regex;
         foreach (example; examples) {
             auto captures = matchFirst(example, r);
-            assert(!captures.empty, format!"Example \"%s\" doesn't match pattern: \"%s\"."(example, pattern));
+            assert(
+                !captures.empty,
+                format!"Example \"%s\" doesn't match pattern: \"%s\". Regex: %s"(example, pattern, r)
+            );
         }
     }
 
@@ -388,7 +388,10 @@ unittest {
         auto r = compilePathPattern(pattern).regex;
         foreach (example; examples) {
             auto captures = matchFirst(example, r);
-            assert(captures.empty, format!"Example \"%s\" matches pattern: \"%s\"."(example, pattern));
+            assert(
+                captures.empty,
+                format!"Example \"%s\" matches pattern: \"%s\". Regex: %s"(example, pattern, r)
+            );
         }
     }
 
@@ -396,12 +399,12 @@ unittest {
     assertMatches("/users/**", [
         "/users/andrew",
         "/users/",
+        "/users",
         "/users/123",
         "/users/123/john"
     ]);
     assertNotMatches("/users/**", [
         "/user",
-        "/users",
         "/user-not"
     ]);
 
@@ -426,13 +429,13 @@ unittest {
     // Test complex combined patterns.
     assertMatches("/users/{userId}/*/settings/**", [
         "/users/123/username/settings/abc/123",
-        "/users/john/pw/settings/test"
+        "/users/john/pw/settings/test",
+        "/users/123/username/settings"
     ]);
     assertNotMatches("/users/{userId}/*/settings/**", [
         "/users",
         "/users/settings/123",
-        "/users/andrew",
-        "/users/john/pw/settings"
+        "/users/andrew"
     ]);
 
     // Test path param patterns.

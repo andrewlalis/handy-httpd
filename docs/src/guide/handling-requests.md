@@ -71,7 +71,7 @@ void handle(ref HttpRequestContext ctx) {
 }
 ```
 
-For more information about the PathDelegatingHandler, please see the [dedicated page on this topic](../useful-handlers/path-delegating-handler.md).
+For more information about the PathDelegatingHandler, please see the [dedicated page on this topic](./handlers/path-delegating-handler.md).
 
 #### Body Content
 

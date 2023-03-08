@@ -28,6 +28,11 @@ class FileResolvingHandler : HttpRequestHandler {
     private string basePath;
 
     /** 
+     * The strategy that this handler uses when resolving requests for directories.
+     */
+    private const DirectoryResolutionStrategy directoryResolutionStrategy;
+
+    /** 
      * Associative array containing mime type mappings for file extensions.
      */
     private string[string] mimeTypes;
@@ -36,8 +41,13 @@ class FileResolvingHandler : HttpRequestHandler {
      * Constructs the request handler.
      * Params:
      *   basePath = The path to use to resolve files in.
+     *   directoryResolutionStrategy = The strategy to use when resolving
+     *                                 requests for directories.
      */
-    this(string basePath = ".") {
+    this(
+        string basePath = ".",
+        DirectoryResolutionStrategy directoryResolutionStrategy = DirectoryResolutionStrategies.listDirContentsAndServeIndexFiles
+    ) {
         this.basePath = basePath;
         this.mimeTypes = [
             "html": "text/html",
@@ -63,6 +73,7 @@ class FileResolvingHandler : HttpRequestHandler {
             "pdf": "application/pdf",
             "xml": "application/xml"
         ];
+        this.directoryResolutionStrategy = DirectoryResolutionStrategies.listDirContentsAndServeIndexFiles;
     }
 
     /**
@@ -72,11 +83,23 @@ class FileResolvingHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequestContext ctx) {
+        import std.file : isFile, isDir;
+
         auto log = getLogger();
-        log.debugF!"Resolving file for url %s..."(ctx.request.url);
+        log.debugF!"Resolving file for URL %s"(ctx.request.url);
         string path = sanitizeRequestPath(ctx.request.url);
+        log.traceF!"Sanitized URL %s to path %s"(ctx.request.url, path);
         if (path !is null) {
-            ctx.response.fileResponse(path, getMimeType(path));
+            if (isFile(path)) {
+                log.debugF!"Sending file response from path %s"(path);
+                ctx.response.fileResponse(path, getMimeType(path));
+            } else if (isDir(path)) {
+                log.debugF!"Handling request for directory %s"(path);
+                handleDirRequest(ctx.response, path, ctx.request.url);
+            } else {
+                log.debugF!"Path %s is not a file or directory."(path);
+                ctx.response.notFound();
+            }
         } else {
             log.debugF!"Could not resolve file for url %s."(ctx.request.url);
             ctx.response.notFound();
@@ -96,22 +119,21 @@ class FileResolvingHandler : HttpRequestHandler {
     }
 
     /** 
-     * Sanitizes a request url such that it points to a file within the
-     * configured base path for this handler.
+     * Sanitizes a request url such that it points to a file or directory
+     * within the handler's configured base path.
      * Params:
      *   url = The url to sanitize.
      * Returns: A string representing the file pointed to by the given url,
-     * or null if no valid file could be found.
+     * or null if no valid file or directory could be found.
      */
     private string sanitizeRequestPath(string url) {
-        import std.path;
-        import std.file : exists, isDir;
+        import std.path : buildPath, buildNormalizedPath, absolutePath;
+        import std.file : exists;
         import std.algorithm : startsWith;
-        import std.regex;
 
         string normalizedUrl;
         if (url.length == 0 || url == "/") {
-            return findIndexFile(this.basePath);
+            return this.basePath;
         } else {
             if (startsWith(url, "/")) url = url[1 .. $];
             normalizedUrl = buildNormalizedPath(buildPath(this.basePath, url));
@@ -121,45 +143,17 @@ class FileResolvingHandler : HttpRequestHandler {
             string normalizedAbsolutePath = absolutePath(normalizedUrl);
             if (!startsWith(normalizedAbsolutePath, baseAbsolutePath)) return null;
         }
-        
-        if (exists(normalizedUrl)) {
-            if (isDir(normalizedUrl)) {
-                return findIndexFile(normalizedUrl);
-            } else {
-                return normalizedUrl;
-            }
-        } else {
-            return null;
-        }
+
+        return exists(normalizedUrl) ? normalizedUrl : null;
     }
 
     unittest {
-        import std.path;
-        import std.file;
-        import std.stdio;
+        import std.path : buildPath;
         
         // For these tests, we'll pretend that the project root dir is our base path for files to serve.
-        // For the test, we create a simple "index.html" which is removed at the end.
-        auto f = File("index.html", "w");
-        f.writeln("<html><body>Hello world.</body></html>");
-        f.close();
-        scope (exit) {
-            if (exists("index.html")) std.file.remove("index.html");
-            if (exists("index.htm")) std.file.remove("index.htm");
-            if (exists("index.txt")) std.file.remove("index.txt");
-            if (exists("index")) std.file.remove("index");
-        }
         FileResolvingHandler handler = new FileResolvingHandler(".");
-        // Try resolving the base index file when given a URL for the base path.
-        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index.html"));
-        assert(handler.sanitizeRequestPath("") == buildPath(".", "index.html"));
-        // Check that it resolves other common index file types too.
-        std.file.rename("index.html", "index.htm");
-        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index.htm"));
-        std.file.rename("index.htm", "index.txt");
-        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index.txt"));
-        std.file.rename("index.txt", "index");
-        assert(handler.sanitizeRequestPath("/") == buildPath(".", "index"));
+        assert(handler.sanitizeRequestPath("/") == buildPath("."));
+        assert(handler.sanitizeRequestPath("") == buildPath("."));
 
         // Check some basic files which exist.
         assert(handler.sanitizeRequestPath("/dub.json") == buildPath("dub.json"));
@@ -167,12 +161,80 @@ class FileResolvingHandler : HttpRequestHandler {
             handler.sanitizeRequestPath("/source/handy_httpd/package.d") ==
             buildPath("source", "handy_httpd", "package.d")
         );
+        assert(handler.sanitizeRequestPath("/examples") == buildPath("examples"));
         // Check that non-existent paths resolve to null.
         assert(handler.sanitizeRequestPath("/non-existent-path") is null);
         // Ensure that requests for resources outside the base path are ignored.
         assert(handler.sanitizeRequestPath("/../README.md") is null);
         assert(handler.sanitizeRequestPath("/../../data.txt") is null);
         assert(handler.sanitizeRequestPath("/etc/profile") is null);
+    }
+
+    /** 
+     * Handles a request for a directory. What happens depends on the directory
+     * resolution strategy of this handler. If we are allowed to serve index
+     * files, then we'll try to do that. Otherwise, if we're allowed to show a
+     * listing of directory contents, we'll do that. Finally, if neither of
+     * those options are allowed, we return a 404.
+     * Params:
+     *   response = The response to write to.
+     *   dir = The directory that was requested.
+     *   requestUrl = The original request URL.
+     */
+    private void handleDirRequest(ref HttpResponse response, string dir, string requestUrl) {
+        if (directoryResolutionStrategy.serveIndexFiles) {
+            string indexFilePath = findIndexFile(dir);
+            if (indexFilePath !is null) {
+                fileResponse(response, indexFilePath, getMimeType(indexFilePath));
+            }
+        }
+        if (directoryResolutionStrategy.listDirContents) {
+            import std.array : appender;
+            import std.file : dirEntries, SpanMode;
+            import std.format : format;
+            import std.path : buildPath, baseName;
+
+            string html = q"HTML
+<html>
+<body>
+    <h3>Entries for directory "%s"</h3>
+    <table>
+        <tr>
+            <th>Entry</th>
+            <th>Type</th>
+            <th>Last Modified</th>
+            <th>Size</th>
+        </tr>
+        %s
+    </table>
+</body>
+HTML";
+            auto app = appender!string;
+
+            foreach (entry; dirEntries(dir, SpanMode.shallow, false)) {
+                string rowFormat = q"HTML
+<tr>
+    <td><a href="%s">%s</a></td>
+    <td>%s</td>
+    <td>%s</td>
+    <td>%d</td>
+</tr>
+HTML";
+                string filename = baseName(entry.name);
+                string fileUrl = buildPath(requestUrl, filename);
+                app ~= format(
+                    rowFormat,
+                    fileUrl, filename,
+                    entry.isFile() ? "file" : "dir",
+                    entry.timeLastModified(),
+                    entry.size()
+                );
+            }
+
+            response.writeBodyString(format(html, requestUrl, app[]), "text/html");
+        }
+        // No other option but to return not-found.
+        notFound(response);
     }
 
     /** 
@@ -263,4 +325,22 @@ class FileResolvingHandler : HttpRequestHandler {
         assert(handler.getMimeType(".gitignore") == "text/html");
         assert(handler.getMimeType("test.") == "text/html");
     }
+}
+
+struct DirectoryResolutionStrategy {
+    /** 
+     * Whether to show a plain HTML listing of the directory's content.
+     */
+    public const bool listDirContents;
+    /** 
+     * Whether to attempt to serve index files from a directory.
+     */
+    public const bool serveIndexFiles;
+}
+
+enum DirectoryResolutionStrategies {
+    listDirContentsAndServeIndexFiles = DirectoryResolutionStrategy(true, true),
+    listDirContents = DirectoryResolutionStrategy(true, false),
+    serveIndexFiles = DirectoryResolutionStrategy(false, true),
+    none = DirectoryResolutionStrategy(false, false)
 }
