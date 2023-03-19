@@ -46,7 +46,8 @@ class FileResolvingHandler : HttpRequestHandler {
      */
     this(
         string basePath = ".",
-        DirectoryResolutionStrategy directoryResolutionStrategy = DirectoryResolutionStrategies.listDirContentsAndServeIndexFiles
+        DirectoryResolutionStrategy directoryResolutionStrategy
+            = DirectoryResolutionStrategies.listDirContentsAndServeIndexFiles
     ) {
         this.basePath = basePath;
         this.mimeTypes = [
