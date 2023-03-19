@@ -3,6 +3,6 @@
 	"versions": {
 		"handy-httpd": {"path":"../../"},
 		"httparsed": "1.2.1",
-		"slf4d": "2.0.0"
+		"slf4d": "2.1.0"
 	}
 }

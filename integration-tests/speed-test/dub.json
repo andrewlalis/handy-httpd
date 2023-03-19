@@ -5,8 +5,7 @@
 	"copyright": "Copyright © 2023, Andrew Lalis",
 	"dependencies": {
 		"handy-httpd": {
-			"path": "../../",
-			"version": ">=0.0.0"
+			"path": "../../"
 		},
 		"requests": "~>2.0.9"
 	},

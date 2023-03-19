@@ -10,12 +10,11 @@ void main() {
     cfg.workerPoolSize = 5;
     cfg.port = 8080;
     new HttpServer((ref ctx) {
-        auto log = getLogger();
         if (ctx.request.url == "/stop") {
             ctx.response.writeBodyString("Shutting down the server.");
             ctx.server.stop();
         } else if (ctx.request.url == "/hello") {
-            log.infoF!"Responding to request: %s"(ctx.request.url);
+            infoF!"Responding to request: %s"(ctx.request.url);
             ctx.response.writeBodyString("Hello world!");
         } else {
             ctx.response.notFound();

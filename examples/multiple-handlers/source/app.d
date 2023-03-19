@@ -16,9 +16,8 @@ void handleUsers(ref HttpRequestContext ctx) {
 }
 
 void handleUser(ref HttpRequestContext ctx) {
-	auto log = getLogger();
 	ulong userId = ctx.request.getPathParamAs!ulong("userId");
-	log.infoF!"User %d visited the page."(userId);
+	infoF!"User %d visited the page."(userId);
 	ctx.response.writeBodyString("Hello user!");
 }
 

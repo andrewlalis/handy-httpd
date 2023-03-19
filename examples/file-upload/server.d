@@ -23,17 +23,16 @@ void main() {
     cfg.workerPoolSize = 3;
     cfg.port = 8080;
     new HttpServer((ref ctx) {
-        auto log = getLogger();
         if (ctx.request.url == "/upload" && ctx.request.method == Method.POST) {
-            log.info("User uploaded file.");
+            info("User uploaded file.");
             try {
                 import std.datetime.stopwatch;
                 auto sw = StopWatch(AutoStart.yes);
                 ulong bytesRead = ctx.request.readBodyToFile("latest-upload");
                 sw.stop();
-                log.infoF!"Read %d bytes in %d ms."(bytesRead, sw.peek.total!"msecs");
+                infoF!"Read %d bytes in %d ms."(bytesRead, sw.peek.total!"msecs");
             } catch (Exception e) {
-                log.error("Error: " ~ e.msg);
+                error(e);
             }
         } else if (ctx.request.url == "/" || ctx.request.url == "" || ctx.request.url == "/index.html") {
             ctx.response.writeBodyString(indexContent, "text/html; charset=utf-8");
