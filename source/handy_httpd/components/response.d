@@ -10,6 +10,7 @@ import std.string : format, representation;
 import std.conv;
 import std.socket : Socket;
 import std.range;
+import slf4d;
 
 /** 
  * The data that the HTTP server will send back to clients.
@@ -49,7 +50,9 @@ struct HttpResponse {
      * Returns: The response object, for method chaining.
      */
     public HttpResponse setStatus(ushort status) {
-        if (flushed) throw new Exception("Cannot modify header after it's been flushed.");
+        if (flushed) {
+            warnF!"Attempted to set status to %d after the response has already been flushed."(status);
+        }
         this.status = status;
         return this;
     }
@@ -62,7 +65,9 @@ struct HttpResponse {
      * Returns: The response object, for method chaining.
      */
     public HttpResponse setStatusText(string statusText) {
-        if (flushed) throw new Exception("Cannot modify header after it's been flushed.");
+        if (flushed) {
+            warnF!"Attempted to set statusText to \"%s\" after the response has already been flushed."(statusText);
+        }
         this.statusText = statusText;
         return this;
     }
@@ -76,7 +81,9 @@ struct HttpResponse {
      * Returns: The response object, for method chaining.
      */
     public HttpResponse addHeader(string name, string value) {
-        if (flushed) throw new Exception("Cannot modify header after it's been flushed.");
+        if (flushed) {
+            warnF!"Attempted to set header \"%s\" to \"%s\" after the response has already been flushed."(name, value);
+        }
         this.headers[name] = value;
         return this;
     }
@@ -86,7 +93,9 @@ struct HttpResponse {
      * information can no longer be modified.
      */
     public void flushHeaders() {
-        if (flushed) return;
+        if (flushed) {
+            warn("Attempted to flush headers after the response has already been flushed.");
+        }
         auto app = appender!string;
         app ~= format!"HTTP/1.1 %d %s\r\n"(this.status, this.statusText);
         foreach (name, value; this.headers) {
@@ -111,8 +120,8 @@ struct HttpResponse {
         if (!flushed) {
             addHeader("Content-Length", size.to!string);
             addHeader("Content-Type", contentType);
+            flushHeaders();
         }
-        flushHeaders();
         ulong bytesWritten = 0;
         while (!inputRange.empty) {
             ulong bytesToWrite = size - bytesWritten;

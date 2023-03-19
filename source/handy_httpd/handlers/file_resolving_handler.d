@@ -186,6 +186,7 @@ class FileResolvingHandler : HttpRequestHandler {
             string indexFilePath = findIndexFile(dir);
             if (indexFilePath !is null) {
                 fileResponse(response, indexFilePath, getMimeType(indexFilePath));
+                return;
             }
         }
         if (directoryResolutionStrategy.listDirContents) {
@@ -232,6 +233,7 @@ HTML";
             }
 
             response.writeBodyString(format(html, requestUrl, app[]), "text/html");
+            return;
         }
         // No other option but to return not-found.
         notFound(response);
