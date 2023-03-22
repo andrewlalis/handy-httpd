@@ -10,8 +10,31 @@ import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.util.range;
+import handy_httpd.components.parse_utils;
 import std.range;
 
+public HttpRequestContext buildCtxForRequest(
+    Method method,
+    string url,
+    string bodyContent,
+    string contentType = "text/plain"
+) {
+    auto urlAndParams = parseUrlAndParams(url);
+    return new HttpRequestContextBuilder()
+        .withRequest((rb) {
+            rb.withMethod(method)
+                .withUrl(urlAndParams[0])
+                .withParams(urlAndParams[1]);
+            if (bodyContent !is null && contentType !is null) {
+                rb.withBody(bodyContent, contentType);
+            }
+        })
+        .build();
+}
+
+public HttpRequestContext buildCtxForRequest(Method method, string url) {
+    return buildCtxForRequest(method, url, null, null);
+}
 
 /** 
  * A fluent-style builder for helping to create request contexts for unit
@@ -29,12 +52,14 @@ class HttpRequestContextBuilder {
         this.responseBuilder = new HttpResponseBuilder();
     }
 
-    public HttpRequestBuilder request() {
-        return this.requestBuilder;
+    public HttpRequestContextBuilder withRequest(void delegate(HttpRequestBuilder) dg) {
+        dg(this.requestBuilder);
+        return this;
     }
 
-    public HttpResponseBuilder response() {
-        return this.responseBuilder;
+    public HttpRequestContextBuilder withResponse(void delegate(HttpResponseBuilder) dg) {
+        dg(this.responseBuilder);
+        return this;
     }
 
     public HttpRequestContextBuilder withServer(HttpServer server) {
@@ -79,9 +104,13 @@ class HttpRequestBuilder {
         this.url = url;
     }
 
-    HttpRequestBuilder withMethod(string method) {
-        this.method = methodFromName(method);
+    HttpRequestBuilder withMethod(Method method) {
+        this.method = method;
         return this;
+    }
+
+    HttpRequestBuilder withMethod(string method) {
+        return this.withMethod(methodFromName(method));
     }
 
     HttpRequestBuilder withUrl(string url) {
@@ -100,6 +129,16 @@ class HttpRequestBuilder {
         return this;
     }
 
+    HttpRequestBuilder withoutHeader(string name) {
+        this.headers.remove(name);
+        return this;
+    }
+
+    HttpRequestBuilder withParams(string[string] params) {
+        this.params = params;
+        return this;
+    }
+
     HttpRequestBuilder withParam(string name, string value) {
         this.params[name] = value;
         return this;
@@ -115,8 +154,14 @@ class HttpRequestBuilder {
         return this;
     }
 
-    HttpRequestBuilder withInputRange(string input) {
-        return this.withInputRange(inputRangeObject([cast(ubyte[]) input.dup]));
+    HttpRequestBuilder withBody(ubyte[] bodyContent, string contentType = "application/octet-stream") {
+        return this.withInputRange(inputRangeObject([bodyContent]))
+        .withHeader("Content-Type", contentType)
+        .withHeader("Content-Length", bodyContent.length);
+    }
+
+    HttpRequestBuilder withBody(string bodyContent, string contentType = "text/plain") {
+        return this.withBody(cast(ubyte[]) bodyContent, contentType);
     }
 
     HttpRequest build() {
@@ -149,9 +194,31 @@ class HttpResponseBuilder {
         return this;
     }
 
+    HttpResponseBuilder withHeader(V)(string name, V value) {
+        import std.conv : to;
+        this.headers[name] = value.to!string;
+        return this;
+    }
+
+    HttpResponseBuilder withoutHeader(string name) {
+        this.headers.remove(name);
+        return this;
+    }
+
     HttpResponseBuilder withOutputRange(OutputRange!(ubyte[]) outputRange) {
         this.outputRange = outputRange;
         return this;
+    }
+
+    HttpResponseBuilder withBody(ubyte[] bodyContent, string contentType = "application/octet-stream") {
+        OutputRange!(ubyte[]) or = outputRangeObject!(ubyte[])(bodyContent);
+        return this.withOutputRange(or)
+        .withHeader("Content-Type", contentType)
+        .withHeader("Content-Length", bodyContent.length);
+    }
+
+    HttpResponseBuilder withBody(string bodyContent, string contentType = "text/plain") {
+        return this.withBody(cast(ubyte[]) bodyContent, contentType);
     }
 
     HttpResponse build() {

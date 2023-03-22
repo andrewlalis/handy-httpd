@@ -97,7 +97,7 @@ public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string
  *   rawUrl = The raw url containing both path and query params.
  * Returns: A tuple containing the path and parsed query params.
  */
-private Tuple!(string, string[string]) parseUrlAndParams(string rawUrl) {
+public Tuple!(string, string[string]) parseUrlAndParams(string rawUrl) {
     Tuple!(string, string[string]) result;
     auto p = rawUrl.indexOf('?');
     if (p == -1) {

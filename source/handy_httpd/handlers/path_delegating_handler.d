@@ -246,12 +246,7 @@ class PathDelegatingHandler : HttpRequestHandler {
         see how the handler changes them.
         */
         HttpRequestContext generateHandledCtx(string method, string url) {
-            auto builder = new HttpRequestContextBuilder();
-            builder.withServer(new HttpServer());
-            builder.request()
-                .withMethod(method)
-                .withUrl(url);
-            auto ctx = builder.build();
+            auto ctx = buildCtxForRequest(methodFromName(method), url);
             handler.handle(ctx);
             return ctx;
         }

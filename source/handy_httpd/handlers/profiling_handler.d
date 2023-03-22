@@ -9,16 +9,17 @@ import std.datetime;
 
 import core.sync.rwmutex;
 
+/** 
+ * A wrapper handler that can be applied over another, to record performance
+ * statistics at runtime.
+ */
 class ProfilingHandler : HttpRequestHandler {
     private HttpRequestHandler handler;
-    private const size_t historyMaxSize;
-    private size_t historySize;
-    private DList!RequestInfo history;
 
-    this(HttpRequestHandler handler, size_t historyMaxSize = 1000) {
+    ulong[METHOD_COUNT] methodCounts;
+
+    this(HttpRequestHandler handler) {
         this.handler = handler;
-        this.historyMaxSize = historyMaxSize;
-        this.historySize = 0;
     }
 
     public void handle(ref HttpRequestContext ctx) {
@@ -34,32 +35,10 @@ class ProfilingHandler : HttpRequestHandler {
             info.requestMethod = ctx.request.method;
             info.responseStatus = ctx.response.status;
             synchronized {
-                this.historySize += this.history.insertFront(info);
-                while (this.historySize > this.historyMaxSize) {
-                    this.history.removeBack();
-                    this.historySize--;
-                }
+                // Increment method count.
+                methodCounts[methodIndex(ctx.request.method)]++;
             }
         }
-    }
-
-    public double getAverageRequestDuration() {
-        return history[].map!(info => info.requestDuration.total!"usecs").mean / 1_000_000.0;
-    }
-
-    public double getAverageRequestsPerSecond() {
-        if (history.empty) return 0;
-        RequestInfo oldestInfo = history.back();
-        Duration timeSinceLastInfo = Clock.currTime() - oldestInfo.timestamp;
-        return this.historySize / timeSinceLastInfo.total!"seconds";
-    }
-
-    public ulong[ushort] getResponseStatusHistogram() {
-        ulong[ushort] statuses;
-        foreach (info; history) {
-            statuses[info.responseStatus]++;
-        }
-        return statuses;
     }
 }
 
@@ -74,5 +53,51 @@ struct RequestInfo {
 }
 
 unittest {
+    import handy_httpd.util.builders;
+    import core.thread;
+    import std.stdio;
 
+    ProfilingHandler h1 = new ProfilingHandler(toHandler((ref HttpRequestContext ctx) {
+        // Do nothing
+    }));
+
+    // Test method counting.
+    auto ctx1 = buildCtxForRequest(Method.GET, "/hello-world");
+    h1.handle(ctx1);
+    assert(h1.methodCounts[methodIndex(Method.GET)] == 1);
+    auto ctx2 = buildCtxForRequest(Method.POST, "/data");
+    h1.handle(ctx2);
+    assert(h1.methodCounts[methodIndex(Method.POST)] == 1);
+
+    // Test that method counting is thread-safe by handling requests from many threads simultaneously.
+    h1.methodCounts[methodIndex(Method.GET)] = 0;
+    h1.methodCounts[methodIndex(Method.POST)] = 0;
+
+    class RequesterThread : Thread {
+        private Method method;
+        private HttpRequestHandler handler;
+        public this(Method method, HttpRequestHandler handler) {
+            super(&this.run);
+            this.method = method;
+            this.handler = handler;
+        }
+        private void run() {
+            for (int i = 0; i < 1000; i++) {
+                auto c = buildCtxForRequest(this.method, "/hello");
+                this.handler.handle(c);
+            }
+        }
+    }
+
+    RequesterThread[] requesterThreads;
+    for (int i = 0; i < METHOD_COUNT; i++) {
+        const Method method = methodFromIndex(i);
+        RequesterThread t = new RequesterThread(method, h1);
+        requesterThreads ~= t;
+    }
+    foreach (t; requesterThreads) t.start();
+    foreach (t; requesterThreads) t.join();
+    for (int i = 0; i < METHOD_COUNT; i++) {
+        assert(h1.methodCounts[i] == 1000);
+    }
 }

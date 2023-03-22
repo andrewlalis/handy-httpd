@@ -19,17 +19,17 @@ struct HttpRequest {
      * defined as a bit-shifted 1, for efficient matching logic. See the
      * `Method` enum in this module for more information.
      */
-    public const Method method;
+    public const Method method = Method.GET;
 
     /** 
      * The url of the request, excluding query parameters.
      */
-    public const string url;
+    public const string url = "";
 
     /** 
      * The request version.
      */
-    public const int ver;
+    public const int ver = 1;
 
     /** 
      * An associative array containing all request headers.
@@ -172,10 +172,7 @@ struct HttpRequest {
 
         // Test case 1: Simply reading a string.
         string body1 = "Hello world!";
-        HttpRequest r1 = new HttpRequestBuilder()
-            .withHeader("Content-Length", body1.length)
-            .withInputRange(body1)
-            .build();
+        HttpRequest r1 = new HttpRequestBuilder().withBody(body1).build();
         auto app1 = appender!(ubyte[][]);
         ulong bytesRead1 = r1.readBody(app1);
         assert(bytesRead1 == body1.length);
@@ -183,9 +180,7 @@ struct HttpRequest {
 
         // Test case 2: Missing Content-Length header, so we don't read anything.
         string body2 = "Goodbye, world.";
-        HttpRequest r2 = new HttpRequestBuilder()
-            .withInputRange(body2)
-            .build();
+        HttpRequest r2 = new HttpRequestBuilder().withBody(body2).withoutHeader("Content-Length").build();
         auto app2 = appender!(ubyte[][]);
         ulong bytesRead2 = r2.readBody(app2);
         assert(bytesRead2 == 0);
@@ -193,9 +188,7 @@ struct HttpRequest {
 
         // Test case 3: Missing Content-Length header but we allow infinite reading.
         string body3 = "Hello moon!";
-        HttpRequest r3 = new HttpRequestBuilder()
-            .withInputRange(body3)
-            .build();
+        HttpRequest r3 = new HttpRequestBuilder().withBody(body3).withoutHeader("Content-Length").build();
         auto app3 = appender!(ubyte[][]);
         ulong bytesRead3 = r3.readBody(app3, true);
         assert(bytesRead3 == body3.length);
@@ -305,7 +298,7 @@ struct HttpRequest {
  * 
  * https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
  */
-enum Method : ushort {
+public enum Method : ushort {
     GET     = 1 << 0,
     HEAD    = 1 << 1,
     POST    = 1 << 2,
@@ -315,6 +308,39 @@ enum Method : ushort {
     OPTIONS = 1 << 6,
     TRACE   = 1 << 7,
     PATCH   = 1 << 8
+}
+
+import std.traits : EnumMembers;
+
+/** 
+ * Constant that defines the number of available methods.
+ */
+public static const METHOD_COUNT = [EnumMembers!Method].length;
+
+/** 
+ * Gets the zero-based index of a method enum value, useful for histograms.
+ * Params:
+ *   method = The method to get the index for.
+ * Returns: The index of the method.
+ */
+public size_t methodIndex(Method method) {
+    static foreach (i, member; EnumMembers!Method) {
+        if (method == member) return i;
+    }
+    assert(0, "Not an enum member.");
+}
+
+/** 
+ * Gets a method using a zero-based index of the method enum value.
+ * Params:
+ *   idx = The index to find the method by.
+ * Returns: The method at the given index.
+ */
+public Method methodFromIndex(size_t idx) {
+    static foreach (i, member; EnumMembers!Method) {
+        if (i == idx) return member;
+    }
+    return Method.GET;
 }
 
 /** 
