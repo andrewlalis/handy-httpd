@@ -1,3 +1,6 @@
+# Main testing workflow for Handy-Httpd.
+# All testing is done in a single workflow (and job) to reduce load on the
+# runners, since we only need to checkout and setup DLang once.
 name: Testing
 
 on:
@@ -20,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        compiler: [dmd-2.099.1, dmd-latest, ldc-1.31.0, ldc-latest]
+        compiler: [dmd-2.099.1, dmd-latest, ldc-1.31.0] # Note: ldc-latest is omitted due to a bug.
     runs-on: ${{ matrix.os }}
 
     steps:
