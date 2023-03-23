@@ -1,0 +1,65 @@
+name: Testing
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - source/**
+      - examples/**
+      - .github/workflows/testing.yml
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Test Suite
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        compiler: [dmd-2.099.1, dmd-latest, ldc-1.31.0, ldc-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup DLang
+        uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.compiler }}
+
+      # Run basic build and test on the library.
+        
+      - name: Build handy-httpd
+        run: dub -q build
+
+      - name: Run Unit Tests
+        run: dub -q test
+
+      # Run integration tests.
+
+      - name: "Integration Test: speed-test"
+        working-directory: integration-tests/speed-test
+        run: dub -q run
+
+      # Build each example to ensure that they're up-to-date.
+
+      - name: "Example: file-upload"
+        working-directory: examples/file-upload
+        run: dub -q build --single server.d
+
+      - name: "Example: multiple-handlers"
+        working-directory: examples/multiple-handlers
+        run: dub -q build
+
+      - name: "Example: single-file-server"
+        working-directory: examples/single-file-server
+        run: dub -q build --single hello.d
+
+      - name: "Example: static-content-server"
+        working-directory: examples/static-content-server
+        run: dub -q build --single content_server.d
