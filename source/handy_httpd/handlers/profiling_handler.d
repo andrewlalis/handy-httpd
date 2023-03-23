@@ -210,7 +210,7 @@ unittest {
     string csvFile = "tmp-CsvProfilingDataHandler.csv";
     CsvProfilingDataHandler dataHandler = new CsvProfilingDataHandler(csvFile);
     scope(exit) {
-        // std.file.remove(csvFile);
+        std.file.remove(csvFile);
     }
     ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
         ctx.response.status = 200;
