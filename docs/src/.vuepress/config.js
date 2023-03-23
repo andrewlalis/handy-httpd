@@ -47,7 +47,7 @@ module.exports = {
         link: 'https://github.com/andrewlalis/handy-httpd'
       },
       {
-        text: 'code.dlang.org',
+        text: 'dub',
         link: 'https://code.dlang.org/packages/handy-httpd'
       },
       {
@@ -75,6 +75,7 @@ module.exports = {
           children: [
             'handlers/path-delegating-handler',
             'handlers/file-resolving-handler',
+            'handlers/profiling-handler',
           ]
         }
       ],

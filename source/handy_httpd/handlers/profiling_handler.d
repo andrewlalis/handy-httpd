@@ -1,3 +1,8 @@
+/** 
+ * This module defines a set of tools that can be used to profile the
+ * performance of your request handler, by wrapping it in a
+ * `ProfilingHandler` that emits data to a `ProfilingDataHandler`.
+ */
 module handy_httpd.handlers.profiling_handler;
 
 import handy_httpd.components.handler;
@@ -26,8 +31,21 @@ public HttpRequestHandler profiled(HttpRequestHandler handler, ProfilingDataHand
 }
 
 /** 
+ * Wraps a handler in a ProfilingHandler that's using a logging data handler.
+ * Params:
+ *   handler = The handler to wrap in a profiling handler.
+ * Returns: The profiling handler.
+ */
+public HttpRequestHandler profiled(HttpRequestHandler handler) {
+    return profiled(handler, new LoggingProfilingDataHandler());
+}
+
+/** 
  * A wrapper handler that can be applied over another, to record performance
- * statistics at runtime.
+ * statistics at runtime. The profiling handler will collect basic information
+ * about each request that's handled by a given handler, and pass it on to a
+ * data handler. The data handler might write the data to a file, use it for
+ * aggregate statistics, or logging.
  */
 class ProfilingHandler : HttpRequestHandler {
     private HttpRequestHandler handler;
@@ -192,7 +210,7 @@ unittest {
     string csvFile = "tmp-CsvProfilingDataHandler.csv";
     CsvProfilingDataHandler dataHandler = new CsvProfilingDataHandler(csvFile);
     scope(exit) {
-        std.file.remove(csvFile);
+        // std.file.remove(csvFile);
     }
     ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
         ctx.response.status = 200;
