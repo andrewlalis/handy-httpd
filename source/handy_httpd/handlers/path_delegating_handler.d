@@ -47,7 +47,7 @@ class PathDelegatingHandler : HttpRequestHandler {
 
     this() {
         this.handlerMappings = [];
-        this.notFoundHandler = toHandler((ref ctx) {ctx.response.notFound();});
+        this.notFoundHandler = toHandler((ref ctx) { notFoundResponse(ctx.response); });
     }
 
     /** 
@@ -183,7 +183,7 @@ class PathDelegatingHandler : HttpRequestHandler {
         auto handler = new PathDelegatingHandler();
         assertThrown!Exception(handler.setNotFoundHandler(null));
         auto notFoundHandler = toHandler((ref ctx) {
-            notFound(ctx.response);
+            notFoundResponse(ctx.response);
         });
         assertNotThrown!Exception(handler.setNotFoundHandler(notFoundHandler));
     }
@@ -251,15 +251,15 @@ class PathDelegatingHandler : HttpRequestHandler {
             return ctx;
         }
 
-        assert(generateHandledCtx("GET", "/home").response.status == 200);
-        assert(generateHandledCtx("GET", "/home-not-exists").response.status == 404);
-        assert(generateHandledCtx("GET", "/users").response.status == 200);
-        assert(generateHandledCtx("GET", "/users/34").response.status == 200);
+        assert(generateHandledCtx("GET", "/home").response.status == HttpStatus.OK);
+        assert(generateHandledCtx("GET", "/home-not-exists").response.status == HttpStatus.NOT_FOUND);
+        assert(generateHandledCtx("GET", "/users").response.status == HttpStatus.OK);
+        assert(generateHandledCtx("GET", "/users/34").response.status == HttpStatus.OK);
         assert(generateHandledCtx("GET", "/users/34").request.getPathParamAs!int("id") == 34);
-        assert(generateHandledCtx("GET", "/api/test").response.status == 200);
-        assert(generateHandledCtx("GET", "/api/test/bleh").response.status == 404);
-        assert(generateHandledCtx("GET", "/api").response.status == 404);
-        assert(generateHandledCtx("GET", "/").response.status == 404);
+        assert(generateHandledCtx("GET", "/api/test").response.status == HttpStatus.OK);
+        assert(generateHandledCtx("GET", "/api/test/bleh").response.status == HttpStatus.NOT_FOUND);
+        assert(generateHandledCtx("GET", "/api").response.status == HttpStatus.NOT_FOUND);
+        assert(generateHandledCtx("GET", "/").response.status == HttpStatus.NOT_FOUND);
     }
 }
 

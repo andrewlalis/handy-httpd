@@ -68,7 +68,7 @@ class ProfilingHandler : HttpRequestHandler {
                 Clock.currTime(),
                 sw.peek(),
                 ctx.request.method,
-                ctx.response.status
+                ctx.response.status.code
             );
             this.dataHandler.handle(info);
         }
@@ -155,6 +155,7 @@ class LoggingProfilingDataHandler : ProfilingDataHandler {
 
 unittest {
     import handy_httpd.util.builders;
+    import handy_httpd.components.response;
     import slf4d;
     import slf4d.testing_provider;
 
@@ -163,7 +164,7 @@ unittest {
     
     LoggingProfilingDataHandler dataHandler = new LoggingProfilingDataHandler();
     ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
-        ctx.response.status = 200;
+        ctx.response.status = HttpStatus.OK;
     }), dataHandler);
     for (int i = 0; i < 10_000; i++) {
         auto ctx = buildCtxForRequest(Method.GET, "/data");
@@ -204,6 +205,7 @@ class CsvProfilingDataHandler : ProfilingDataHandler {
 
 unittest {
     import handy_httpd.util.builders;
+    import handy_httpd.components.response;
     import std.file;
     import std.random;
     import std.stdio;
@@ -213,7 +215,7 @@ unittest {
         std.file.remove(csvFile);
     }
     ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
-        ctx.response.status = 200;
+        ctx.response.status = HttpStatus.OK;
     }), dataHandler);
     for (int i = 0; i < 1000; i++) {
         Method method = methodFromIndex(uniform(0, 10));

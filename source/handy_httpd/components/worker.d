@@ -91,7 +91,7 @@ class ServerWorkerThread : Thread {
                 clientSocket.shutdown(SocketShutdown.BOTH);
                 clientSocket.close();
 
-                log.infoF!"%d %s"(ctx.response.status, ctx.response.statusText);
+                log.infoF!"%d %s"(ctx.response.status.code, ctx.response.status.text);
 
                 // Reset the request parser so we're ready for the next request.
                 requestParser.msg.reset();

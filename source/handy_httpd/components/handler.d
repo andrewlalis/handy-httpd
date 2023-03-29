@@ -91,8 +91,7 @@ class BasicServerExceptionHandler : ServerExceptionHandler {
         auto log = getLogger();
         log.errorF!"An error occurred while handling a request: %s"(e.msg);
         if (!ctx.response.isFlushed) {
-            ctx.response.setStatus(500);
-            ctx.response.setStatusText("Internal Server Error");
+            ctx.response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR);
             ctx.response.writeBodyString("An error occurred while handling your request.");
         } else {
             log.error("The response has already been sent; cannot send 500 error.");
@@ -121,8 +120,6 @@ HttpRequestHandler toHandler(HttpRequestHandlerFunction fn) {
  */
 HttpRequestHandler noOpHandler() {
     return toHandler((ref ctx) {
-        ctx.response.setStatus(503)
-            .setStatusText("Service Unavailable")
-            .flushHeaders();
+        ctx.response.setStatus(HttpStatus.SERVICE_UNAVAILABLE);
     });
 }

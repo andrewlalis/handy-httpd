@@ -6,30 +6,82 @@
 module handy_httpd.components.responses;
 
 import handy_httpd.components.response;
+import std.range.interfaces : InputRange;
 
-/** 
- * Convenience method to prepare a simple 200 OK response.
- * Params:
- *    response = The HTTP response to write to.
- */
-void okResponse(ref HttpResponse response) {
-    response.setStatus(200).setStatusText("OK").flushHeaders();
+void respond(
+    ref HttpResponse response,
+    HttpStatus status,
+    InputRange!(ubyte[]) bodyInputRange,
+    ulong bodySize,
+    string bodyContentType
+) {
+    response.setStatus(status);
+    if (bodyInputRange !is null) {
+        response.writeBodyRange(bodyInputRange, bodySize, bodyContentType);
+    }
+}
+
+void respond(
+    ref HttpResponse response,
+    HttpStatus status,
+    string bodyContent,
+    string bodyContentType = "text/plain; charset=utf-8"
+) {
+    response.setStatus(status);
+    if (bodyContent !is null && bodyContent.length > 0) {
+        response.writeBodyString(bodyContent, bodyContentType);
+    }
+}
+
+void respond(ref HttpResponse response, HttpStatus status) {
+    respond(response, status, null);
 }
 
 /** 
- * Convenience method to prepare a 200 OK response with a body.
+ * Formats a response function name into a camelCase name that's suitable for
+ * use in mixin-generated code.
  * Params:
- *   response = The HTTP response to write to.
- *   bodyContent = The body of the response.
- *   contentType = The content type of the body.
+ *   name = The name of an HTTP status enum.
+ * Returns: The formatted function name.
  */
-void okResponse(ref HttpResponse response, string bodyContent, string contentType = "text/plain; charset=utf-8") {
-    import std.conv : to;
-    response.setStatus(200).setStatusText("OK");
-    response.addHeader("Content-Type", contentType);
-    response.addHeader("Content-Length", bodyContent.length.to!string);
-    response.flushHeaders();
-    response.writeBodyString(bodyContent, contentType);
+private string formatResponseFunctionName(string name) {
+    import std.string : toLower, capitalize, split, join;
+    string[] parts = split(toLower(name), "_");
+    string functionName = parts[0];
+    for (size_t i = 1; i < parts.length; i++) {
+        functionName ~= capitalize(parts[i]);
+    }
+    return functionName ~ "Response";
+}
+
+// Statically generate simple helper functions for each HTTP status.
+import std.traits : EnumMembers;
+
+// Generates functions like the following:
+// okResponse(ref HttpResponse response) {...}
+// okResponse(ref HttpResponse, string bodyContent, string bodyContentType) {...}
+// notFoundResponse(ref HttpResponse response) {...}
+// notFoundResponse(ref HttpResponse, string bodyContent, string bodyContentType) {...}
+static foreach (member; EnumMembers!HttpStatus) {
+    import std.string : format;
+    mixin(format(
+        q{
+            void %s(ref HttpResponse response) {
+                response.setStatus(HttpStatus.%s);
+            }
+            
+            void %s(
+                ref HttpResponse response,
+                string bodyContent,
+                string bodyContentType = "text/plain; charset=utf-8"
+            ) {
+                response.setStatus(HttpStatus.%s);
+                response.writeBodyString(bodyContent, bodyContentType);
+            }
+        },
+        formatResponseFunctionName(__traits(identifier, member)), member,
+        formatResponseFunctionName(__traits(identifier, member)), member
+    ));
 }
 
 /** 
@@ -44,40 +96,13 @@ void fileResponse(ref HttpResponse response, string filename, string type) {
     import std.stdio;
     import std.conv : to;
     if (!exists(filename)) {
-        response.setStatus(404).setStatusText("Not Found")
-            .addHeader("Content-Type", type).flushHeaders();
+        response.setStatus(HttpStatus.NOT_FOUND);
+        response.addHeader("Content-Type", type).flushHeaders();
     } else {
-        response.setStatus(200).setStatusText("OK");
+        response.setStatus(HttpStatus.OK);
         auto file = File(filename, "r");
         ulong size = file.size();
         // Flush the headers, and begin streaming the file directly.
         response.writeBodyRange(file.byChunk(8192), size, type);
     }
-}
-
-/** 
- * Convenience method to send a 404 Not Found response to a request.
- * Params:
- *   response = The HTTP response to write to.
- */
-void notFound(ref HttpResponse response) {
-    response.setStatus(404).setStatusText("Not Found").flushHeaders();
-}
-
-/** 
- * Convenience method to send a method not allowed response.
- * Params:
- *   response = The response to write to.
- */
-void methodNotAllowed(ref HttpResponse response) {
-    response.setStatus(405).setStatusText("Method Not Allowed").flushHeaders();
-}
-
-/** 
- * Convenience method to send an internal server error response.
- * Params:
- *   response = The response to write to.
- */
-void internalServerError(ref HttpResponse response) {
-    response.setStatus(500).setStatusText("Internal Server Errror").flushHeaders();
 }

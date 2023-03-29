@@ -178,14 +178,12 @@ class HttpRequestBuilder {
 }
 
 class HttpResponseBuilder {
-    private ushort status = 200;
-    private string statusText = "OK";
+    private StatusInfo status = HttpStatus.OK;
     private string[string] headers;
     private OutputRange!(ubyte[]) outputRange = new DiscardingOutputRange();
 
-    HttpResponseBuilder withStatus(ushort code, string text = "") {
-        this.status = code;
-        this.statusText = text;
+    HttpResponseBuilder withStatus(StatusInfo status) {
+        this.status = status;
         return this;
     }
 
@@ -224,7 +222,6 @@ class HttpResponseBuilder {
     HttpResponse build() {
         return HttpResponse(
             status,
-            statusText,
             headers,
             false,
             outputRange
