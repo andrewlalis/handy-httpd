@@ -183,7 +183,7 @@ class PathDelegatingHandler : HttpRequestHandler {
         auto handler = new PathDelegatingHandler();
         assertThrown!Exception(handler.setNotFoundHandler(null));
         auto notFoundHandler = toHandler((ref ctx) {
-            ctx.response.status = 404;
+            notFound(ctx.response);
         });
         assertNotThrown!Exception(handler.setNotFoundHandler(notFoundHandler));
     }
