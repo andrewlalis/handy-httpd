@@ -6,6 +6,7 @@ module handy_httpd.components.request;
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
 import std.range : InputRange, isOutputRange, Appender, appender;
+import std.typecons : Nullable, nullable;
 import std.exception;
 import slf4d;
 
@@ -54,6 +55,48 @@ struct HttpRequest {
      * a body. In practice, this will usually be a `SocketInputRange`.
      */
     public InputRange!(ubyte[]) inputRange;
+
+    /** 
+     * Tests if this request has a header with the given name.
+     * Params:
+     *   name = The name to check for, case-sensitive.
+     * Returns: True if this request has a header with the given name, or false
+     * otherwise.
+     */
+    public bool hasHeader(string name) {
+        return (name in headers) !is null;
+    }
+
+    /** 
+     * Gets the string representation of a given header value, or null if the
+     * header isn't present.
+     * Params:
+     *   name = The name of the header, case-sensitive.
+     * Returns: The header's string representation, or null if not found.
+     */
+    public string getHeader(string name) {
+        if (hasHeader(name)) return headers[name];
+        return null;
+    }
+
+    /** 
+     * Gets a header as the specified type, or returns the default value
+     * if the header with the given name doesn't exist or is of an invalid
+     * format.
+     * Params:
+     *   name = The name of the header, case-sensitive.
+     *   defaultValue = The default value to return if the header doesn't exist.
+     * Returns: The value of the header as the specified type.
+     */
+    public T getHeaderAs(T)(string name, T defaultValue = T.init) {
+        import std.conv : to, ConvException;
+        if (!hasHeader(name)) return defaultValue;
+        try {
+            return headers[name].to!T;
+        } catch (ConvException e) {
+            return defaultValue;
+        }
+    }
 
     /** 
      * Gets a URL parameter as the specified type, or returns the default value
