@@ -2,7 +2,7 @@
 
 As you've seen in the [introduction](./README.md), you can create a new server with a function that takes in an [HttpRequestContext](ddoc-handy_httpd.components.handler.HttpRequestContext). This function serves as a **handler**, that _handles_ incoming requests. In fact, that function is just a shorthand way of making an instance of the [HttpRequestHandler](ddoc-handy_httpd.components.handler.HttpRequestHandler) interface.
 
-The HttpRequestHandler interface defines a single method: `void handle(ref HttpRequestContext ctx)` that takes a request context and performs everything that's needed to respond to that request.
+The HttpRequestHandler interface defines a single method: [handle](ddoc-handy_httpd.components.handler.HttpRequestHandler.handle), that takes a request context and performs everything that's needed to respond to that request.
 
 Usually, to correctly respond to a request, you need to:
 1. Read information from the HTTP request.
@@ -67,6 +67,7 @@ void handle(ref HttpRequestContext ctx) {
     string userId = ctx.request.pathParams["userId"];
     // Or more safely:
     int userId2 = ctx.request.getPathParamAs!int("userId", -1);
+    string setting = ctx.request.pathParams["setting"];
     // Do stuff for this user...
 }
 ```
@@ -97,8 +98,7 @@ What this might look like in practice is shown in the example below:
 ```d
 void handle(ref HttpRequestContext ctx) {
     // Do logic on request.
-    ctx.response.status = 201;
-    ctx.response.statusText = "Created";
+    ctx.response.status = HttpStatus.CREATED;
     ctx.response.addHeader("X-MY-TOKEN", "abc");
     // Calling `writeBodyString` will automatically flush the status and headers to the socket.
     ctx.response.writeBodyString("{\"id\": 1}", "application/json");
@@ -107,11 +107,11 @@ void handle(ref HttpRequestContext ctx) {
 
 #### Status and Headers
 
-The first thing you should do when responding to a request is to send a status, and headers. The response's `ushort status` can be set to one of the [valid HTTP response statuses](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status), depending on the situation. You may also want to set the request's `string statusText` to something like `"Not Found"` if you return a 404 status, for example.
+The first thing you should do when responding to a request is to send a status, and headers. The response's `status` can be set according to a value from the [HttpStatus](ddoc-handy_httpd.components.response.HttpStatus) enum, which lists every valid HTTP status code and its associated textual representation.
 
 You can add headers via [addHeader(string name, string value)](ddoc-handy_httpd.components.response.HttpResponse.addHeader).
 
-> Note that setting the status, statusText, and headers is only possible before they've been flushed, i.e. before any body content is sent.
+> Note that setting the status and headers is only possible before they've been flushed, i.e. before any body content is sent.
 
 #### Writing the Response Body
 

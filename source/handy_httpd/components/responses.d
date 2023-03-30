@@ -1,11 +1,10 @@
 /** 
  * Contains convenience functions for pre-formatted HTTP responses.
- * Note that all functions here will flush the response, meaning that you do
- * not have to manually flush the response in your handler.
  */
 module handy_httpd.components.responses;
 
 import handy_httpd.components.response;
+import handy_httpd.components.handler : HttpRequestContext;
 import std.range.interfaces : InputRange;
 
 void respond(
@@ -69,6 +68,10 @@ static foreach (member; EnumMembers!HttpStatus) {
             void %s(ref HttpResponse response) {
                 response.setStatus(HttpStatus.%s);
             }
+
+            void %s(ref HttpRequestContext ctx) {
+                ctx.response.setStatus(HttpStatus.%s);
+            }
             
             void %s(
                 ref HttpResponse response,
@@ -78,7 +81,18 @@ static foreach (member; EnumMembers!HttpStatus) {
                 response.setStatus(HttpStatus.%s);
                 response.writeBodyString(bodyContent, bodyContentType);
             }
+
+            void %s(
+                ref HttpRequestContext ctx,
+                string bodyContent,
+                string bodyContentType = "text/plain; charset=utf-8"
+            ) {
+                ctx.response.setStatus(HttpStatus.%s);
+                ctx.response.writeBodyString(bodyContent, bodyContentType);
+            }
         },
+        formatResponseFunctionName(__traits(identifier, member)), member,
+        formatResponseFunctionName(__traits(identifier, member)), member,
         formatResponseFunctionName(__traits(identifier, member)), member,
         formatResponseFunctionName(__traits(identifier, member)), member
     ));

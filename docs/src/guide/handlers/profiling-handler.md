@@ -12,8 +12,8 @@ Suppose you've made a request handler like the one below, and you want to profil
 // Suppose you have this handler
 class MyHandler : HttpRequestHandler {
     void handle(ref HttpRequestContext ctx) {
-        ctx.response.status = 200;
-        ctx.response.writeBody("Hello there!");
+        ctx.response.status = HttpStatus.OK;
+        ctx.response.writeBodyString("Hello there!");
     }
 }
 

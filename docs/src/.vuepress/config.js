@@ -66,7 +66,8 @@ module.exports = {
             'about',
             'handling-requests',
             'logging',
-            'configuration'
+            'configuration',
+            'testing'
           ]
         },
         {

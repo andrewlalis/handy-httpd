@@ -13,6 +13,16 @@ import handy_httpd.util.range;
 import handy_httpd.components.parse_utils;
 import std.range;
 
+/** 
+ * Builds a request context with a request with the given information, and a
+ * plain response that's ready to be written to.
+ * Params:
+ *   method = The request method.
+ *   url = The requested URL.
+ *   bodyContent = The body of the request. This can be null.
+ *   contentType = The type of the body. This can be null.
+ * Returns: A request context.
+ */
 public HttpRequestContext buildCtxForRequest(
     Method method,
     string url,
@@ -32,6 +42,14 @@ public HttpRequestContext buildCtxForRequest(
         .build();
 }
 
+/** 
+ * Builds a request context with a request with the given information, and a
+ * plain response that's ready to be written to.
+ * Params:
+ *   method = The request method.
+ *   url = The requested URL.
+ * Returns: A request context.
+ */
 public HttpRequestContext buildCtxForRequest(Method method, string url) {
     return buildCtxForRequest(method, url, null, null);
 }
@@ -52,11 +70,23 @@ class HttpRequestContextBuilder {
         this.responseBuilder = new HttpResponseBuilder();
     }
 
+    /** 
+     * Modifies this builder's request with the given delegate.
+     * Params:
+     *   dg = The delegate function to apply to the request builder.
+     * Returns: A reference to this builder.
+     */
     public HttpRequestContextBuilder withRequest(void delegate(HttpRequestBuilder) dg) {
         dg(this.requestBuilder);
         return this;
     }
 
+    /** 
+     * Modifies this builder's response with the given delegate.
+     * Params:
+     *   dg = The delegate function to apply to the response builder.
+     * Returns: A reference to this builder.
+     */
     public HttpRequestContextBuilder withResponse(void delegate(HttpResponseBuilder) dg) {
         dg(this.responseBuilder);
         return this;

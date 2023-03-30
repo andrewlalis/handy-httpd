@@ -22,7 +22,7 @@ In this example, we take advantage of the [Dub package manager](https://code.dla
 ```d
 #!/usr/bin/env dub
 /+ dub.sdl:
-	dependency "handy_httpd" version="~>5.5"
+	dependency "handy_httpd" version="~>6.0"
 +/
 import handy_httpd;
 
@@ -31,7 +31,7 @@ void main() {
 		if (ctx.request.url == "/hello") {
 			ctx.response.writeBodyString("Hello world!");
 		} else {
-			ctx.response.notFound();
+			ctx.response.setStatus(HttpStatus.NOT_FOUND);
 		}
 	}).start();
 }

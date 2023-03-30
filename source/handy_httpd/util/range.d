@@ -191,3 +191,14 @@ class DiscardingOutputRange : OutputRange!(ubyte[]) {
         // Do nothing with the data.
     }
 }
+
+/** 
+ * An output range that concatenates data into a string. Useful for testing.
+ */
+class StringOutputRange : OutputRange!(ubyte[]) {
+    public string content;
+    
+    public void put(ubyte[] data) {
+        this.content ~= cast(string) data;
+    }
+}
