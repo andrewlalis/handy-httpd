@@ -192,6 +192,19 @@ class DiscardingOutputRange : OutputRange!(ubyte[]) {
     }
 }
 
+unittest {
+    import std.random;
+    // Just do a sanity check that nothing happens when dumping content to it.
+    auto r = new DiscardingOutputRange();
+    ubyte[] buffer = new ubyte[1000];
+    for (size_t i = 0; i < 100; i++) {
+        for (size_t j = 0; j < buffer.length; j++) {
+            buffer[j] = cast(ubyte) uniform(0, 256);
+        }
+        r.put(buffer);
+    }
+}
+
 /** 
  * An output range that concatenates data into a string. Useful for testing.
  */
@@ -201,4 +214,13 @@ class StringOutputRange : OutputRange!(ubyte[]) {
     public void put(ubyte[] data) {
         this.content ~= cast(string) data;
     }
+}
+
+unittest {
+    auto r = new StringOutputRange();
+    assert(r.content.length == 0);
+    r.put(cast(ubyte[]) "Hello world!");
+    assert(r.content == "Hello world!");
+    r.put(cast(ubyte[]) "test");
+    assert(r.content == "Hello world!test");
 }
