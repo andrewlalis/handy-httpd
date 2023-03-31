@@ -17,7 +17,7 @@ void main() {
             infoF!"Responding to request: %s"(ctx.request.url);
             ctx.response.writeBodyString("Hello world!");
         } else {
-            notFoundResponse(ctx.response);
+            ctx.response.setStatus(HttpStatus.NOT_FOUND);
         }
     }, cfg).start();
 }

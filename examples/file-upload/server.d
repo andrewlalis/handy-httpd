@@ -37,7 +37,7 @@ void main() {
         } else if (ctx.request.url == "/" || ctx.request.url == "" || ctx.request.url == "/index.html") {
             ctx.response.writeBodyString(indexContent, "text/html; charset=utf-8");
         } else {
-            notFoundResponse(ctx.response);
+            ctx.response.setStatus(HttpStatus.NOT_FOUND);
         }
     }, cfg).start();
 }
