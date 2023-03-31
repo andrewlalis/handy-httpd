@@ -12,6 +12,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 - Beginner friendly
 - Extensible with custom handlers, exception handlers, and filters
 - Well-documented
+- Prioritises testability
 - Ships with some handy pre-made request handlers:
 	- Serve static files with the `FileResolvingHandler`
 	- Apply filters before and after handling requests with the `FilteredHandler`
