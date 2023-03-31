@@ -15,7 +15,7 @@ import std.math : sqrt;
 // and writes its square root.
 class SqrtHandler : HttpRequestHandler {
     void handle(ref HttpRequestContext ctx) {
-        string bodyContent = readBodyAsString();
+        string bodyContent = ctx.request.readBodyAsString();
         if (bodyContent is null || bodyContent.length < 1) {
             ctx.response.status = HttpStatus.BAD_REQUEST;
             return;
@@ -33,6 +33,7 @@ unittest {
     import handy_httpd;
     import handy_httpd.util.builders;
     import handy_httpd.util.range;
+    import std.string;
 
     auto handler = new SqrtHandler();
 
@@ -49,15 +50,20 @@ unittest {
     // Now let's test a request that should produce the correct output.
     auto responseOutput = new StringOutputRange(); // Use this to store the handler's response.
     auto ctx = new HttpRequestContextBuilder()
-        .withRequest(rq => {
+        .withRequest((rq) {
             rq.withBody("16");
         })
-        .withResponse(rp => {
+        .withResponse((rp) {
             rp.withOutputRange(responseOutput);
         })
         .build();
     handler.handle(ctx);
     assert(ctx.response.status == HttpStatus.OK);
-    assert(responseOutput.content == "4.0");
+    string content = responseOutput.content;
+    string[] parts = split(content, "\r\n\r\n");
+    assert(parts.length == 2);
+    assert(parts[1].length > 0);
+    assert(strip(parts[1]) == "4");
 }
 ```
+> Note: This example is taken from [handy-httpd/examples/handler-testing](https://github.com/andrewlalis/handy-httpd/tree/main/examples/handler-testing).
