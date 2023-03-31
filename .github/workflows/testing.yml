@@ -55,6 +55,10 @@ jobs:
         working-directory: examples/file-upload
         run: dub -q build --single server.d
 
+      - name: "Example: handler-testing"
+        working-directory: examples/handler-testing
+        run: dub test --single handler.d
+
       - name: "Example: multiple-handlers"
         working-directory: examples/multiple-handlers
         run: dub -q build
