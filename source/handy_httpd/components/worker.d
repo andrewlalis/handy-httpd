@@ -12,6 +12,11 @@ import std.datetime;
 import std.datetime.stopwatch;
 import httparsed : MsgParser, initParser;
 import slf4d;
+import streams.primitives;
+import streams.interfaces;
+import streams.types.socket;
+import streams.types.concat;
+import streams.types.array;
 
 import handy_httpd.server;
 import handy_httpd.components.handler;
@@ -66,8 +71,10 @@ class ServerWorkerThread : Thread {
                 }
                 Socket clientSocket = nullableSocket.get();
 
+                auto inputStream = SocketInputStream(clientSocket);
+
                 // Then try and parse their request and obtain a request context.
-                Nullable!HttpRequestContext nullableCtx = receiveRequest(clientSocket);
+                Nullable!HttpRequestContext nullableCtx = receiveRequest(inputStream);
                 if (nullableCtx.isNull) {
                     continue;
                 }
@@ -97,7 +104,7 @@ class ServerWorkerThread : Thread {
                 requestParser.msg.reset();
                 
                 // Destroy the request context's allocated objects.
-                destroy!(false)(ctx.request.inputRange);
+                destroy!(false)(ctx.request.inputStream);
                 destroy!(false)(ctx.response.outputRange);
             }
         } catch (Exception e) {
@@ -113,28 +120,26 @@ class ServerWorkerThread : Thread {
      * further handle the request. If null, no further action should be taken
      * beyond closing the socket.
      */
-    private Nullable!HttpRequestContext receiveRequest(Socket clientSocket) {
+    private Nullable!HttpRequestContext receiveRequest(S)(ref S inputStream) if (isByteInputStream!S) {
         auto log = getLogger();
-        ptrdiff_t received = clientSocket.receive(receiveBuffer);
-        log.debugF!"Worker-%d received %d bytes from the client."(this.id, received);
-        if (received == 0 || received == Socket.ERROR) {
-            if (received == Socket.ERROR) {
-                string errorText = lastSocketError();
-                log.errorF!"Worker-%d encountered socket receive failure: %s"(this.id, errorText);
-            }
-            clientSocket.close();
+        StreamResult initialReadResult = inputStream.readFromStream(this.receiveBuffer);
+        if (initialReadResult.hasError) {
+            log.errorF!"Worker-%d encountered socket receive failure: %s"(this.id, initialReadResult.error.message);
+            return Nullable!HttpRequestContext.init;
+        }
+        log.debugF!"Worker-%d received %d bytes from the client."(this.id, initialReadResult.count);
+        if (initialReadResult.count == 0) {
             return Nullable!HttpRequestContext.init; // Skip if we didn't receive valid data.
         }
-        immutable ubyte[] data = receiveBuffer[0..received].idup;
+        immutable ubyte[] data = receiveBuffer[0 .. initialReadResult.count].idup;
 
         // Prepare the request context by parsing the HttpRequest, and preparing the context.
         try {
             auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
             log.debugF!"Worker-%d parsed first %d bytes as the HTTP request."(this.id, requestAndSize[1]);
-            return nullable(prepareRequestContext(requestAndSize[0], requestAndSize[1], received, clientSocket));
+            return nullable(prepareRequestContext(requestAndSize[0], requestAndSize[1], initialReadResult.count, inputStream));
         } catch (Exception e) {
             log.warnF!"Worker-%d failed to parse HTTP request: %s"(this.id, e.msg);
-            clientSocket.close();
             return Nullable!HttpRequestContext.init;
         }
     }
@@ -149,20 +154,25 @@ class ServerWorkerThread : Thread {
      *   socket = The socket that connected.
      * Returns: A request context that is ready handling.
      */
-    private HttpRequestContext prepareRequestContext(
+    private HttpRequestContext prepareRequestContext(S)(
         HttpRequest parsedRequest,
         size_t bytesRead,
         size_t bytesReceived,
-        Socket socket
-    ) {
+        ref S inputStream
+    ) if (isByteInputStream!S) {
         HttpRequestContext ctx = HttpRequestContext(
             parsedRequest,
             HttpResponse(),
             this.server,
             this
         );
-        ctx.request.inputRange = new SocketInputRange(socket, getReceiveBuffer(), bytesRead, bytesReceived);
-        ctx.response.outputRange = new SocketOutputRange(socket);
+
+        auto concatStream = concatInputStreamFor!(ArrayInputStream!ubyte, SocketInputStream)(
+            arrayInputStreamFor(this.receiveBuffer[bytesRead .. bytesReceived]),
+            inputStream
+        );
+        ctx.request.inputStream = inputStreamWrapperFor(concatStream);
+        // ctx.response.outputRange = new SocketOutputRange(socket);
         foreach (headerName, headerValue; this.server.config.defaultHeaders) {
             ctx.response.addHeader(headerName, headerValue);
         }

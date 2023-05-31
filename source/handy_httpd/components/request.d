@@ -9,6 +9,9 @@ import std.range : InputRange, isOutputRange, Appender, appender;
 import std.typecons : Nullable, nullable;
 import std.exception;
 import slf4d;
+import streams.primitives;
+import streams.interfaces;
+import streams.functions;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
@@ -50,11 +53,10 @@ struct HttpRequest {
     public string[string] pathParams;
 
     /** 
-     * The input range that can be used to read this request's body in chunks
-     * of `ubyte[]`. It can be null, indicating that this request does not have
-     * a body. In practice, this will usually be a `SocketInputRange`.
+     * The input stream for the request's body. This may be `null` if the
+     * request doesn't have a body.
      */
-    public InputRange!(ubyte[]) inputRange;
+    public InputStream!ubyte inputStream;
 
     /** 
      * Tests if this request has a header with the given name.
@@ -186,17 +188,17 @@ struct HttpRequest {
      *                       infinitely if no Content-Length header is provided.
      * Returns: The number of bytes that were read.
      */
-    public ulong readBody(R)(R outputRange, bool allowInfiniteRead = false) if (isOutputRange!(R, ubyte[])) {
+    public ulong readBody(S)(ref S outputStream, bool allowInfiniteRead = false) if (isByteOutputStream!S) {
         const string* contentLengthStrPtr = "Content-Length" in headers;
         // If we're not allowed to read infinitely, and no content-length is given, don't attempt to read.
         if (!allowInfiniteRead && contentLengthStrPtr is null) {
             return 0;
         }
-        long contentLength = -1;
+        Nullable!ulong contentLength;
         if (contentLengthStrPtr !is null) {
             import std.conv : to, ConvException;
             try {
-                contentLength = (*contentLengthStrPtr).to!long;
+                contentLength = nullable((*contentLengthStrPtr).to!ulong);
             } catch (ConvException e) {
                 // Invalid formatting for content-length header.
                 // If we don't allow infinite reading, quit 0.
@@ -205,7 +207,7 @@ struct HttpRequest {
                 }
             }
         }
-        return this.readBody!(R)(outputRange, contentLength);
+        return this.readBody!(S)(outputStream, contentLength);
     }
 
     unittest {
@@ -238,35 +240,34 @@ struct HttpRequest {
         assert(app3[] == [cast(ubyte[]) body3]);
     }
 
-    /** 
-     * Internal helper method for reading the body of a request.
-     * Params:
-     *   outputRange = The output range to supply chunks of `ubyte[]` to.
-     *   expectedLength = The expected size of the body to read. If this is
-     *                    set to -1, then we'll read until there's nothing
-     *                    left. Otherwise, we'll read as many bytes as given.
-     * Returns: The number of bytes that were read.
-     */
-    private ulong readBody(R)(R outputRange, long expectedLength) if (isOutputRange!(R, ubyte[])) {
-        auto log = getLogger();
-        log.debugF!"Reading request body. Expected length: %d"(expectedLength);
+    private ulong readBody(S)(
+        ref S outputStream,
+        Nullable!ulong expectedLength
+    ) if (isByteOutputStream!S) {
         import std.algorithm : min;
-        bool hasExpectedLength = expectedLength != -1;
-        ulong bytesRead = 0;
 
-        while (!this.inputRange.empty() && (!hasExpectedLength || bytesRead < expectedLength)) {
-            ubyte[] data = this.inputRange.front();
-            ulong bytesLeftToRead = expectedLength - bytesRead;
-            size_t bytesToConsume = min(bytesLeftToRead, data.length);
-            outputRange.put(data[0 .. bytesToConsume]);
-            bytesRead += bytesToConsume;
-            this.inputRange.popFront();
-            log.debugF!"Consumed %d bytes."(bytesToConsume);
+        const uint BUFFER_SIZE = 8192;
+        auto log = getLogger();
+        log.debugF!"Reading request body. Expected length: %s"(expectedLength);
+        ubyte[BUFFER_SIZE] buffer;
+        ulong bytesRead = 0;
+        
+        while (expectedLength.isNull || bytesRead < expectedLength.get()) {
+            const uint bytesToRead = expectedLength.isNull
+                ? BUFFER_SIZE
+                : min(expectedLength.get() - bytesRead, BUFFER_SIZE);
+            StreamResult readResult = this.inputStream.readFromStream(buffer[0 .. bytesToRead]);
+            if (readResult.hasError) throw new Exception("Stream read error: " ~ cast(string) readResult.error.message);
+
+            StreamResult writeResult = outputStream.writeToStream(buffer[0 .. readResult.count]);
+            if (writeResult.hasError) throw new Exception("Stream write error: " ~ cast(string) writeResult.error.message);
+            if (writeResult.count != readResult.count) {
+                throw new Exception("Couldn't write all bytes to output stream.");
+            }
+            bytesRead += writeResult.count;
         }
-        log.debugF!"Reading completed. Expected length: %d, Bytes read: %d"(expectedLength, bytesRead);
-        if (hasExpectedLength && bytesRead < expectedLength) {
-            throw new Exception("Connection closed before all data could be read.");
-        }
+
+        log.debugF!"Reading completed. Expected length: %s, bytes read: %d"(expectedLength, bytesRead);
         return bytesRead;
     }
 
@@ -278,9 +279,10 @@ struct HttpRequest {
      * Returns: The byte content of the request body.
      */
     public ubyte[] readBodyAsBytes(bool allowInfiniteRead = false) {
-        Appender!(ubyte[]) app = appender!(ubyte[])();
-        readBody(app, allowInfiniteRead);
-        return app[];
+        import streams.types.array;
+        auto sOut = byteArrayOutputStream();
+        readBody(sOut, allowInfiniteRead);
+        return sOut.toArray();
     }
 
     /** 
@@ -290,9 +292,8 @@ struct HttpRequest {
      * Returns: The string contents of the request body.
      */
     public string readBodyAsString(bool allowInfiniteRead = false) {
-        Appender!string app = appender!string();
-        readBody(app, allowInfiniteRead);
-        return app[];
+        ubyte[] bytes = readBodyAsBytes(allowInfiniteRead);
+        return cast(string) bytes;
     }
 
     /** 
@@ -303,8 +304,8 @@ struct HttpRequest {
      * Returns: The request body as a JSON node.
      */
     public auto readBodyAsJson(bool allowInfiniteRead = false) {
-        import std.json;
-        return readBodyAsString(allowInfiniteRead).parseJSON();
+        import std.json : parseJSON;
+        return parseJSON(readBodyAsString(allowInfiniteRead));
     }
 
     /** 
@@ -315,22 +316,11 @@ struct HttpRequest {
      * Returns: The size of the received file, in bytes.
      */
     public ulong readBodyToFile(string filename, bool allowInfiniteRead = false) {
-        import std.stdio : File;
-
-        /** 
-         * Simple wrapper for a range that dumps chunks of data into a file.
-         */
-        struct FileOutputRange {
-            File file;
-            void put(ubyte[] data) {
-                file.rawWrite(data);
-            }
-        }
-
-        File file = File(filename, "wb");
-        FileOutputRange output = FileOutputRange(file);
-        ulong bytesRead = readBody(output, allowInfiniteRead);
-        file.close();
+        import streams.types.file;
+        import std.string : toStringz;
+        auto sOut = FileOutputStream(toStringz(filename));
+        ulong bytesRead = readBody(sOut, allowInfiniteRead);
+        sOut.closeStream();
         return bytesRead;
     }
 }
