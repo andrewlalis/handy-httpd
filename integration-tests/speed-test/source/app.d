@@ -6,8 +6,7 @@ import core.cpuid;
 import core.thread;
 
 int main() {
-	auto prov = new shared DefaultProvider(false, Levels.TRACE);
-	prov.getLoggerFactory().setModuleLevel("handy_httpd", Levels.WARN);
+	auto prov = new shared DefaultProvider(false, Levels.ERROR);
 	configureLoggingProvider(prov);
 	auto log = getLogger();
 
