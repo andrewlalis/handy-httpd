@@ -122,3 +122,15 @@ After setting a status and headers, you can write the response body. This can be
 | [writeBody](ddoc-handy_httpd.components.response.HttpResponse.writeBodyRange) | Writes the response body using data taken from an input stream of bytes. The size and content type must be explicitly specified before anything is written. |
 | [writeBodyBytes](ddoc-handy_httpd.components.response.HttpResponse.writeBodyBytes) | Writes the given bytes to the response body. You can optionally specify a content type, or it'll default to `application/octet-stream`. |
 | [writeBodyString](ddoc-handy_httpd.components.response.HttpResponse.writeBodyString) | Writes the given text to the response body. You can optionally specify a content type, or it'll default to `text/plain; charset=utf-8`. |
+
+## IO
+
+For IO operations while handling requests, Handy-Httpd uses the [streams](https://github.com/andrewlalis/streams) library. It offers a simple interface for input and output stream primitives, and is generally a bit more extensible than the ranges that are present in the Phobos standard library.
+
+**Input streams** read from some underlying resource. In the case of HTTP, that mostly means that when we receive a request, we construct a `SocketInputStream` around the TCP socket we're using for the connection.
+
+Conversely, **output streams** write to some underlying resource, and again, since we're talking HTTP, that means we use a `SocketOutputStream` to write bytes to the TCP socket.
+
+The `read...` and `write...` methods of the [HttpRequest](ddoc-handy_httpd.components.request.HttpRequest) and the [HttpResponse](ddoc-handy_httpd.components.response.HttpResponse), respectively, are just wrappers around the underlying `readFromStream` and `writeToStream` methods of the input and output streams.
+
+> For a more in-depth explanation, please read the documentation available at the streams library's source.
