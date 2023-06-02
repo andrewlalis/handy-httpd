@@ -35,6 +35,7 @@ class ServerWorkerThread : Thread {
     private MsgParser!Msg requestParser = initParser!Msg();
     private ubyte[] receiveBuffer;
     private HttpServer server;
+    private Logger logger;
 
     /** 
      * Constructs this worker thread for the given server, with the given id.
@@ -48,6 +49,7 @@ class ServerWorkerThread : Thread {
         this.id = id;
         this.receiveBuffer = new ubyte[server.config.receiveBufferSize];
         this.server = server;
+        this.logger = getLogger(super.name());
     }
 
     /** 
@@ -59,11 +61,10 @@ class ServerWorkerThread : Thread {
      * 3. Handle the request using the server's handler.
      */
     private void run() {
-        auto log = getLogger();
         try {
             while (server.isReady) {
                 // First try and get a socket to the client.
-                log.debugF!"Worker-%d waiting for the next client."(this.id);
+                this.logger.debug_("Waiting for the next client.");
                 Nullable!Socket nullableSocket = server.waitForNextClient();
                 if (nullableSocket.isNull) {
                     continue;
@@ -76,30 +77,30 @@ class ServerWorkerThread : Thread {
                 // Then try and parse their request and obtain a request context.
                 Nullable!HttpRequestContext nullableCtx = receiveRequest(&inputStream, &outputStream);
                 if (nullableCtx.isNull) {
-                    debugF!"Worker-%d skipping this request because we couldn't get a context."(this.id);
+                    this.logger.debug_("Skipping this request because we couldn't get a context.");
                     continue;
                 }
                 HttpRequestContext ctx = nullableCtx.get();
 
                 // Then handle the request using the server's handler.
-                log.infoF!"Request: Method=%s URL=\"%s\""(ctx.request.method, ctx.request.url);
+                this.logger.infoF!"Request: Method=%s, URL=\"%s\""(ctx.request.method, ctx.request.url);
                 try {
                     this.server.getHandler.handle(ctx);
                     if (!ctx.response.isFlushed) {
                         ctx.response.flushHeaders();
                     }
                 } catch (Exception e) {
-                    log.debugF!"Encountered exception %s while handling request: %s"(e.classinfo.name, e.msg);
+                    this.logger.debugF!"Encountered exception %s while handling request: %s"(e.classinfo.name, e.msg);
                     try {
                         this.server.getExceptionHandler.handle(ctx, e);
                     } catch (Exception e2) {
-                        log.error("Exception occurred in the server's exception handler.", e2);
+                        this.logger.error("Exception occurred in the server's exception handler.", e2);
                     }
                 }
                 clientSocket.shutdown(SocketShutdown.BOTH);
                 clientSocket.close();
 
-                log.infoF!"%d %s"(ctx.response.status.code, ctx.response.status.text);
+                this.logger.infoF!"Response: Status=%d %s"(ctx.response.status.code, ctx.response.status.text);
 
                 // Reset the request parser so we're ready for the next request.
                 requestParser.msg.reset();
@@ -109,7 +110,7 @@ class ServerWorkerThread : Thread {
                 destroy!(false)(ctx.response.outputStream);
             }
         } catch (Exception e) {
-            log.error(e);
+            this.logger.error(e);
         }
     }
 
@@ -126,13 +127,12 @@ class ServerWorkerThread : Thread {
         StreamIn inputStream,
         StreamOut outputStream
     ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
-        auto log = getLogger();
         StreamResult initialReadResult = inputStream.readFromStream(this.receiveBuffer);
         if (initialReadResult.hasError) {
-            log.errorF!"Worker-%d encountered socket receive failure: %s"(this.id, initialReadResult.error.message);
+            this.logger.errorF!"Encountered socket receive failure: %s"(initialReadResult.error.message);
             return Nullable!HttpRequestContext.init;
         }
-        log.debugF!"Worker-%d received %d bytes from the client."(this.id, initialReadResult.count);
+        this.logger.debugF!"Received %d bytes from the client."(initialReadResult.count);
         if (initialReadResult.count == 0) {
             return Nullable!HttpRequestContext.init; // Skip if we didn't receive valid data.
         }
@@ -141,7 +141,7 @@ class ServerWorkerThread : Thread {
         // Prepare the request context by parsing the HttpRequest, and preparing the context.
         try {
             auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
-            log.debugF!"Worker-%d parsed first %d bytes as the HTTP request."(this.id, requestAndSize[1]);
+            this.logger.debugF!"Parsed first %d bytes as the HTTP request."(requestAndSize[1]);
             return nullable(prepareRequestContext(
                 requestAndSize[0],
                 requestAndSize[1],
@@ -150,7 +150,7 @@ class ServerWorkerThread : Thread {
                 outputStream
             ));
         } catch (Exception e) {
-            log.warnF!"Worker-%d failed to parse HTTP request: %s"(this.id, e.msg);
+            this.logger.warnF!"Failed to parse HTTP request: %s"(e.msg);
             return Nullable!HttpRequestContext.init;
         }
     }
@@ -185,8 +185,7 @@ class ServerWorkerThread : Thread {
             inputStream
         ));
         ctx.response.outputStream = outputStreamObjectFor(outputStream);
-        traceF!"Worker-%d preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
-            this.id,
+        this.logger.traceF!"Preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
             ctx.request.inputStream,
             ctx.response.outputStream
         );
