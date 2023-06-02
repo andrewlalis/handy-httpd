@@ -5,18 +5,18 @@ module handy_httpd.components.responses;
 
 import handy_httpd.components.response;
 import handy_httpd.components.handler : HttpRequestContext;
-import std.range.interfaces : InputRange;
+import streams;
 
 void respond(
     ref HttpResponse response,
     HttpStatus status,
-    InputRange!(ubyte[]) bodyInputRange,
+    InputStream!ubyte bodyInputStream,
     ulong bodySize,
     string bodyContentType
 ) {
     response.setStatus(status);
-    if (bodyInputRange !is null) {
-        response.writeBodyRange(bodyInputRange, bodySize, bodyContentType);
+    if (bodyInputStream !is null) {
+        response.writeBody(bodyInputStream, bodySize, bodyContentType);
     }
 }
 
@@ -107,16 +107,15 @@ static foreach (member; EnumMembers!HttpStatus) {
  */
 void fileResponse(ref HttpResponse response, string filename, string type) {
     import std.file;
-    import std.stdio;
     import std.conv : to;
+    import std.string : toStringz;
     if (!exists(filename)) {
         response.setStatus(HttpStatus.NOT_FOUND);
         response.addHeader("Content-Type", type).flushHeaders();
     } else {
         response.setStatus(HttpStatus.OK);
-        auto file = File(filename, "r");
-        ulong size = file.size();
+        ulong size = getSize(filename);
         // Flush the headers, and begin streaming the file directly.
-        response.writeBodyRange(file.byChunk(8192), size, type);
+        response.writeBody(FileInputStream(toStringz(filename)), size, type);
     }
 }

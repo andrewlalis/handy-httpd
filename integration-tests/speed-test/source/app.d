@@ -6,7 +6,7 @@ import core.cpuid;
 import core.thread;
 
 int main() {
-	auto prov = new shared DefaultProvider(false);
+	auto prov = new shared DefaultProvider(false, Levels.TRACE);
 	prov.getLoggerFactory().setModuleLevel("handy_httpd", Levels.WARN);
 	configureLoggingProvider(prov);
 	auto log = getLogger();
@@ -58,10 +58,9 @@ int main() {
 }
 
 HttpServer getTestingServer() {
-	auto log = getLogger();
 	ServerConfig config = ServerConfig.defaultValues();
 	config.workerPoolSize = threadsPerCPU / 2;
-	log.infoF!"Starting testing server with %d workers."(config.workerPoolSize);
+	infoF!"Starting testing server with %d workers."(config.workerPoolSize);
 	config.port = 8080;
 
 	return new HttpServer((ref ctx) {

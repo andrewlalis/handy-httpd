@@ -3,14 +3,13 @@
  */
 module handy_httpd.components.response;
 
-import handy_httpd.util.range;
-
 import std.array;
 import std.string : format, representation;
 import std.conv;
 import std.socket : Socket;
 import std.range;
 import slf4d;
+import streams;
 
 /** 
  * The data that the HTTP server will send back to clients.
@@ -32,10 +31,9 @@ struct HttpResponse {
     private bool flushed = false;
 
     /** 
-     * The output range that the response body will be written to. In practice
-     * this will usually be a `SocketOutputRange`.
+     * The output stream that the response body will be written to.
      */
-    public OutputRange!(ubyte[]) outputRange;
+    public OutputStream!ubyte outputStream;
 
     /** 
      * Sets the status of the response. This can only be done before headers
@@ -73,6 +71,7 @@ struct HttpResponse {
      * information can no longer be modified.
      */
     public void flushHeaders() {
+        debug_("Flushing response headers.");
         if (flushed) {
             warn("Attempted to flush headers after the response has already been flushed.");
         }
@@ -82,39 +81,32 @@ struct HttpResponse {
             app ~= format!"%s: %s\r\n"(name, value);
         }
         app ~= "\r\n";
-        this.outputRange.put(cast(ubyte[]) app[]);
+        StreamResult result = this.outputStream.writeToStream(cast(ubyte[]) app[]);
+        if (result.hasError) {
+            throw new Exception("Failed to write headers to output stream: " ~ cast(string) result.error.message);
+        }
         flushed = true;
     }
 
-    /** 
-     * Writes the body of the response using data obtained from the given
-     * input range. Note that it is required to specify the size of the data
-     * to write beforehand, since we should always send a Content-Length header
-     * to the client.
+    /**
+     * Writes the given input stream of bytes to the response's body.
      * Params:
-     *   inputRange = The input range to send data from.
-     *   size = The pre-computed size of the content.
-     *   contentType = The content type of the response.
+     *   stream = The stream of bytes to write to the output.
+     *   size = The size of the response. This must be known beforehand to set
+     *          the "Content-Length" header.
+     *   contentType = The content type of the bytes.
      */
-    public void writeBodyRange(R)(R inputRange, ulong size, string contentType) if (isInputRangeOf!(R, ubyte[])) {
+    public void writeBody(S)(S stream, ulong size, string contentType) if (isByteInputStream!S) {
         if (!flushed) {
             addHeader("Content-Length", size.to!string);
             addHeader("Content-Type", contentType);
             flushHeaders();
         }
-        ulong bytesWritten = 0;
-        while (!inputRange.empty) {
-            ulong bytesToWrite = size - bytesWritten;
-            ubyte[] data = inputRange.front();
-            // We can safely cast the length to an integer, since it is a buffer size.
-            uint idx = cast(uint) data.length;
-            if (idx > bytesToWrite) {
-                idx = cast(uint) bytesToWrite; // This is safe since we know that bytesToWrite is small.
-            }
-            this.outputRange.put(data[0 .. idx]);
-            bytesWritten += idx;
-            inputRange.popFront();
+        StreamResult result = transferTo(stream, this.outputStream, Optional!ulong(size));
+        if (result.hasError) {
+            throw new Exception("Failed to write body to output stream: " ~ cast(string) result.error.message);
         }
+        debugF!"Wrote %d bytes to response output stream."(result.count);
     }
 
     /** 
@@ -126,7 +118,7 @@ struct HttpResponse {
      *   contentType = The content type of the data.
      */
     public void writeBodyBytes(ubyte[] data, string contentType = "application/octet-stream") {
-        this.writeBodyRange([data], data.length, contentType);
+        this.writeBody(arrayInputStreamFor(data), data.length, contentType);
     }
 
     /** 
