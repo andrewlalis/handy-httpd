@@ -7,6 +7,8 @@ on:
       - source/**
       - docs/**
       - examples/**
+      - integration-tests/**
+      - .github/workflows/deploy-docs.yml
 
   workflow_dispatch:
 

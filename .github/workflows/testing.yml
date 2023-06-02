@@ -9,6 +9,7 @@ on:
     paths:
       - source/**
       - examples/**
+      - integration-tests/**
       - .github/workflows/testing.yml
   pull_request:
     branches: ["main"]

@@ -6,7 +6,7 @@ import core.cpuid;
 import core.thread;
 
 int main() {
-	auto prov = new shared DefaultProvider(false, Levels.ERROR);
+	auto prov = new shared DefaultProvider(false, Levels.INFO);
 	configureLoggingProvider(prov);
 	auto log = getLogger();
 
