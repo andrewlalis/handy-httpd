@@ -80,7 +80,7 @@ Some requests that your server receives may include a body, which is any content
 
 | <div style="width: 150px;">Method</div> | Description |
 |---     |---          |
-| [readBody](ddoc-handy_httpd.components.request.HttpRequest.readBody) | Reads the request body, and passes it in chunks to the given output range. Unless you explicitly enable *infinite reading*, it will respect the request's `Content-Length` header, and if no such header is present, nothing will be read. |
+| [readBody](ddoc-handy_httpd.components.request.HttpRequest.readBody) | Reads the request body, and writes it to a given output stream. Unless you explicitly enable *infinite reading*, it will respect the request's `Content-Length` header, and if no such header is present, nothing will be read. |
 | [readBodyAsBytes](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsBytes) | Reads the entire request body to a byte array. |
 | [readBodyAsString](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsString) | Reads the entire request body to a string. |
 | [readBodyAsJson](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsJson) | Reads the entire request body as a [JSONValue](https://dlang.org/phobos/std_json.html#.JSONValue). |
@@ -119,6 +119,6 @@ After setting a status and headers, you can write the response body. This can be
 
 | <div style="width: 150px;">Method</div> | Description |
 |---     |---          |
-| [writeBodyRange](ddoc-handy_httpd.components.response.HttpResponse.writeBodyRange) | Writes the response body using data taken from an input range that supplies `ubyte[]` chunks. The size and content type must be explicitly specified before anything is written. |
+| [writeBody](ddoc-handy_httpd.components.response.HttpResponse.writeBodyRange) | Writes the response body using data taken from an input stream of bytes. The size and content type must be explicitly specified before anything is written. |
 | [writeBodyBytes](ddoc-handy_httpd.components.response.HttpResponse.writeBodyBytes) | Writes the given bytes to the response body. You can optionally specify a content type, or it'll default to `application/octet-stream`. |
 | [writeBodyString](ddoc-handy_httpd.components.response.HttpResponse.writeBodyString) | Writes the given text to the response body. You can optionally specify a content type, or it'll default to `text/plain; charset=utf-8`. |

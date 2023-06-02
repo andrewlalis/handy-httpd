@@ -8,7 +8,6 @@ module handy_httpd.handlers.profiling_handler;
 import handy_httpd.components.handler;
 import handy_httpd.components.request;
 
-import std.container : DList;
 import std.algorithm;
 import std.datetime;
 
@@ -99,8 +98,10 @@ interface ProfilingDataHandler {
  * detailed message with aggregate statistics.
  */
 class LoggingProfilingDataHandler : ProfilingDataHandler {
+    import std.range;
+
     private const size_t cacheMaxSize;
-    private DList!RequestInfo cache;
+    private RequestInfo[] cache;
     private size_t cacheSize;
 
     private Level emitLevel;
@@ -126,10 +127,10 @@ class LoggingProfilingDataHandler : ProfilingDataHandler {
         );
         synchronized(this) {
             if (cacheSize == cacheMaxSize) {
-                cache.removeBack();
+                cache = cache[0 .. $ - 1];
                 cacheSize--;
             }
-            cache.insertFront(info);
+            cache = info ~ cache;
             cacheSize++;
             requestCount++;
             if (requestCount == detailEmitInterval) {
