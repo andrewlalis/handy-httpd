@@ -226,7 +226,6 @@ class PathDelegatingHandler : HttpRequestHandler {
         import handy_httpd.server;
         import handy_httpd.components.responses;
         import handy_httpd.util.builders;
-        import handy_httpd.util.range;
 
         // import slf4d;
         // import slf4d.default_provider;

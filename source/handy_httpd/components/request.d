@@ -5,13 +5,10 @@ module handy_httpd.components.request;
 
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
-import std.range : InputRange, isOutputRange, Appender, appender;
 import std.typecons : Nullable, nullable;
 import std.exception;
 import slf4d;
-import streams.primitives;
-import streams.interfaces;
-import streams.functions;
+import streams;
 
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
@@ -45,18 +42,25 @@ struct HttpRequest {
      */
     public const string[string] params;
 
-    /** 
+    /**
      * An associative array containing any path parameters obtained from the
      * request url. These are only populated in cases where it is possible to
      * parse path parameters, such as with a PathDelegatingHandler.
      */
     public string[string] pathParams;
 
-    /** 
+    /**
      * The input stream for the request's body. This may be `null` if the
      * request doesn't have a body.
      */
     public InputStream!ubyte inputStream;
+
+    /**
+     * The pre-allocated buffer that we'll use when receiving the rest of this
+     * request's body, if it has one. This buffer belongs to the worker that
+     * is handling the request.
+     */
+    public ubyte[] receiveBuffer;
 
     /** 
      * Tests if this request has a header with the given name.
@@ -173,17 +177,14 @@ struct HttpRequest {
     }
 
     /** 
-     * Reads the entirety of the request body, and passes it in chunks to the
-     * given output range.
-     * 
-     * Throws a `SocketException` if an unrecoverable error occurs and the
-     * reading cannot continue (such as a socket error or closed connection).
+     * Reads the entirety of the request body, and passes it to the given
+     * output stream.
      *
      * Throws an exception if the connection is closed before the expected
      * data can be read (if a Content-Length header is given).
      *
      * Params:
-     *   outputRange = An output range that accepts chunks of `ubyte[]`.
+     *   outputStream = An output byte stream to write the body to.
      *   allowInfiniteRead = Whether to allow the function to read potentially
      *                       infinitely if no Content-Length header is provided.
      * Returns: The number of bytes that were read.
@@ -200,6 +201,7 @@ struct HttpRequest {
             try {
                 contentLength = nullable((*contentLengthStrPtr).to!ulong);
             } catch (ConvException e) {
+                warnF!"Caught ConvException: %s; while parsing Content-Length header: %s"(e.msg, *contentLengthStrPtr);
                 // Invalid formatting for content-length header.
                 // If we don't allow infinite reading, quit 0.
                 if (!allowInfiniteRead) {
@@ -212,62 +214,78 @@ struct HttpRequest {
 
     unittest {
         import std.conv;
-        import std.range;
         import handy_httpd.util.builders;
 
         // Test case 1: Simply reading a string.
         string body1 = "Hello world!";
         HttpRequest r1 = new HttpRequestBuilder().withBody(body1).build();
-        auto app1 = appender!(ubyte[][]);
-        ulong bytesRead1 = r1.readBody(app1);
+        auto sOut1 = byteArrayOutputStream();
+        ulong bytesRead1 = r1.readBody(sOut1);
         assert(bytesRead1 == body1.length);
-        assert(app1[] == [cast(ubyte[]) body1]);
+        assert(sOut1.toArrayRaw() == cast(ubyte[]) body1);
 
         // Test case 2: Missing Content-Length header, so we don't read anything.
         string body2 = "Goodbye, world.";
         HttpRequest r2 = new HttpRequestBuilder().withBody(body2).withoutHeader("Content-Length").build();
-        auto app2 = appender!(ubyte[][]);
-        ulong bytesRead2 = r2.readBody(app2);
+        auto sOut2 = byteArrayOutputStream();
+        ulong bytesRead2 = r2.readBody(sOut2);
         assert(bytesRead2 == 0);
-        assert(app2[] == []);
+        assert(sOut2.toArrayRaw().length == 0);
 
         // Test case 3: Missing Content-Length header but we allow infinite reading.
         string body3 = "Hello moon!";
         HttpRequest r3 = new HttpRequestBuilder().withBody(body3).withoutHeader("Content-Length").build();
-        auto app3 = appender!(ubyte[][]);
-        ulong bytesRead3 = r3.readBody(app3, true);
+        auto sOut3 = byteArrayOutputStream();
+        ulong bytesRead3 = r3.readBody(sOut3, true);
         assert(bytesRead3 == body3.length);
-        assert(app3[] == [cast(ubyte[]) body3]);
+        assert(sOut3.toArrayRaw() == cast(ubyte[]) body3);
     }
 
+    /** 
+     * Internal helper function to read a body when we may or may not be
+     * expecting a certain length.
+     * Params:
+     *   outputStream = The output stream to transfer to.
+     *   expectedLength = The expected length.
+     * Returns: The number of bytes read.
+     */
     private ulong readBody(S)(
         ref S outputStream,
         Nullable!ulong expectedLength
     ) if (isByteOutputStream!S) {
         import std.algorithm : min;
 
-        const uint BUFFER_SIZE = 8192;
-        auto log = getLogger();
-        log.debugF!"Reading request body. Expected length: %s"(expectedLength);
-        ubyte[BUFFER_SIZE] buffer;
+        debugF!"Reading request body. Expected length: %s"(expectedLength);
         ulong bytesRead = 0;
         
         while (expectedLength.isNull || bytesRead < expectedLength.get()) {
             const uint bytesToRead = expectedLength.isNull
-                ? BUFFER_SIZE
-                : min(expectedLength.get() - bytesRead, BUFFER_SIZE);
-            StreamResult readResult = this.inputStream.readFromStream(buffer[0 .. bytesToRead]);
-            if (readResult.hasError) throw new Exception("Stream read error: " ~ cast(string) readResult.error.message);
+                ? cast(uint) this.receiveBuffer.length
+                : min(expectedLength.get() - bytesRead, cast(uint)this.receiveBuffer.length);
+            StreamResult readResult = this.inputStream.readFromStream(this.receiveBuffer[0 .. bytesToRead]);
+            if (readResult.hasError) {
+                throw new Exception("Stream read error: " ~ cast(string) readResult.error.message);
+            }
+            traceF!"Received %d bytes when attempting to read at least %d."(readResult.count, bytesToRead);
+            if (readResult.count == 0) break;
 
-            StreamResult writeResult = outputStream.writeToStream(buffer[0 .. readResult.count]);
-            if (writeResult.hasError) throw new Exception("Stream write error: " ~ cast(string) writeResult.error.message);
+            StreamResult writeResult = outputStream.writeToStream(this.receiveBuffer[0 .. readResult.count]);
+            if (writeResult.hasError) {
+                static if (isClosableStream!S) {
+                    OptionalStreamError closeError = outputStream.closeStream();
+                    if (closeError.present) {
+                        errorF!"Failed to close output stream after write error: %s"(closeError.value.message);
+                    }
+                }
+                throw new Exception("Stream write error: " ~ cast(string) writeResult.error.message);
+            }
             if (writeResult.count != readResult.count) {
                 throw new Exception("Couldn't write all bytes to output stream.");
             }
             bytesRead += writeResult.count;
         }
 
-        log.debugF!"Reading completed. Expected length: %s, bytes read: %d"(expectedLength, bytesRead);
+        debugF!"Reading completed. Expected length: %s, bytes read: %d"(expectedLength, bytesRead);
         return bytesRead;
     }
 
@@ -316,7 +334,6 @@ struct HttpRequest {
      * Returns: The size of the received file, in bytes.
      */
     public ulong readBodyToFile(string filename, bool allowInfiniteRead = false) {
-        import streams.types.file;
         import std.string : toStringz;
         auto sOut = FileOutputStream(toStringz(filename));
         ulong bytesRead = readBody(sOut, allowInfiniteRead);

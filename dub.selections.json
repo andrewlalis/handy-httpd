@@ -3,6 +3,6 @@
 	"versions": {
 		"httparsed": "1.2.1",
 		"slf4d": "2.2.0",
-		"streams": "2.2.0"
+		"streams": "3.2.0"
 	}
 }

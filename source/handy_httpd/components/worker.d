@@ -23,7 +23,6 @@ import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
-import handy_httpd.util.range;
 
 import std.stdio;
 
@@ -72,16 +71,18 @@ class ServerWorkerThread : Thread {
                 Socket clientSocket = nullableSocket.get();
 
                 auto inputStream = SocketInputStream(clientSocket);
+                auto outputStream = SocketOutputStream(clientSocket);
 
                 // Then try and parse their request and obtain a request context.
-                Nullable!HttpRequestContext nullableCtx = receiveRequest(inputStream);
+                Nullable!HttpRequestContext nullableCtx = receiveRequest(&inputStream, &outputStream);
                 if (nullableCtx.isNull) {
+                    debugF!"Worker-%d skipping this request because we couldn't get a context."(this.id);
                     continue;
                 }
                 HttpRequestContext ctx = nullableCtx.get();
 
                 // Then handle the request using the server's handler.
-                log.infoF!"%s %s"(ctx.request.method, ctx.request.url);
+                log.infoF!"Request: Method=%s URL=\"%s\""(ctx.request.method, ctx.request.url);
                 try {
                     this.server.getHandler.handle(ctx);
                     if (!ctx.response.isFlushed) {
@@ -105,7 +106,7 @@ class ServerWorkerThread : Thread {
                 
                 // Destroy the request context's allocated objects.
                 destroy!(false)(ctx.request.inputStream);
-                destroy!(false)(ctx.response.outputRange);
+                destroy!(false)(ctx.response.outputStream);
             }
         } catch (Exception e) {
             log.error(e);
@@ -115,12 +116,16 @@ class ServerWorkerThread : Thread {
     /** 
      * Attempts to receive an HTTP request from the given socket.
      * Params:
-     *   clientSocket = The socket to receive from.
+     *   inputStream = The input stream to read the request from.
+     *   outputStream = The output stream to write response content to.
      * Returns: A nullable request context, which if present, can be used to
      * further handle the request. If null, no further action should be taken
      * beyond closing the socket.
      */
-    private Nullable!HttpRequestContext receiveRequest(S)(ref S inputStream) if (isByteInputStream!S) {
+    private Nullable!HttpRequestContext receiveRequest(StreamIn, StreamOut)(
+        StreamIn inputStream,
+        StreamOut outputStream
+    ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
         auto log = getLogger();
         StreamResult initialReadResult = inputStream.readFromStream(this.receiveBuffer);
         if (initialReadResult.hasError) {
@@ -137,7 +142,13 @@ class ServerWorkerThread : Thread {
         try {
             auto requestAndSize = handy_httpd.components.parse_utils.parseRequest(requestParser, cast(string) data);
             log.debugF!"Worker-%d parsed first %d bytes as the HTTP request."(this.id, requestAndSize[1]);
-            return nullable(prepareRequestContext(requestAndSize[0], requestAndSize[1], initialReadResult.count, inputStream));
+            return nullable(prepareRequestContext(
+                requestAndSize[0],
+                requestAndSize[1],
+                initialReadResult.count,
+                inputStream,
+                outputStream
+            ));
         } catch (Exception e) {
             log.warnF!"Worker-%d failed to parse HTTP request: %s"(this.id, e.msg);
             return Nullable!HttpRequestContext.init;
@@ -151,28 +162,34 @@ class ServerWorkerThread : Thread {
      *   parsedRequest = The parsed request.
      *   bytesRead = The number of bytes read during request parsing.
      *   bytesReceived = The number of bytes initially received.
-     *   socket = The socket that connected.
-     * Returns: A request context that is ready handling.
+     *   inputStream = The stream to read the request from.
+     *   outputStream = The stream to write response content to.
+     * Returns: A request context that is ready for handling.
      */
-    private HttpRequestContext prepareRequestContext(S)(
+    private HttpRequestContext prepareRequestContext(StreamIn, StreamOut)(
         HttpRequest parsedRequest,
         size_t bytesRead,
         size_t bytesReceived,
-        ref S inputStream
-    ) if (isByteInputStream!S) {
+        StreamIn inputStream,
+        StreamOut outputStream
+    ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
         HttpRequestContext ctx = HttpRequestContext(
             parsedRequest,
             HttpResponse(),
             this.server,
             this
         );
-
-        auto concatStream = concatInputStreamFor!(ArrayInputStream!ubyte, SocketInputStream)(
+        ctx.request.receiveBuffer = this.receiveBuffer;
+        ctx.request.inputStream = inputStreamObjectFor(concatInputStreamFor(
             arrayInputStreamFor(this.receiveBuffer[bytesRead .. bytesReceived]),
             inputStream
+        ));
+        ctx.response.outputStream = outputStreamObjectFor(outputStream);
+        traceF!"Worker-%d preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
+            this.id,
+            ctx.request.inputStream,
+            ctx.response.outputStream
         );
-        ctx.request.inputStream = inputStreamWrapperFor(concatStream);
-        // ctx.response.outputRange = new SocketOutputRange(socket);
         foreach (headerName, headerValue; this.server.config.defaultHeaders) {
             ctx.response.addHeader(headerName, headerValue);
         }

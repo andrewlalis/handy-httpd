@@ -7,7 +7,6 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.worker;
 import handy_httpd.server;
-import handy_httpd.util.range;
 
 import std.range : InputRange, OutputRange;
 import slf4d;
