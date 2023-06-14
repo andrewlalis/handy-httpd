@@ -193,6 +193,8 @@ struct HttpRequest {
         const string* contentLengthStrPtr = "Content-Length" in headers;
         // If we're not allowed to read infinitely, and no content-length is given, don't attempt to read.
         if (!allowInfiniteRead && contentLengthStrPtr is null) {
+            warn("Refusing to read request body because allowInfiniteRead is " ~
+            "false and no \"Content-Length\" header exists.");
             return 0;
         }
         Nullable!ulong contentLength;
@@ -205,6 +207,7 @@ struct HttpRequest {
                 // Invalid formatting for content-length header.
                 // If we don't allow infinite reading, quit 0.
                 if (!allowInfiniteRead) {
+                    warn("Refusing to read request body because allowInfiniteRead is false.");
                     return 0;
                 }
             }
