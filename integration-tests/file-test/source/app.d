@@ -7,6 +7,9 @@ import requests;
 import core.thread;
 
 int main() {
+	auto provider = new shared DefaultProvider(true, Levels.TRACE);
+	configureLoggingProvider(provider);
+
 	HttpServer server = getTestingServer();
 	Thread serverThread = new Thread(&server.start);
 	serverThread.start();
