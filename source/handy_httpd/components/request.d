@@ -257,15 +257,25 @@ struct HttpRequest {
         Nullable!ulong expectedLength
     ) if (isByteOutputStream!S) {
         import std.algorithm : min;
+        import std.string : toLower;
 
         debugF!"Reading request body. Expected length: %s"(expectedLength);
+
+        // Set up any necessary stream wrappers depending on the transfer encoding and compression.
+        InputStream!ubyte sIn;
+        if (hasHeader("Transfer-Encoding") && toLower(getHeader("Transfer-Encoding")) == "chunked") {
+            sIn = inputStreamObjectFor(chunkedEncodingInputStreamFor(this.inputStream));
+        } else {
+            sIn = this.inputStream;
+        }
+
         ulong bytesRead = 0;
         
         while (expectedLength.isNull || bytesRead < expectedLength.get()) {
             const uint bytesToRead = expectedLength.isNull
                 ? cast(uint) this.receiveBuffer.length
                 : min(expectedLength.get() - bytesRead, cast(uint)this.receiveBuffer.length);
-            StreamResult readResult = this.inputStream.readFromStream(this.receiveBuffer[0 .. bytesToRead]);
+            StreamResult readResult = sIn.readFromStream(this.receiveBuffer[0 .. bytesToRead]);
             if (readResult.hasError) {
                 throw new Exception("Stream read error: " ~ cast(string) readResult.error.message);
             }
