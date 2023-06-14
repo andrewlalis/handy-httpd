@@ -10,17 +10,18 @@ int main() {
 	HttpServer server = getTestingServer();
 	Thread serverThread = new Thread(&server.start);
 	serverThread.start();
+	scope(exit) {
+		server.stop();
+		serverThread.join();
+	}
 
 	while (!server.isReady()) {
 		info("Waiting for server to come online...");
+		Thread.sleep(msecs(1));
 	}
-
-	info("Online!");
+	info("Testing server is online.");
 
 	testFileUpload();
-
-	server.stop();
-	serverThread.join();
 	
 	return 0;
 }
@@ -42,6 +43,7 @@ HttpServer getTestingServer() {
 	PathDelegatingHandler handler = new PathDelegatingHandler();
 	handler.addMapping("POST", "/upload", (ref HttpRequestContext ctx) {
 		ctx.request.readBodyToFile("uploaded-file.txt");
+		ctx.response.writeBodyString("Thank you!");
 	});
 
 	return new HttpServer(handler, config);
