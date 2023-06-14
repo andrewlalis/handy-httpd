@@ -45,7 +45,10 @@ HttpServer getTestingServer() {
 
 	PathDelegatingHandler handler = new PathDelegatingHandler();
 	handler.addMapping("POST", "/upload", (ref HttpRequestContext ctx) {
-		ctx.request.readBodyToFile("uploaded-file.txt");
+		info("Receiving uploaded file...");
+		infoF!"Headers: %s"(ctx.request.headers);
+		ulong size = ctx.request.readBodyToFile("uploaded-file.txt");
+		infoF!"Received %d bytes"(size);
 		ctx.response.writeBodyString("Thank you!");
 	});
 
