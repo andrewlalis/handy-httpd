@@ -12,7 +12,7 @@
 	"dependencies": {
 		"httparsed": "~>1.2.1",
 		"slf4d": "~>2.2.0",
-		"streams": "~>3.2.0"
+		"streams": "~>3.3.0"
 	},
 	"description": "Extremely lightweight HTTP server for D.",
 	"license": "MIT",
