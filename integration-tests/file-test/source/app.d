@@ -32,10 +32,17 @@ int main() {
 void testFileUpload() {
 	import std.stdio;
 	import std.file;
-	auto f = File("sample-files/sample-1.txt", "rb");
+	import std.format;
+	const originalFile = "sample-files/sample-1.txt";
+	auto f = File(originalFile, "rb");
 	auto content = postContent("http://localhost:8080/upload", f.byChunk(8192), "text/plain");
 	assert(std.file.exists("uploaded-file.txt"));
-	assert(getSize("uploaded-file.txt") == getSize("sample-files/sample-1.txt"));
+	const originalFileSize = getSize(originalFile);
+	const newFileSize = getSize("uploaded-file.txt");
+	assert(
+		originalFileSize == newFileSize,
+		format!"Uploaded file size of %d doesn't match original size of %d."(newFileSize, originalFileSize)
+	);
 }
 
 HttpServer getTestingServer() {
