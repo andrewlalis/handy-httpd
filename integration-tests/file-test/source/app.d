@@ -54,7 +54,7 @@ HttpServer getTestingServer() {
 	handler.addMapping("POST", "/upload", (ref HttpRequestContext ctx) {
 		info("Receiving uploaded file...");
 		infoF!"Headers: %s"(ctx.request.headers);
-		ulong size = ctx.request.readBodyToFile("uploaded-file.txt");
+		ulong size = ctx.request.readBodyToFile("uploaded-file.txt", true);
 		infoF!"Received %d bytes"(size);
 		ctx.response.writeBodyString("Thank you!");
 	});
