@@ -5,7 +5,7 @@ name: Testing
 
 on:
   push:
-    branches: ["main"]
+    branches: ["*"]
     paths:
       - source/**
       - examples/**
@@ -48,6 +48,10 @@ jobs:
 
       - name: "Integration Test: speed-test"
         working-directory: integration-tests/speed-test
+        run: dub -q run
+      
+      - name: "Integration Test: file-test"
+        working-directory: integration-tests/file-test
         run: dub -q run
 
       # Build each example to ensure that they're up-to-date.

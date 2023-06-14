@@ -1,0 +1,15 @@
+{
+	"authors": [
+		"Andrew Lalis"
+	],
+	"copyright": "Copyright © 2023, Andrew Lalis",
+	"description": "Integration tests for various file-oriented operations.",
+	"license": "MIT",
+	"name": "file-test",
+	"dependencies": {
+		"handy-httpd": {
+			"path": "../../"
+		},
+		"requests": "~>2.0.9"
+	}
+}
