@@ -264,6 +264,7 @@ struct HttpRequest {
         // Set up any necessary stream wrappers depending on the transfer encoding and compression.
         InputStream!ubyte sIn;
         if (hasHeader("Transfer-Encoding") && toLower(getHeader("Transfer-Encoding")) == "chunked") {
+            debug_("Request has Transfer-Encoding=chunked, using chunked input stream.");
             sIn = inputStreamObjectFor(chunkedEncodingInputStreamFor(this.inputStream));
         } else {
             sIn = this.inputStream;
@@ -275,6 +276,7 @@ struct HttpRequest {
             const uint bytesToRead = expectedLength.isNull
                 ? cast(uint) this.receiveBuffer.length
                 : min(expectedLength.get() - bytesRead, cast(uint)this.receiveBuffer.length);
+            traceF!"Reading up to %d bytes from stream."(bytesToRead);
             StreamResult readResult = sIn.readFromStream(this.receiveBuffer[0 .. bytesToRead]);
             if (readResult.hasError) {
                 throw new Exception("Stream read error: " ~ cast(string) readResult.error.message);
@@ -348,6 +350,8 @@ struct HttpRequest {
      */
     public ulong readBodyToFile(string filename, bool allowInfiniteRead = false) {
         import std.string : toStringz;
+        import std.file : exists, remove;
+        if (exists(filename)) remove(filename);
         auto sOut = FileOutputStream(toStringz(filename));
         ulong bytesRead = readBody(sOut, allowInfiniteRead);
         sOut.closeStream();
