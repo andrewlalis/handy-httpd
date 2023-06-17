@@ -10,6 +10,6 @@
 		"handy-httpd": {
 			"path": "../../"
 		},
-		"requests": "~>2.0.9"
+		"requests": "~>2.1.0"
 	}
 }

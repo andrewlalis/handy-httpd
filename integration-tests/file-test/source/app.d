@@ -14,7 +14,8 @@ import std.string;
 import core.thread;
 
 int main() {
-	auto provider = new shared DefaultProvider(true, Levels.TRACE);
+	auto provider = new shared DefaultProvider(true, Levels.INFO);
+	provider.getLoggerFactory().setModuleLevel("streams.types", Levels.WARN);
 	configureLoggingProvider(provider);
 
 	HttpServer server = getTestingServer();
@@ -30,13 +31,15 @@ int main() {
 		Thread.sleep(msecs(1));
 	}
 	info("Testing server is online.");
-	Thread.sleep(msecs(10));
+	Thread.sleep(seconds(1));
 	logSep();
 
 	testFileUpload();
+	Thread.sleep(seconds(1));
 	logSep();
 
 	testFileDownload();
+	Thread.sleep(seconds(1));
 	logSep();
 
 	info("All tests completed.");

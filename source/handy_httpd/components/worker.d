@@ -45,7 +45,7 @@ class ServerWorkerThread : Thread {
      */
     this(HttpServer server, int id) {
         super(&run);
-        super.name("handy-httpd_worker-" ~ id.to!string);
+        super.name("handy_httpd_worker-" ~ id.to!string);
         this.id = id;
         this.receiveBuffer = new ubyte[server.config.receiveBufferSize];
         this.server = server;
