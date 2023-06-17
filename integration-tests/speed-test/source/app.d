@@ -7,6 +7,7 @@ import core.thread;
 
 int main() {
 	auto prov = new shared DefaultProvider(false, Levels.INFO);
+	prov.getLoggerFactory().setModuleLevel("handy_http", Levels.WARN);
 	configureLoggingProvider(prov);
 	auto log = getLogger();
 

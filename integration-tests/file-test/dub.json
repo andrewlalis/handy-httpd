@@ -10,6 +10,7 @@
 		"handy-httpd": {
 			"path": "../../"
 		},
-		"requests": "~>2.1.0"
+		"requests": "~>2.1.0",
+		"streams": "~>3.4.0"
 	}
 }
