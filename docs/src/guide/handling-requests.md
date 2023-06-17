@@ -88,6 +88,8 @@ Some requests that your server receives may include a body, which is any content
 
 > Note: While Handy-Httpd doesn't force you to limit the amount of data you read, please be careful when reading an entire request body at once, like with `readBodyAsString`. This will load the entire request body into memory, and **will** crash your program if the body is too large.
 
+Sometimes, the body content of a request may be encoded if the `Transfer-Encoding=chunked` header is provided. In that case, Handy-Httpd will automatically wrap the underlying input stream with one that reads the chunked encoding and provides you with the raw data. In short, you Handy-Httpd will manage chunked encoded requests for you. However, it *will not* automatically apply chunked encoding to your server's responses.
+
 ### Response
 
 Besides the request itself, the request context also contains the [HttpResponse](ddoc-handy_httpd.components.response.HttpResponse) to which your handler will write its response data. Usually, you'll follow the standard sequence of events mentioned above, and you'll:
