@@ -51,8 +51,8 @@ jobs:
         run: dub -q run
       
       - name: "Integration Test: file-test"
-        # working-directory: integration-tests/file-test
-        run: cd integration-tests/file-test && dub -q run
+        working-directory: integration-tests/file-test
+        run: dub -q run
 
       # Build each example to ensure that they're up-to-date.
 
