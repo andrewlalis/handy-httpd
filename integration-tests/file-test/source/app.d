@@ -15,8 +15,8 @@ import core.thread;
 
 int main() {
 	auto provider = new shared DefaultProvider(true, Levels.INFO);
-	provider.getLoggerFactory().setModuleLevel("streams.types", Levels.WARN);
-	provider.getLoggerFactory().setModuleLevel("handy_httpd", Levels.DEBUG);
+	provider.getLoggerFactory().setModuleLevel("streams.types", Levels.TRACE);
+	provider.getLoggerFactory().setModuleLevel("handy_httpd", Levels.TRACE);
 	configureLoggingProvider(provider);
 
 	HttpServer server = getTestingServer();
