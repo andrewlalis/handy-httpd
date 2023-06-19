@@ -60,13 +60,19 @@ jobs:
         with:
           compiler: ${{ matrix.compiler }}
       
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "17"
+      
       - name: Speed Test
         working-directory: integration-tests/speed-test
         run: dub -q run
       
       - name: File Test
         working-directory: integration-tests/file-test
-        run: dub -q run
+        run: java Tests.java
   
   examples:
     name: Examples
