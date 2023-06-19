@@ -15,7 +15,7 @@ import std.file;
 import std.string;
 
 void main() {
-    auto provider = new shared DefaultProvider(true, Levels.INFO);
+    auto provider = new shared DefaultProvider(true, Levels.TRACE);
     configureLoggingProvider(provider);
 
     ServerConfig config = ServerConfig.defaultValues();
