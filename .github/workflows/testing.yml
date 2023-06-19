@@ -18,8 +18,8 @@ permissions:
   contents: read
 
 jobs:
-  tests:
-    name: Test Suite
+  unit-tests:
+    name: Unit Tests
     strategy:
       fail-fast: false
       matrix:
@@ -44,17 +44,71 @@ jobs:
       - name: Run Unit Tests
         run: dub -q test
 
-      # Run integration tests.
+      # Build each example to ensure that they're up-to-date.
 
-      - name: "Integration Test: speed-test"
+      - name: "Example: file-upload"
+        working-directory: examples/file-upload
+        run: dub -q build --single server.d
+
+      - name: "Example: handler-testing"
+        working-directory: examples/handler-testing
+        run: dub test --single handler.d
+
+      - name: "Example: multiple-handlers"
+        working-directory: examples/multiple-handlers
+        run: dub -q build
+
+      - name: "Example: single-file-server"
+        working-directory: examples/single-file-server
+        run: dub -q build --single hello.d
+
+      - name: "Example: static-content-server"
+        working-directory: examples/static-content-server
+        run: dub -q build --single content_server.d
+
+  integration-tests:
+    name: Integration Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        compiler: [dmd-2.099.1, dmd-latest, ldc-1.31.0] # Note: ldc-latest is omitted due to a bug.
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup DLang
+        uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.compiler }}
+      
+      - name: Speed Test
         working-directory: integration-tests/speed-test
         run: dub -q run
       
-      - name: "Integration Test: file-test"
+      - name: File Test
         working-directory: integration-tests/file-test
         run: dub -q run
+  
+  examples:
+    name: Examples
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        compiler: [dmd-2.099.1, dmd-latest, ldc-1.31.0] # Note: ldc-latest is omitted due to a bug.
+    runs-on: ${{ matrix.os }}
 
-      # Build each example to ensure that they're up-to-date.
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup DLang
+        uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.compiler }}
 
       - name: "Example: file-upload"
         working-directory: examples/file-upload
