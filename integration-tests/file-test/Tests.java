@@ -25,6 +25,10 @@ class Tests {
         if (!testFileUpload()) {
             testsFailed++;
         }
+
+        if (!testFileUploadChunked()) {
+            testsFailed++;
+        }
         if (!testFileDownload()) {
             testsFailed++;
         }
@@ -75,6 +79,37 @@ class Tests {
     private static boolean testFileUpload() throws Exception {
         System.out.println("Starting file upload test.");
         final var filePath = Path.of("sample-files", "sample-1.txt");
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:8080/upload"))
+                .POST(BodyPublishers.ofString(Files.readString(filePath)))
+                .header("Content-Type", "text/plain")
+                .build();
+            HttpResponse<String> response = httpClient.send(request, BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                System.out.println("Incorrect status code: " + response.statusCode());
+                return false;
+            }
+            final var uploadedFile = Path.of("uploaded-file.txt");
+            if (Files.notExists(uploadedFile)) {
+                System.out.println("Uploaded file doesn't exist.");
+                return false;
+            }
+            if (Files.size(filePath) != Files.size(uploadedFile)) {
+                System.out.println("Uploaded file doesn't have same size as original.");
+                return false;
+            }
+        } catch (Exception e) {
+            System.out.println("Failed due to exception.");
+            e.printStackTrace();
+            return false;
+        }
+        System.out.println("File upload test successful.");
+        return true;
+    }
+
+    private static boolean testFileUploadChunked() throws Exception {
+        System.out.println("Starting file upload chunked test.");
+        final var filePath = Path.of("sample-files", "sample-1.txt");
         try (var in = Files.newInputStream(filePath)) {
             HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:8080/upload"))
                 .POST(BodyPublishers.ofInputStream(() -> in))
@@ -95,8 +130,12 @@ class Tests {
                 System.out.println("Uploaded file doesn't have same size as original.");
                 return false;
             }
+        } catch (Exception e) {
+            System.out.println("Failed due to exception.");
+            e.printStackTrace();
+            return false;
         }
-        System.out.println("File upload test successful.");
+        System.out.println("File upload chunked test successful.");
         return true;
     }
 
