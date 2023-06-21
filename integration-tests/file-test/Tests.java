@@ -6,6 +6,7 @@ import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 
 class Tests {
     private static final HttpClient httpClient = HttpClient.newHttpClient();
@@ -129,7 +130,7 @@ class Tests {
                 return false;
             }
         } catch (Exception e) {
-            System.out.println("Failed due to exception.");
+            System.out.println("Failed due to exception at " + LocalDateTime.now());
             e.printStackTrace();
             return false;
         }
