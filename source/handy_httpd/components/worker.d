@@ -70,6 +70,7 @@ class ServerWorkerThread : Thread {
                     continue;
                 }
                 Socket clientSocket = nullableSocket.get();
+                this.logger.debugF!"Got client socket: %s"(clientSocket.remoteAddress());
 
                 auto inputStream = SocketInputStream(clientSocket);
                 auto outputStream = SocketOutputStream(clientSocket);
@@ -127,6 +128,7 @@ class ServerWorkerThread : Thread {
         StreamIn inputStream,
         StreamOut outputStream
     ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
+        this.logger.trace("Reading the initial request into the receive buffer.");
         StreamResult initialReadResult = inputStream.readFromStream(this.receiveBuffer);
         if (initialReadResult.hasError) {
             this.logger.errorF!"Encountered socket receive failure: %s, lastSocketError = %s"(
