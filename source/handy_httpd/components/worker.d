@@ -66,7 +66,7 @@ class ServerWorkerThread : Thread {
                 // First try and get a socket to the client.
                 this.logger.debug_("Waiting for the next client.");
                 Nullable!Socket nullableSocket = server.waitForNextClient();
-                if (nullableSocket.isNull) {
+                if (nullableSocket.isNull || !nullableSocket.get().isAlive()) {
                     continue;
                 }
                 Socket clientSocket = nullableSocket.get();
