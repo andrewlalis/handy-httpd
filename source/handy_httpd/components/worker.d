@@ -129,7 +129,10 @@ class ServerWorkerThread : Thread {
     ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
         StreamResult initialReadResult = inputStream.readFromStream(this.receiveBuffer);
         if (initialReadResult.hasError) {
-            this.logger.errorF!"Encountered socket receive failure: %s"(initialReadResult.error.message);
+            this.logger.errorF!"Encountered socket receive failure: %s, lastSocketError = %s"(
+                initialReadResult.error.message,
+                lastSocketError()
+            );
             return Nullable!HttpRequestContext.init;
         }
         this.logger.debugF!"Received %d bytes from the client."(initialReadResult.count);
