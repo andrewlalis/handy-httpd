@@ -22,22 +22,20 @@ class Tests {
 
         int testsFailed = 0;
 
-        if (!testFileUpload()) {
-            testsFailed++;
-        }
-
-        if (!testFileUploadChunked()) {
-            testsFailed++;
-        }
-        if (!testFileDownload()) {
-            testsFailed++;
-        }
+        boolean uploadSuccess = testFileUpload();
+        boolean chunkedUploadSuccess = testFileUploadChunked();
+        boolean downloadSuccess = testFileDownload();
 
         shutdownServer();
         int serverExitCode = serverProcess.waitFor();
         System.out.println("Server exited with code " + serverExitCode);
 
-        if (testsFailed > 0) {
+        System.out.println("Test Results:");
+        System.out.println("  testFileUpload: " + uploadSuccess);
+        System.out.println("  testFileUploadChunked: " + chunkedUploadSuccess);
+        System.out.println("  testFileDownload: " + downloadSuccess);
+
+        if (!uploadSuccess || !chunkedUploadSuccess || !downloadSuccess) {
             System.exit(1);
         }
     }
