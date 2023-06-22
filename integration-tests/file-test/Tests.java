@@ -21,8 +21,6 @@ class Tests {
         }
         System.out.println("Server is online!");
 
-        int testsFailed = 0;
-
         boolean uploadSuccess = testFileUpload();
         boolean chunkedUploadSuccess = testFileUploadChunked();
         boolean downloadSuccess = testFileDownload();
