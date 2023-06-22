@@ -3,7 +3,7 @@
 	"versions": {
 		"handy-httpd": {"path":"../../"},
 		"httparsed": "1.2.1",
-		"slf4d": "2.1.1",
-		"streams": "3.3.0"
+		"slf4d": "2.4.0",
+		"streams": "3.4.2"
 	}
 }

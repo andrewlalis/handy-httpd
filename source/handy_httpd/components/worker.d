@@ -17,6 +17,7 @@ import streams.interfaces;
 import streams.types.socket;
 import streams.types.concat;
 import streams.types.array;
+import streams.types.buffered;
 
 import handy_httpd.server;
 import handy_httpd.components.handler;
@@ -98,6 +99,7 @@ class ServerWorkerThread : Thread {
                         this.logger.error("Exception occurred in the server's exception handler.", e2);
                     }
                 }
+                outputStream.closeStream();
                 clientSocket.shutdown(SocketShutdown.BOTH);
                 clientSocket.close();
 
@@ -185,10 +187,14 @@ class ServerWorkerThread : Thread {
             this
         );
         ctx.request.receiveBuffer = this.receiveBuffer;
-        ctx.request.inputStream = inputStreamObjectFor(concatInputStreamFor(
-            arrayInputStreamFor(this.receiveBuffer[bytesRead .. bytesReceived]),
-            inputStream
-        ));
+        if (bytesReceived > bytesRead) {
+            ctx.request.inputStream = inputStreamObjectFor(concatInputStreamFor(
+                arrayInputStreamFor(this.receiveBuffer[bytesRead .. bytesReceived]),
+                bufferedInputStreamFor(inputStream)
+            ));
+        } else {
+            ctx.request.inputStream = inputStreamObjectFor(bufferedInputStreamFor(inputStream));
+        }
         ctx.response.outputStream = outputStreamObjectFor(outputStream);
         this.logger.traceF!"Preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
             ctx.request.inputStream,

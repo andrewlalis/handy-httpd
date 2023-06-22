@@ -132,25 +132,24 @@ class HttpServer {
      * calling `stop()`.
      */
     public void start() {
-        auto log = getLogger();
         this.serverSocket = new TcpSocket();
-        log.trace("Initialized server socket.");
+        trace("Initialized server socket.");
         if (this.config.reuseAddress) {
             this.serverSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-            log.debug_("Enabled REUSEADDR socket option.");
+            debug_("Enabled REUSEADDR socket option.");
         }
-        log.trace("Calling preBindCallbacks.");
+        trace("Calling preBindCallbacks.");
         foreach (socketConfigFunction; this.config.preBindCallbacks) {
             socketConfigFunction(this.serverSocket);
         }
         this.serverSocket.bind(this.address);
-        log.infoF!"Bound to address %s"(this.address);
+        infoF!"Bound to address %s"(this.address);
         this.serverSocket.listen(this.config.connectionQueueSize);
-        log.debug_("Started listening for connections.");
+        debug_("Started listening for connections.");
         this.ready = true;
         initWorkerThreads();
 
-        log.info("Now accepting connections.");
+        info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
             try {
                 Socket clientSocket = this.serverSocket.accept();
@@ -160,14 +159,14 @@ class HttpServer {
                 this.requestSemaphore.notify();
             } catch (SocketAcceptException acceptException) {
                 if (this.serverSocket.isAlive()) {
-                    log.warnF!"Socket accept failed: %s"(acceptException.msg);
+                    warnF!"Socket accept failed: %s"(acceptException.msg);
                 }
             }
         }
         this.ready = false;
-        log.debug_("Shutting down worker threads.");
+        debug_("Shutting down worker threads.");
         shutdownWorkerThreads();
-        log.info("Server shut down.");
+        info("Server shut down.");
     }
 
     /** 
@@ -175,8 +174,7 @@ class HttpServer {
      * will block until all pending requests have been fulfilled.
      */
     public void stop() {
-        auto log = getLogger();
-        log.info("Stopping the server.");
+        info("Stopping the server.");
         if (this.serverSocket !is null) {
             this.serverSocket.shutdown(SocketShutdown.BOTH);
             this.serverSocket.close();
@@ -204,7 +202,6 @@ class HttpServer {
      */
     public Nullable!Socket waitForNextClient() {
         import std.datetime : seconds;
-        auto log = getLogger();
         Nullable!Socket result;
         try {
             bool notified = this.requestSemaphore.wait(seconds(10));
@@ -216,7 +213,7 @@ class HttpServer {
                 }
             }
         } catch (SyncError e) {
-            log.errorF!"SyncError occurred while waiting for the next client: %s"(e.msg);
+            errorF!"SyncError occurred while waiting for the next client: %s"(e.msg);
         }
         return result;
     }
@@ -226,14 +223,13 @@ class HttpServer {
      * semaphore that they will use to be notified of work to do.
      */
     private void initWorkerThreads() {
-        auto log = getLogger();
         this.workerThreadGroup = new ThreadGroup();
         while (this.workers.length < this.config.workerPoolSize) {
             ServerWorkerThread worker = new ServerWorkerThread(this, this.nextWorkerId++);
             worker.start();
             this.workerThreadGroup.add(worker);
             this.workers ~= worker;
-            log.debugF!"Started worker-%d"(worker.id);
+            debugF!"Started worker-%d"(worker.id);
         }
     }
 

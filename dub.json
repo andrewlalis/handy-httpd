@@ -11,8 +11,8 @@
 	"copyright": "Copyright © 2022, Andrew Lalis",
 	"dependencies": {
 		"httparsed": "~>1.2.1",
-		"slf4d": "~>2.2.0",
-		"streams": "~>3.4.0"
+		"slf4d": "~>2.4.0",
+		"streams": "~>3.4.2"
 	},
 	"description": "Extremely lightweight HTTP server for D.",
 	"license": "MIT",
