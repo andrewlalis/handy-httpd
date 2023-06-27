@@ -23,7 +23,7 @@ In this example, we take advantage of the [Dub package manager](https://code.dla
 ```d
 #!/usr/bin/env dub
 /+ dub.sdl:
-	dependency "handy_httpd" version="~>6.0"
+	dependency "handy-httpd" version="~>7.1"
 +/
 import handy_httpd;
 
