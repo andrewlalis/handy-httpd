@@ -7,6 +7,7 @@ void main() {
 	pathHandler.addMapping("/users", &handleUsers);
 	pathHandler.addMapping("/users/{userId:uint}", &handleUser);
 	pathHandler.addMapping("/items", &handleItems);
+	pathHandler.addMapping("/error", &handleWithError);
 	auto server = new HttpServer(pathHandler);
 	server.start();
 }
@@ -23,4 +24,9 @@ void handleUser(ref HttpRequestContext ctx) {
 
 void handleItems(ref HttpRequestContext ctx) {
 	ctx.response.writeBodyString("You're on the /items page.");
+}
+
+void handleWithError(ref HttpRequestContext ctx) {
+	ctx.response.writeBodyString("This worker has an error.");
+	throw new Error("Oh no");
 }

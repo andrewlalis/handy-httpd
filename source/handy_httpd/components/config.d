@@ -35,6 +35,12 @@ struct ServerConfig {
      */
     size_t workerPoolSize;
 
+    /**
+     * The number of milliseconds that the worker pool manager should wait
+     * between each health check it performs.
+     */
+    uint workerPoolManagerIntervalMs;
+
     /** 
      * An alias for a delegate function that can be used to modify a socket.
      */
@@ -63,6 +69,7 @@ struct ServerConfig {
         cfg.connectionQueueSize = 100;
         cfg.reuseAddress = true;
         cfg.workerPoolSize = 25;
+        cfg.workerPoolManagerIntervalMs = 10_000;
         return cfg;
     }
 }

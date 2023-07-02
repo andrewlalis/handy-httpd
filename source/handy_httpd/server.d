@@ -10,7 +10,7 @@ import std.typecons : Nullable;
 import core.sync.semaphore : Semaphore;
 import core.sync.exception;
 import core.sync.rwmutex;
-import core.atomic : atomicLoad;
+import core.atomic;
 import core.thread.threadgroup : ThreadGroup;
 
 import handy_httpd.components.request;
@@ -19,6 +19,7 @@ import handy_httpd.components.handler;
 import handy_httpd.components.config;
 import handy_httpd.components.parse_utils : parseRequest, Msg;
 import handy_httpd.components.worker;
+import handy_httpd.components.worker_pool;
 
 import httparsed : MsgParser, initParser;
 import slf4d;
@@ -78,19 +79,9 @@ class HttpServer {
     private ReadWriteMutex requestQueueMutex;
 
     /** 
-     * The group of worker threads that will process requests.
+     * The managed thread pool containing workers to handle requests.
      */
-    private ThreadGroup workerThreadGroup;
-
-    /** 
-     * The list of worker threads.
-     */
-    private ServerWorkerThread[] workers;
-
-    /** 
-     * The next id to use for a worker thread.
-     */
-    private int nextWorkerId = 1;
+    private WorkerPool workerPool;
 
     /** 
      * Constructs a new server using the supplied handler to handle all
@@ -109,6 +100,7 @@ class HttpServer {
         this.requestSemaphore = new Semaphore();
         this.requestQueueMutex = new ReadWriteMutex();
         this.exceptionHandler = new BasicServerExceptionHandler();
+        this.workerPool = new WorkerPool(this);
     }
 
     /** 
@@ -146,8 +138,8 @@ class HttpServer {
         infoF!"Bound to address %s"(this.address);
         this.serverSocket.listen(this.config.connectionQueueSize);
         debug_("Started listening for connections.");
-        this.ready = true;
-        initWorkerThreads();
+        atomicStore(this.ready, true);
+        this.workerPool.start();
 
         info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
@@ -163,9 +155,9 @@ class HttpServer {
                 }
             }
         }
-        this.ready = false;
-        debug_("Shutting down worker threads.");
-        shutdownWorkerThreads();
+        atomicStore(this.ready, false);
+        this.notifyWorkerThreads();
+        this.workerPool.stop();
         info("Server shut down.");
     }
 
@@ -219,31 +211,14 @@ class HttpServer {
     }
 
     /** 
-     * Spawns all worker threads in a new thread group, and initializes the
-     * semaphore that they will use to be notified of work to do.
+     * Notifies all worker threads waiting on incoming requests. This is called
+     * after the server finishes, to shortcut the workers' usual timeout delay.
      */
-    private void initWorkerThreads() {
-        this.workerThreadGroup = new ThreadGroup();
-        while (this.workers.length < this.config.workerPoolSize) {
-            ServerWorkerThread worker = new ServerWorkerThread(this, this.nextWorkerId++);
-            worker.start();
-            this.workerThreadGroup.add(worker);
-            this.workers ~= worker;
-            debugF!"Started worker-%d"(worker.id);
-        }
-    }
-
-    /** 
-     * Shuts down all worker threads by sending one final semaphore notification
-     * to all of them.
-     */
-    private void shutdownWorkerThreads() {
+    private void notifyWorkerThreads() {
         for (int i = 0; i < this.config.workerPoolSize; i++) {
             this.requestSemaphore.notify();
             this.requestSemaphore.notify();
         }
-        this.workerThreadGroup.joinAll();
-        this.workers = [];
     }
 
     /** 

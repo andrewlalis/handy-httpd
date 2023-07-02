@@ -8,6 +8,7 @@ import std.socket;
 import std.typecons;
 import std.conv;
 import core.thread;
+import core.atomic;
 import std.datetime;
 import std.datetime.stopwatch;
 import httparsed : MsgParser, initParser;
@@ -25,8 +26,6 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
 
-import std.stdio;
-
 /** 
  * The server worker thread is a thread that processes incoming requests from
  * an `HttpServer`.
@@ -37,6 +36,7 @@ class ServerWorkerThread : Thread {
     private ubyte[] receiveBuffer;
     private HttpServer server;
     private Logger logger;
+    private shared bool busy = false;
 
     /** 
      * Constructs this worker thread for the given server, with the given id.
@@ -70,6 +70,7 @@ class ServerWorkerThread : Thread {
                 if (nullableSocket.isNull || !nullableSocket.get().isAlive()) {
                     continue;
                 }
+                atomicStore(this.busy, true); // Since we got a legit client, mark this worker as busy.
                 Socket clientSocket = nullableSocket.get();
                 this.logger.debugF!"Got client socket: %s"(clientSocket.remoteAddress());
 
@@ -111,6 +112,7 @@ class ServerWorkerThread : Thread {
                 // Destroy the request context's allocated objects.
                 destroy!(false)(ctx.request.inputStream);
                 destroy!(false)(ctx.response.outputStream);
+                atomicStore(this.busy, false); // This worker is no longer busy.
             }
         } catch (Exception e) {
             this.logger.error(e);
@@ -220,5 +222,13 @@ class ServerWorkerThread : Thread {
      */
     public HttpServer getServer() {
         return server;
+    }
+
+    /**
+     * Tells whether this worker is currently busy handling a request.
+     * Returns: True if this worker is handling a request, or false otherwise.
+     */
+    public bool isBusy() {
+        return atomicLoad(this.busy);
     }
 }

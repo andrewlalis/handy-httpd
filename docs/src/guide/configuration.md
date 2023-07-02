@@ -63,3 +63,11 @@ These options can be used to configure the general server behavior.
 |---   |---            |
 | `size_t` | `25` |
 The number of worker threads to use to process incoming requests. Increasing this number can improve performance for servers where the bottleneck is in the number of concurrent requests.
+
+### `workerPoolManagerIntervalMs`
+| Type | Default Value |
+|---   |---            |
+| `uint` | `10_000` (10 seconds) |
+The number of milliseconds that the worker pool manager should wait between each health check it performs. Each health check can find and replace worker threads that have died due to an uncaught error or exception.
+
+This interval shouldn't need to be very small, unless a high percentage of your requests end up killing their worker thread with a fatal error.
