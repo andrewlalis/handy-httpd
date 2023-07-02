@@ -237,4 +237,13 @@ class HttpServer {
     public ServerExceptionHandler getExceptionHandler() {
         return exceptionHandler;
     }
+
+    /**
+     * Sets the server's exception handler.
+     * Params:
+     *   exceptionHandler = The exception handler to use.
+     */
+    public void setExceptionHandler(ServerExceptionHandler exceptionHandler) {
+        this.exceptionHandler = exceptionHandler;
+    }
 }
