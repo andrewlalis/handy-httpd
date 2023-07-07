@@ -2,6 +2,8 @@
 
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
+Already using Handy-Httpd? Consider filling out this [feedback form](https://docs.google.com/forms/d/e/1FAIpQLSdazfaKLghGk1XpefOyDdHFfSZLaHQlCaeI9KAsaIMR5iNX6A/viewform?usp=sf_link) so we can keep improving!
+
 [Check out the full documentation here.](https://andrewlalis.github.io/handy-httpd/)
 
 ## Features
@@ -23,7 +25,7 @@ In this example, we take advantage of the [Dub package manager](https://code.dla
 ```d
 #!/usr/bin/env dub
 /+ dub.sdl:
-	dependency "handy-httpd" version="~>7.2"
+	dependency "handy-httpd" version="~>7"
 +/
 import handy_httpd;
 

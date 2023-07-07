@@ -17,7 +17,7 @@ import streams;
  * plain response that's ready to be written to.
  * Params:
  *   method = The request method.
- *   url = The requested URL.
+ *   url = The requested URL, which may include parameters.
  *   bodyContent = The body of the request. This can be null.
  *   contentType = The type of the body. This can be null.
  * Returns: A request context.
@@ -65,8 +65,8 @@ class HttpRequestContextBuilder {
     private ServerWorkerThread worker;
 
     this() {
-        this.requestBuilder = new HttpRequestBuilder();
-        this.responseBuilder = new HttpResponseBuilder();
+        this.requestBuilder = new HttpRequestBuilder(this);
+        this.responseBuilder = new HttpResponseBuilder(this);
     }
 
     /** 
@@ -80,6 +80,16 @@ class HttpRequestContextBuilder {
         return this;
     }
 
+    /**
+     * Gets a reference to the request builder that will be used to create the
+     * context's request. Call `and()` after you're done using it to continue
+     * configuring the context.
+     * Returns: A reference to the request builder.
+     */
+    public HttpRequestBuilder request() {
+        return this.requestBuilder;
+    }
+
     /** 
      * Modifies this builder's response with the given delegate.
      * Params:
@@ -91,16 +101,42 @@ class HttpRequestContextBuilder {
         return this;
     }
 
+    /**
+     * Gets a reference to the response builder that will be used to create the
+     * context's response. Call `and()` after you're done using it to continue
+     * configuring the context.
+     * Returns: A reference to the response builder.
+     */
+    public HttpResponseBuilder response() {
+        return this.responseBuilder;
+    }
+
+    /**
+     * Configures the HTTP server that'll be used for this context.
+     * Params:
+     *   server = The server to use.
+     * Returns: The context builder, for method chaining.
+     */
     public HttpRequestContextBuilder withServer(HttpServer server) {
         this.server = server;
         return this;
     }
 
+    /**
+     * Configures the worker thread for this context.
+     * Params:
+     *   worker = The worker thread to use.
+     * Returns: The context builder, for method chaining.
+     */
     public HttpRequestContextBuilder withWorker(ServerWorkerThread worker) {
         this.worker = worker;
         return this;
     }
 
+    /**
+     * Builds the request context.
+     * Returns: The HttpRequestContext.
+     */
     public HttpRequestContext build() {
         return HttpRequestContext(
             this.requestBuilder.build(),
@@ -116,21 +152,24 @@ class HttpRequestContextBuilder {
  * for testing.
  */
 class HttpRequestBuilder {
-    private Method method;
-    private string url;
+    private HttpRequestContextBuilder ctxBuilder;
+
+    private Method method = Method.GET;
+    private string url = "/";
     private string[string] headers;
     private string[string] params;
     private string[string] pathParams;
     private InputStream!ubyte inputStream = null;
 
-    this() {
-        this.method = Method.GET;
-        this.url = "/";
-    }
+    this() {}
 
     this(string method, string url) {
         this.method = methodFromName(method);
         this.url = url;
+    }
+
+    this(HttpRequestContextBuilder ctxBuilder) {
+        this.ctxBuilder = ctxBuilder;
     }
 
     HttpRequestBuilder withMethod(Method method) {
@@ -178,15 +217,23 @@ class HttpRequestBuilder {
         return this;
     }
 
-    HttpRequestBuilder withInputStream(InputStream!ubyte inputStream) {
-        this.inputStream = inputStream;
+    HttpRequestBuilder withInputStream(S)(S inputStream) if (isByteInputStream!S) {
+        this.inputStream = inputStreamObjectFor(inputStream);
         return this;
     }
 
+    HttpRequestBuilder withInputStream(S)(
+        S inputStream,
+        ulong contentLength,
+        string contentType = "application/octet-stream"
+    ) if (isByteInputStream!S) {
+        return this.withInputStream(inputStream)
+            .withHeader("Content-Type", contentType)
+            .withHeader("Content-Length", contentLength);
+    }
+
     HttpRequestBuilder withBody(ubyte[] bodyContent, string contentType = "application/octet-stream") {
-        return this.withInputStream(inputStreamObjectFor(arrayInputStreamFor(bodyContent)))
-        .withHeader("Content-Type", contentType)
-        .withHeader("Content-Length", bodyContent.length);
+        return this.withInputStream(arrayInputStreamFor(bodyContent), bodyContent.length, contentType);
     }
 
     HttpRequestBuilder withBody(string bodyContent, string contentType = "text/plain") {
@@ -205,12 +252,30 @@ class HttpRequestBuilder {
             new ubyte[8192]
         );
     }
+
+    /**
+     * Fluent method to return to the request context builder. This is only
+     * available if this builder is part of an HttpRequestContextBuilder.
+     * Returns: A reference to the context builder that this response builder
+     * belongs to.
+     */
+    HttpRequestContextBuilder and() {
+        return this.ctxBuilder;
+    }
 }
 
 class HttpResponseBuilder {
+    private HttpRequestContextBuilder ctxBuilder;
+
     private StatusInfo status = HttpStatus.OK;
     private string[string] headers;
-    private OutputStream!ubyte outputStream = outputStreamObjectFor(NoOpOutputStream!ubyte());
+    private OutputStream!ubyte outputStream = new ResponseCachingOutputStream();
+
+    this() {}
+
+    this(HttpRequestContextBuilder ctxBuilder) {
+        this.ctxBuilder = ctxBuilder;
+    }
 
     HttpResponseBuilder withStatus(StatusInfo status) {
         this.status = status;
@@ -238,16 +303,6 @@ class HttpResponseBuilder {
         return this;
     }
 
-    // HttpResponseBuilder withBody(ubyte[] bodyContent, string contentType = "application/octet-stream") {
-    //     return this.withOutputStream(outputStreamObjectFor())
-    //     .withHeader("Content-Type", contentType)
-    //     .withHeader("Content-Length", bodyContent.length);
-    // }
-
-    // HttpResponseBuilder withBody(string bodyContent, string contentType = "text/plain") {
-    //     return this.withBody(cast(ubyte[]) bodyContent, contentType);
-    // }
-
     HttpResponse build() {
         return HttpResponse(
             status,
@@ -256,4 +311,78 @@ class HttpResponseBuilder {
             outputStream
         );
     }
+
+    /**
+     * Fluent method to return to the request context builder. This is only
+     * available if this builder is part of an HttpRequestContextBuilder.
+     * Returns: A reference to the context builder that this request builder
+     * belongs to.
+     */
+    HttpRequestContextBuilder and() {
+        return this.ctxBuilder;
+    }
+}
+
+/**
+ * A byte output stream implementation that caches HTTP header and body content
+ * as it's written, so that you can fetch and inspect the contents later. This
+ * is mainly intended as a helper for unit tests that involve checking the raw
+ * response body for request handlers.
+ *
+ * To use this, create an instance and supply it to an HttpResponseBuilder when
+ * building a mocked request context:
+ * ```d
+ * auto sOut = new ResponseCachingOutputStream();
+ * auto ctx = new HttpRequestContextBuilder()
+ *   .request().withMethod(Method.GET).withUrl("/users").and()
+ *   .response().withOutputStream(sOut).and()
+ *   .build();
+ * myHandlerFunction(ctx);
+ * assert(sOut.getBody() == "expected body content");
+ * ```
+ */
+class ResponseCachingOutputStream : OutputStream!ubyte {
+    import std.array;
+
+    private Appender!string headerApp;
+    private Appender!string bodyApp;
+    private bool readingHeader = true;
+
+    StreamResult writeToStream(ubyte[] buffer) {
+        uint bufferIdx = 0;
+        while (readingHeader) {
+            headerApp ~= cast(char) buffer[bufferIdx++];
+            if (headerApp.data.length > 3) {
+                string suffix = headerApp.data[$ - 4 .. $];
+                if (suffix == "\r\n\r\n") {
+                    readingHeader = false;
+                }
+            }
+        }
+        bodyApp ~= buffer[bufferIdx .. $];
+        return StreamResult(cast(uint) buffer.length);
+    }
+
+    string getHeader() {
+        return headerApp[];
+    }
+
+    string getBody() {
+        return bodyApp[];
+    }
+}
+///
+unittest {
+    void mockHandler(ref HttpRequestContext ctx) {
+        ctx.response.writeBodyString("Hello world!");
+    }
+
+    ResponseCachingOutputStream stream = new ResponseCachingOutputStream();
+    HttpRequestContext ctx = new HttpRequestContextBuilder()
+        .response()
+            .withOutputStream(stream)
+            .and()
+        .build();
+    mockHandler(ctx);
+    assert(stream.getBody() == "Hello world!", stream.getBody());
 }

@@ -44,21 +44,12 @@ unittest {
     assert(ctxNoNumber.response.status == HttpStatus.BAD_REQUEST);
 
     // Now let's test a request that should produce the correct output.
-    auto sOut = byteArrayOutputStream();
+    auto sOut = new ResponseCachingOutputStream();
     auto ctx = new HttpRequestContextBuilder()
-        .withRequest((rq) {
-            rq.withBody("16");
-        })
-        .withResponse((rp) {
-            rp.withOutputStream(outputStreamObjectFor(&sOut));
-        })
+        .request().withBody("16").and()
+        .response().withOutputStream(sOut).and()
         .build();
     handler.handle(ctx);
     assert(ctx.response.status == HttpStatus.OK);
-    // The response is an HTTP response, so we need to split out the body from the headers.
-    string content = cast(string) sOut.toArrayRaw();
-    string[] parts = split(content, "\r\n\r\n");
-    assert(parts.length == 2);
-    assert(parts[1].length > 0);
-    assert(strip(parts[1]) == "4");
+    assert(sOut.getBody() == "4");
 }

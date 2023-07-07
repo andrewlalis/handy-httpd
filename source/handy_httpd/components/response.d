@@ -3,11 +3,9 @@
  */
 module handy_httpd.components.response;
 
-import std.array;
-import std.string : format, representation;
-import std.conv;
+import std.array : appender;
+import std.conv : to;
 import std.socket : Socket;
-import std.range;
 import slf4d;
 import streams;
 
@@ -76,9 +74,9 @@ struct HttpResponse {
             warn("Attempted to flush headers after the response has already been flushed.");
         }
         auto app = appender!string;
-        app ~= format!"HTTP/1.1 %d %s\r\n"(this.status.code, this.status.text);
+        app ~= "HTTP/1.1 " ~ to!string(this.status.code) ~ " " ~ this.status.text ~ "\r\n";
         foreach (name, value; this.headers) {
-            app ~= format!"%s: %s\r\n"(name, value);
+            app ~= name ~ ": " ~ value ~ "\r\n";
         }
         app ~= "\r\n";
         StreamResult result = this.outputStream.writeToStream(cast(ubyte[]) app[]);
