@@ -78,7 +78,9 @@ class ServerWorkerThread : Thread {
                 auto outputStream = SocketOutputStream(clientSocket);
 
                 // Then try and parse their request and obtain a request context.
-                Nullable!HttpRequestContext nullableCtx = receiveRequest(&inputStream, &outputStream);
+                Nullable!HttpRequestContext nullableCtx = receiveRequest(
+                    &inputStream, &outputStream, clientSocket.remoteAddress
+                );
                 if (nullableCtx.isNull) {
                     this.logger.debug_("Skipping this request because we couldn't get a context.");
                     continue;
@@ -124,13 +126,15 @@ class ServerWorkerThread : Thread {
      * Params:
      *   inputStream = The input stream to read the request from.
      *   outputStream = The output stream to write response content to.
+     *   remoteAddress = The client's address.
      * Returns: A nullable request context, which if present, can be used to
      * further handle the request. If null, no further action should be taken
      * beyond closing the socket.
      */
     private Nullable!HttpRequestContext receiveRequest(StreamIn, StreamOut)(
         StreamIn inputStream,
-        StreamOut outputStream
+        StreamOut outputStream,
+        Address remoteAddress
     ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
         this.logger.trace("Reading the initial request into the receive buffer.");
         StreamResult initialReadResult = inputStream.readFromStream(this.receiveBuffer);
@@ -156,7 +160,8 @@ class ServerWorkerThread : Thread {
                 requestAndSize[1],
                 initialReadResult.count,
                 inputStream,
-                outputStream
+                outputStream,
+                remoteAddress
             ));
         } catch (Exception e) {
             this.logger.warnF!"Failed to parse HTTP request: %s"(e.msg);
@@ -173,6 +178,7 @@ class ServerWorkerThread : Thread {
      *   bytesReceived = The number of bytes initially received.
      *   inputStream = The stream to read the request from.
      *   outputStream = The stream to write response content to.
+     *   remoteAddress = The client's address.
      * Returns: A request context that is ready for handling.
      */
     private HttpRequestContext prepareRequestContext(StreamIn, StreamOut)(
@@ -180,7 +186,8 @@ class ServerWorkerThread : Thread {
         size_t bytesRead,
         size_t bytesReceived,
         StreamIn inputStream,
-        StreamOut outputStream
+        StreamOut outputStream,
+        Address remoteAddress
     ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
         HttpRequestContext ctx = HttpRequestContext(
             parsedRequest,
@@ -197,6 +204,7 @@ class ServerWorkerThread : Thread {
         } else {
             ctx.request.inputStream = inputStreamObjectFor(bufferedInputStreamFor(inputStream));
         }
+        ctx.request.remoteAddress = remoteAddress;
         ctx.response.outputStream = outputStreamObjectFor(outputStream);
         this.logger.traceF!"Preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
             ctx.request.inputStream,

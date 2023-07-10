@@ -36,6 +36,8 @@ void handle(ref HttpRequestContext ctx) {
 ```
 The `url` is relative to the base hostname of the server, so if you do `GET http://localhost:8080/data`, the request's `url` will be `/data`.
 
+Each request also contains a `remoteAddress`, which contains the remote socket address of the client that issued the request. Keep in mind that this might be null, and probably will be for most unit tests. See [std.socket : Address](https://dlang.org/phobos/std_socket.html#.Address) in Phobos for more information on how to work with addresses.
+
 #### Headers and Parameters
 
 The request's headers are available via the `headers` associative array, where each header name is mapped to a single string value. There are no guarantees about which headers may be present, nor their type. It's generally up to the handler to figure out how to deal with them.

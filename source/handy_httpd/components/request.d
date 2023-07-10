@@ -6,6 +6,7 @@ module handy_httpd.components.request;
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
 import std.typecons : Nullable, nullable;
+import std.socket : Address;
 import std.exception;
 import slf4d;
 import streams;
@@ -61,6 +62,11 @@ struct HttpRequest {
      * is handling the request.
      */
     public ubyte[] receiveBuffer;
+
+    /**
+     * The remote address that this request was received from.
+     */
+    public Address remoteAddress;
 
     /** 
      * Tests if this request has a header with the given name.

@@ -11,6 +11,7 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
 import streams;
+import std.socket : Address;
 
 /** 
  * Builds a request context with a request with the given information, and a
@@ -160,6 +161,7 @@ class HttpRequestBuilder {
     private string[string] params;
     private string[string] pathParams;
     private InputStream!ubyte inputStream = null;
+    private Address remoteAddress = null;
 
     this() {}
 
@@ -240,6 +242,11 @@ class HttpRequestBuilder {
         return this.withBody(cast(ubyte[]) bodyContent, contentType);
     }
 
+    HttpRequestBuilder withRemoteAddress(Address address) {
+        this.remoteAddress = address;
+        return this;
+    }
+
     HttpRequest build() {
         return HttpRequest(
             this.method,
@@ -249,7 +256,8 @@ class HttpRequestBuilder {
             this.params,
             this.pathParams,
             this.inputStream,
-            new ubyte[8192]
+            new ubyte[8192],
+            this.remoteAddress
         );
     }
 
@@ -264,6 +272,10 @@ class HttpRequestBuilder {
     }
 }
 
+/**
+ * A utility class that provides a fluent interface for building HttpResponse
+ * structs, mostly useful for testing.
+ */
 class HttpResponseBuilder {
     private HttpRequestContextBuilder ctxBuilder;
 
