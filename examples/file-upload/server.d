@@ -3,8 +3,8 @@
     dependency "handy-httpd" path="../../"
 +/
 import handy_httpd;
-import std.stdio;
 import slf4d;
+import slf4d.default_provider;
 
 const indexContent = `
 <html>
@@ -19,6 +19,9 @@ const indexContent = `
 `;
 
 void main() {
+    auto provider = new shared DefaultProvider(true, Levels.TRACE);
+    configureLoggingProvider(provider);
+
     ServerConfig cfg = ServerConfig.defaultValues();
     cfg.workerPoolSize = 3;
     cfg.port = 8080;
@@ -26,11 +29,8 @@ void main() {
         if (ctx.request.url == "/upload" && ctx.request.method == Method.POST) {
             info("User uploaded file.");
             try {
-                import std.datetime.stopwatch;
-                auto sw = StopWatch(AutoStart.yes);
-                ulong bytesRead = ctx.request.readBodyToFile("latest-upload");
-                sw.stop();
-                infoF!"Read %d bytes in %d ms."(bytesRead, sw.peek.total!"msecs");
+                MultipartFormData data = readBodyAsMultipartFormData(ctx.request);
+                infoF!"Read multipart data:\n%s"(data);
             } catch (Exception e) {
                 error(e);
             }

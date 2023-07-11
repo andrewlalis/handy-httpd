@@ -10,3 +10,4 @@ public import handy_httpd.components.request;
 public import handy_httpd.components.response;
 public import handy_httpd.components.handler;
 public import handy_httpd.components.responses;
+public import handy_httpd.components.multipart;
