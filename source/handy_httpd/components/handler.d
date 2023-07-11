@@ -100,32 +100,36 @@ class HttpStatusException : Exception {
 }
 
 /** 
- * A basic implementation of the `ServerExceptionHandler` which just logs the
- * exception, and if possible, sends a 500 response to the client which just
- * indicates that an error occurred.
+ * A basic implementation of the `ServerExceptionHandler` which gracefully
+ * handles `HttpStatusException` by setting the response status, and defaults
+ * to a 500 INTERNAL SERVER ERROR respones for all other exceptions. If the
+ * response has already been flushed, an error will be logged.
  */
 class BasicServerExceptionHandler : ServerExceptionHandler {
     void handle(ref HttpRequestContext ctx, Exception e) {
-        auto log = getLogger();
-        if (auto statusExc = cast(HttpStatusException) e) {
-            log.debugF!"Handling HttpStatusException: %d %s"(statusExc.status.code, statusExc.status.text);
-            if (!ctx.response.isFlushed) {
-                ctx.response.setStatus(statusExc.status);
-                if (statusExc.message !is null) {
-                    ctx.response.writeBodyString(statusExc.message);
-                }
-            } else {
-                log.error("The response has already been flushed; cannot send HttpStatusException status.");
-            }
-        } else {
-            log.errorF!"An error occurred while handling a request: %s"(e.msg);
-            if (!ctx.response.isFlushed) {
-                ctx.response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR);
-                ctx.response.writeBodyString("An error occurred while handling your request.");
-            } else {
-                log.error("The response has already been sent; cannot send 500 error.");
-            }
+        if (ctx.response.isFlushed) {
+            error("Response is already flushed; cannot handle exception.", e);
+            return;
         }
+        if (auto statusExc = cast(HttpStatusException) e) {
+            handleHttpStatusException(ctx, statusExc);
+        } else {
+            handleOtherException(ctx, e);
+        }
+    }
+
+    protected void handleHttpStatusException(ref HttpRequestContext ctx, HttpStatusException e) {
+        debugF!"Handling HttpStatusException: %d %s"(e.status.code, e.status.text);
+        ctx.response.setStatus(e.status);
+        if (e.message !is null) {
+            ctx.response.writeBodyString(e.message);
+        }
+    }
+
+    protected void handleOtherException(ref HttpRequestContext ctx, Exception e) {
+        errorF!"An error occurred while handling a request: %s"(e.msg);
+        ctx.response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+        ctx.response.writeBodyString("An error occurred while handling your request.");
     }
 }
 
