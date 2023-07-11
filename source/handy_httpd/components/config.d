@@ -69,7 +69,7 @@ struct ServerConfig {
         cfg.connectionQueueSize = 100;
         cfg.reuseAddress = true;
         cfg.workerPoolSize = 25;
-        cfg.workerPoolManagerIntervalMs = 10_000;
+        cfg.workerPoolManagerIntervalMs = 60_000;
         return cfg;
     }
 }

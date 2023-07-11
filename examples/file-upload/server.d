@@ -5,6 +5,7 @@
 import handy_httpd;
 import slf4d;
 import slf4d.default_provider;
+import handy_httpd.handlers.path_delegating_handler;
 
 const indexContent = `
 <html>
@@ -12,6 +13,8 @@ const indexContent = `
         <h4>Upload a file!</h4>
         <form action="/upload" method="post" enctype="multipart/form-data">
             <input type="file" name="file1">
+            <input type="file" name="file2">
+            <input type="file" multiple name="other files">
             <input type="submit" value="Submit"/>
         </form>
     </body>
@@ -19,25 +22,33 @@ const indexContent = `
 `;
 
 void main() {
-    auto provider = new shared DefaultProvider(true, Levels.TRACE);
+    auto provider = new shared DefaultProvider(true, Levels.INFO);
     configureLoggingProvider(provider);
 
     ServerConfig cfg = ServerConfig.defaultValues();
     cfg.workerPoolSize = 3;
     cfg.port = 8080;
-    new HttpServer((ref ctx) {
-        if (ctx.request.url == "/upload" && ctx.request.method == Method.POST) {
-            info("User uploaded file.");
-            try {
-                MultipartFormData data = readBodyAsMultipartFormData(ctx.request);
-                infoF!"Read multipart data:\n%s"(data);
-            } catch (Exception e) {
-                error(e);
-            }
-        } else if (ctx.request.url == "/" || ctx.request.url == "" || ctx.request.url == "/index.html") {
-            ctx.response.writeBodyString(indexContent, "text/html; charset=utf-8");
-        } else {
-            ctx.response.setStatus(HttpStatus.NOT_FOUND);
-        }
-    }, cfg).start();
+    PathDelegatingHandler handler = new PathDelegatingHandler();
+    handler.addMapping("GET", "/", &serveIndex);
+    handler.addMapping("GET", "/index.html", &serveIndex);
+    handler.addMapping("POST", "/upload", &handleUpload);
+    new HttpServer(handler, cfg).start();
+}
+
+void serveIndex(ref HttpRequestContext ctx) {
+    ctx.response.writeBodyString(indexContent, "text/html; charset=utf-8");
+}
+
+void handleUpload(ref HttpRequestContext ctx) {
+    info("User uploaded a file!");
+    MultipartFormData data = readBodyAsMultipartFormData(ctx.request);
+    infoF!"Read multipart data with %d elements."(data.elements.length);
+    foreach (MultipartElement element; data.elements) {
+        infoF!"Element name: %s, filename: %s, headers: %s, content-length: %s"(
+            element.name,
+            element.filename.isNull ? "Null" : element.filename.get(),
+            element.headers,
+            element.content.length
+        );
+    }
 }

@@ -5,12 +5,10 @@
 module handy_httpd.components.worker;
 
 import std.socket;
-import std.typecons;
-import std.conv;
+import std.typecons : Nullable, nullable;
+import std.conv : to;
 import core.thread;
-import core.atomic;
-import std.datetime;
-import std.datetime.stopwatch;
+import core.atomic : atomicStore, atomicLoad;
 import httparsed : MsgParser, initParser;
 import slf4d;
 import streams.primitives;
@@ -31,11 +29,34 @@ import handy_httpd.components.parse_utils;
  * an `HttpServer`.
  */
 class ServerWorkerThread : Thread {
+    /**
+     * The id of this worker thread.
+     */
     public const(int) id;
+
+    /**
+     * The reusable request parser that will be called for each incoming request.
+     */
     private MsgParser!Msg requestParser = initParser!Msg();
+
+    /**
+     * A pre-allocated buffer for receiving data from the client.
+     */
     private ubyte[] receiveBuffer;
+
+    /**
+     * The server that this worker belongs to.
+     */
     private HttpServer server;
+
+    /**
+     * A preconfigured SLF4D logger that uses the worker's id in its label.
+     */
     private Logger logger;
+
+    /**
+     * A shared indicator of whether this worker is currently handling a request.
+     */
     private shared bool busy = false;
 
     /** 
@@ -65,12 +86,14 @@ class ServerWorkerThread : Thread {
         try {
             while (server.isReady) {
                 // First try and get a socket to the client.
-                this.logger.debug_("Waiting for the next client.");
                 Nullable!Socket nullableSocket = server.waitForNextClient();
                 if (nullableSocket.isNull || !nullableSocket.get().isAlive()) {
                     continue;
                 }
                 atomicStore(this.busy, true); // Since we got a legit client, mark this worker as busy.
+                scope(exit) {
+                    atomicStore(this.busy, false);
+                }
                 Socket clientSocket = nullableSocket.get();
                 this.logger.debugF!"Got client socket: %s"(clientSocket.remoteAddress());
 
@@ -114,7 +137,6 @@ class ServerWorkerThread : Thread {
                 // Destroy the request context's allocated objects.
                 destroy!(false)(ctx.request.inputStream);
                 destroy!(false)(ctx.response.outputStream);
-                atomicStore(this.busy, false); // This worker is no longer busy.
             }
         } catch (Exception e) {
             this.logger.error(e);

@@ -94,19 +94,33 @@ package class PoolManager : Thread {
     }
 
     private void checkPoolHealth() {
-        this.logger.trace("Checking worker pool health.");
+        uint busyCount = 0;
+        uint waitingCount = 0;
+        uint deadCount = 0;
         synchronized(this.pool.workersMutex.writer) {
             for (size_t idx = 0; idx < this.pool.workers.length; idx++) {
                 ServerWorkerThread worker = this.pool.workers[idx];
                 if (!worker.isRunning()) {
+                    deadCount++;
                     this.pool.workerThreadGroup.remove(worker);
                     ServerWorkerThread newWorker = new ServerWorkerThread(this.pool.server, this.pool.nextWorkerId++);
                     newWorker.start();
                     this.pool.workerThreadGroup.add(newWorker);
                     this.pool.workers[idx] = newWorker;
-                    this.logger.warnF!"Worker %d died (probably due to an unexpected error), and was replaced by a new worker %d."(worker.id, newWorker.id);
+                    this.logger.warnF!
+                        "Worker %d died (probably due to an unexpected error), and was replaced by a new worker %d."(
+                            worker.id,
+                            newWorker.id
+                        );
+                } else {
+                    if (worker.isBusy()) {
+                        busyCount++;
+                    } else {
+                        waitingCount++;
+                    }
                 }
             }
         }
+        this.logger.debugF!"Worker pool: %d busy, %d waiting, %d dead."(busyCount, waitingCount, deadCount);
     }
 }
