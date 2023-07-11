@@ -9,6 +9,7 @@ import handy_httpd.components.worker;
 import handy_httpd.server;
 
 import std.range : InputRange, OutputRange;
+import std.conv : to;
 import slf4d;
 
 /**
@@ -80,6 +81,24 @@ interface ServerExceptionHandler {
     void handle(ref HttpRequestContext ctx, Exception e);
 }
 
+/**
+ * An exception that can be thrown to indicate that the current request should
+ * immediately respond with a specified status, short-circuiting any other
+ * handler logic. Note that it is still the responsibility of the server's
+ * exception handler to honor this exception, but by default, the `BasicServerExceptionHandler`
+ * does honor it.
+ */
+class HttpStatusException : Exception {
+    public immutable HttpStatus status;
+    public immutable string message;
+
+    public this(HttpStatus status, string message = null) {
+        super("Http " ~ status.code.to!string ~ " " ~ status.text ~ ": " ~ message);
+        this.status = status;
+        this.message = message;
+    }
+}
+
 /** 
  * A basic implementation of the `ServerExceptionHandler` which just logs the
  * exception, and if possible, sends a 500 response to the client which just
@@ -88,12 +107,24 @@ interface ServerExceptionHandler {
 class BasicServerExceptionHandler : ServerExceptionHandler {
     void handle(ref HttpRequestContext ctx, Exception e) {
         auto log = getLogger();
-        log.errorF!"An error occurred while handling a request: %s"(e.msg);
-        if (!ctx.response.isFlushed) {
-            ctx.response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR);
-            ctx.response.writeBodyString("An error occurred while handling your request.");
+        if (auto statusExc = cast(HttpStatusException) e) {
+            log.debugF!"Handling HttpStatusException: %d %s"(statusExc.status.code, statusExc.status.text);
+            if (!ctx.response.isFlushed) {
+                ctx.response.setStatus(statusExc.status);
+                if (statusExc.message !is null) {
+                    ctx.response.writeBodyString(statusExc.message);
+                }
+            } else {
+                log.error("The response has already been flushed; cannot send HttpStatusException status.");
+            }
         } else {
-            log.error("The response has already been sent; cannot send 500 error.");
+            log.errorF!"An error occurred while handling a request: %s"(e.msg);
+            if (!ctx.response.isFlushed) {
+                ctx.response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+                ctx.response.writeBodyString("An error occurred while handling your request.");
+            } else {
+                log.error("The response has already been sent; cannot send 500 error.");
+            }
         }
     }
 }

@@ -4,6 +4,8 @@
  */
 module handy_httpd.components.multipart;
 
+import handy_httpd.components.handler : HttpStatusException;
+import handy_httpd.components.response : HttpStatus;
 import handy_httpd.components.request;
 import slf4d;
 import streams;
@@ -64,11 +66,13 @@ struct MultipartFormData {
 
 /**
  * An exception that's thrown if parsing multipart/form-data fails due to
- * invalid formatting or unexpected characters.
+ * invalid formatting or unexpected characters. This is a sub-class of the
+ * `HttpStatusException`, with each multipart exception being a BAD_REQUEST.
  */
-class MultipartFormatException : Exception {
-    import std.exception : basicExceptionCtors;
-    mixin basicExceptionCtors;
+class MultipartFormatException : HttpStatusException {
+    public this(string message) {
+        super(HttpStatus.BAD_REQUEST, message);
+    }
 }
 
 /**
