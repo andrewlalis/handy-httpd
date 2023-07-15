@@ -127,7 +127,7 @@ class BasicServerExceptionHandler : ServerExceptionHandler {
     }
 
     protected void handleOtherException(ref HttpRequestContext ctx, Exception e) {
-        errorF!"An error occurred while handling a request: %s"(e.msg);
+        error("An error occurred while handling a request.", e);
         ctx.response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR);
         ctx.response.writeBodyString("An error occurred while handling your request.");
     }
