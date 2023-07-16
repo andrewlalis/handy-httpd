@@ -73,6 +73,10 @@ jobs:
       - name: File Test
         working-directory: integration-tests/file-test
         run: java Tests.java
+
+      - name: Multipart Test
+        working-directory: integration-tests/multipart
+        run: dub run --single server.d
   
   examples:
     name: Examples
