@@ -90,12 +90,12 @@ const MAX_ELEMENTS = 1024;
  * Returns: The multipart/form-data that was read.
  */
 MultipartFormData readBodyAsMultipartFormData(ref HttpRequest request, bool allowInfiniteRead = false) {
-    import std.algorithm : startsWith, countUntil;
+    import std.algorithm : startsWith;
     string contentType = request.getHeader("Content-Type");
     if (contentType is null || !startsWith(contentType, "multipart/form-data")) {
         throw new MultipartFormatException("Content-Type is not multipart/form-data.");
     }
-    ptrdiff_t boundaryIdx = countUntil(contentType, "boundary=");
+    long boundaryIdx = indexOf(contentType, "boundary=");
     if (boundaryIdx < 0) {
         throw new MultipartFormatException("Missing multipart boundary definition.");
     }
@@ -119,7 +119,6 @@ MultipartFormData readBodyAsMultipartFormData(ref HttpRequest request, bool allo
  * Returns: The multipart/form-data content that's been parsed.
  */
 MultipartFormData parseMultipartFormData(string content, string boundary) {
-    import std.algorithm : countUntil;
     import std.array : RefAppender, appender;
     const string boundaryNormal = "--" ~ boundary ~ "\r\n";
     const string boundaryEnd = "--" ~ boundary ~ "--";
@@ -138,7 +137,8 @@ MultipartFormData parseMultipartFormData(string content, string boundary) {
         } else if (nextBoundary == boundaryNormal) {
             // Find the end index of this element.
             const ulong elementStartIdx = nextIdx + boundary.length + 4;
-            const ulong elementEndIdx = elementStartIdx + countUntil(content[elementStartIdx .. $], "--" ~ boundary);
+            const ulong elementEndIdx = indexOf(content, "--" ~ boundary, elementStartIdx);
+            // const ulong elementEndIdx = elementStartIdx + countUntil(content[elementStartIdx .. $], "--" ~ boundary);
             traceF!"Reading element from body at [%d, %d)"(elementStartIdx, elementEndIdx);
             partAppender ~= readElement(content[elementStartIdx .. elementEndIdx]);
             nextIdx = elementEndIdx;
@@ -161,10 +161,7 @@ private MultipartElement readElement(string content) {
     MultipartElement element;
     ulong bodyIdx = parseElementHeaders(element, content);
     parseContentDisposition(element);
-
-    string bodyContent = content[bodyIdx .. $];
-    element.content = bodyContent;
-
+    element.content = content[bodyIdx .. $ - 2]; // Ignore the trailing \r\n at the end of the body.
     return element;
 }
 
@@ -176,29 +173,33 @@ private MultipartElement readElement(string content) {
  * Returns: The index at which the header ends, and the body starts.
  */
 private ulong parseElementHeaders(ref MultipartElement element, string content) {
-    import std.algorithm : countUntil;
     import std.string : strip;
     ulong nextHeaderIdx = 0;
     ulong bodyIdx = content.length;
     bool parsingHeaders = true;
     while (parsingHeaders) {
         string headerContent;
-        const ptrdiff_t headerEndOffset = countUntil(content[nextHeaderIdx .. $], "\r\n");
-        if (headerEndOffset < 0) {
+        const long headerEndIdx = indexOf(content, "\r\n", nextHeaderIdx);
+        if (headerEndIdx < 0) {
             // We couldn't find the end of the next header line, so assume that there's no body and this is the last header.
+            debug_("Couldn't find end of header line. Assuming that this is the last header.");
             headerContent = content[nextHeaderIdx .. $];
             parsingHeaders = false;
         } else {
             // We found the end of the next header line.
-            headerContent = content[nextHeaderIdx .. nextHeaderIdx + headerEndOffset];
-            nextHeaderIdx = nextHeaderIdx + headerEndOffset + 2;
+            headerContent = content[nextHeaderIdx .. headerEndIdx];
+            nextHeaderIdx = headerEndIdx + 2;
             // Check to see if this is the last header (expect one more \r\n after the normal ending).
             if (content.length >= nextHeaderIdx + 2 && content[nextHeaderIdx .. nextHeaderIdx + 2] == "\r\n") {
                 bodyIdx = nextHeaderIdx + 2;
                 parsingHeaders = false;
             }
         }
-        const ulong headerValueSeparatorIdx = countUntil(headerContent, ":");
+        const long headerValueSeparatorIdx = indexOf(headerContent, ":");
+        if (headerValueSeparatorIdx < 0) {
+            throw new MultipartFormatException("Invalid header line: " ~ headerContent);
+        }
+        // const ulong headerValueSeparatorIdx = countUntil(headerContent, ":");
         string headerName = strip(headerContent[0 .. headerValueSeparatorIdx]);
         string headerValue = strip(headerContent[headerValueSeparatorIdx + 1 .. $]);
         traceF!"Read multipart element header: %s=%s"(headerName, headerValue);
@@ -233,4 +234,29 @@ private void parseContentDisposition(ref MultipartElement element) {
             traceF!"Element filename: %s"(element.filename);
         }
     }
+}
+
+private long indexOf(T)(T[] array, T[] subset, ulong offset = 0) {
+    if (subset.length > array.length) return -1;
+    if (subset.length == array.length) {
+        if (offset != 0) return -1;
+        return subset == array ? 0 : -1;
+    }
+    if (subset.length == 0) return 0;
+    long index = offset;
+    while (index < (array.length - subset.length)) {
+        if (array[index .. index + subset.length] == subset) return index;
+        index++;
+    }
+    return -1;
+}
+
+unittest {
+    assert(indexOf("abc", "a") == 0);
+    assert(indexOf("abc", "a", 1) == -1);
+    assert(indexOf("hello world!", "world") == 6);
+    assert(indexOf("hello world!", "world", 7) == -1);
+    assert(indexOf("hello world!", "world", 3) == 6);
+    assert(indexOf("", "bleh") == -1);
+    assert(indexOf("", "blerg", 42) == -1);
 }

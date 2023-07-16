@@ -10,6 +10,7 @@ import handy_httpd.components.worker;
 import core.thread;
 import core.atomic;
 import core.sync.rwmutex;
+import core.sync.semaphore;
 import slf4d;
 
 /**
@@ -31,6 +32,10 @@ class WorkerPool {
         this.workersMutex = new ReadWriteMutex();
     }
 
+    /**
+     * Starts the worker pool by spawning new worker threads and a new pool
+     * manager thread.
+     */
     void start() {
         synchronized(this.workersMutex.writer) {
             while (this.workers.length < this.server.config.workerPoolSize) {
@@ -44,9 +49,16 @@ class WorkerPool {
         this.managerThread.start();
     }
 
+    /**
+     * Stops the worker pool, by stopping all worker threads and the pool's
+     * manager thread. After it's stopped, the pool can be started again via
+     * `start()`.
+     */
     void stop() {
         this.managerThread.stop();
+        this.managerThread.notify();
         synchronized(this.workersMutex.writer) {
+            this.server.notifyWorkerThreads();
             this.workerThreadGroup.joinAll();
             foreach (worker; this.workers) {
                 this.workerThreadGroup.remove(worker);
@@ -57,6 +69,10 @@ class WorkerPool {
         this.managerThread.join();
     }
 
+    /**
+     * Gets the size of the pool, in terms of the number of worker threads.
+     * Returns: The number of worker threads in this pool.
+     */
     uint size() {
         synchronized(this.workersMutex.reader) {
             return cast(uint) this.workers.length;
@@ -71,6 +87,7 @@ class WorkerPool {
 package class PoolManager : Thread {
     private WorkerPool pool;
     private Logger logger;
+    private Semaphore sleepSemaphore;
     private shared bool running;
 
     package this(WorkerPool pool) {
@@ -78,15 +95,25 @@ package class PoolManager : Thread {
         super.name("handy_httpd_worker-pool-manager");
         this.pool = pool;
         this.logger = getLogger(super.name());
+        this.sleepSemaphore = new Semaphore();
     }
 
     private void run() {
         atomicStore(this.running, true);
         while (atomicLoad(this.running)) {
             // Sleep for a while before running checks.
-            Thread.sleep(msecs(this.pool.server.config.workerPoolManagerIntervalMs));
-            this.checkPoolHealth();
+            bool notified = this.sleepSemaphore.wait(msecs(this.pool.server.config.workerPoolManagerIntervalMs));
+            if (!notified) {
+                this.checkPoolHealth();
+            } else {
+                // We were notified to quit, exit now.
+                this.stop();
+            }
         }
+    }
+
+    package void notify() {
+        this.sleepSemaphore.notify();
     }
 
     package void stop() {

@@ -156,7 +156,6 @@ class HttpServer {
             }
         }
         atomicStore(this.ready, false);
-        this.notifyWorkerThreads();
         this.workerPool.stop();
         info("Server shut down.");
     }
@@ -212,9 +211,9 @@ class HttpServer {
 
     /** 
      * Notifies all worker threads waiting on incoming requests. This is called
-     * after the server finishes, to shortcut the workers' usual timeout delay.
+     * by the worker pool when it shuts down, to cause all workers to quit waiting.
      */
-    private void notifyWorkerThreads() {
+    public void notifyWorkerThreads() {
         for (int i = 0; i < this.config.workerPoolSize; i++) {
             this.requestSemaphore.notify();
             this.requestSemaphore.notify();
