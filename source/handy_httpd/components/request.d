@@ -51,6 +51,13 @@ struct HttpRequest {
     public string[string] pathParams;
 
     /**
+     * If this request was processed by a `PathDelegatingHandler`, then this
+     * will be set to the path pattern that was matched when it chose a handler
+     * to handle this request.
+     */
+    public string pathPattern;
+
+    /**
      * The input stream for the request's body. This may be `null` if the
      * request doesn't have a body.
      */
@@ -476,6 +483,18 @@ public string methodToName(const Method method) {
         case Method.PATCH:
             return "PATCH";
     }
+}
+
+/**
+ * Builds a bitmask from the given list of methods.
+ * Params:
+ *   methods = The methods to make a bitmask for.
+ * Returns: A bitmask where bits are active for each method in the given list.
+ */
+public ushort methodMaskFromMethods(Method[] methods) {
+    ushort mask = 0;
+    foreach (method; methods) mask |= method;
+    return mask;
 }
 
 /** 

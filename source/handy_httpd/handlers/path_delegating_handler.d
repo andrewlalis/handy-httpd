@@ -14,7 +14,8 @@
  *
  * Mapping a request to a handler requires both a matching URL, and an
  * acceptable HTTP method. For example, a handler may be registered to handle
- * GET requests to "/home", or POST and PUT requests to "/users".
+ * GET requests to "/home", or POST and PUT requests to "/users". A handler may
+ * even be registered to multiple paths.
  *
  * At runtime, if a PathDelegatingHandler receives a request for which no
  * mapping matches, then a configurable `notFoundHandler` is called to handle
@@ -31,6 +32,15 @@ import slf4d;
 
 import std.regex;
 import std.typecons;
+
+/**
+ * An exception that's thrown if an invalid handler mapping is defined by a
+ * user of the PathDelegatingHandler class.
+ */
+class HandlerMappingException : Exception {
+    import std.exception : basicExceptionCtors;
+    mixin basicExceptionCtors;
+}
 
 /** 
  * A request handler that delegates handling of requests to other handlers,
@@ -60,7 +70,7 @@ class PathDelegatingHandler : HttpRequestHandler {
      * we can add a mapping like so:
      * ```d
      * new PathDelegatingHandler()
-     *     .addMapping(["GET", "PATCH"], "/users/{name}", myHandler);
+     *     .addMapping([Method.GET, Method.PATCH], "/users/{name}", myHandler);
      * ```
      *
      * To let a handler apply to any request method, you can also simply supply
@@ -72,97 +82,96 @@ class PathDelegatingHandler : HttpRequestHandler {
      *
      * Params:
      *   methods = The methods that the handler accepts.
-     *   pathPattern = The path pattern the handler accepts.
+     *   pathPatterns = The path patterns the handler accepts.
      *   handler = The handler to handle requests.
      * Returns: This path delegating handler.
      */
-    public PathDelegatingHandler addMapping(string[] methods, string pathPattern, HttpRequestHandler handler) {
-        import std.algorithm : map, sort, uniq;
-        import std.string : format, toUpper;
-        import std.array : array;
+    public PathDelegatingHandler addMapping(Method[] methods, string[] pathPatterns, HttpRequestHandler handler) {
+        import std.string : format, join;
 
-        if (handler is null) throw new Exception("Cannot add a mapping for a null handler.");
-
-        ushort methodsMask = methodMaskFromNames(methods);
-        if (methods.length == 0) methodsMask = methodMaskFromAll();
-        foreach (mapping; this.handlerMappings) {
-            // TODO: Actually parse and check if path patterns overlap.
-            if (mapping.pathPattern == pathPattern && (mapping.methodsMask & methodsMask) > 0) {
-                throw new Exception(
-                    format!"A mapping already exists for methods %s and path %s."(methods, pathPattern)
-                );
-            }
+        if (handler is null) {
+            throw new HandlerMappingException("Cannot add a mapping for a null handler.");
         }
-        auto t = compilePathPattern(pathPattern);
+
+        if (pathPatterns is null || pathPatterns.length < 1) {
+            pathPatterns = ["**"]; // If no path patterns are given, match anything.
+        }
+
+        immutable ushort methodsMask = (methods !is null && methods.length > 0)
+            ? methodMaskFromMethods(methods)
+            : methodMaskFromAll();
+        // TODO: Check that there's no unintended conflict with another mapping.
+        Regex!(char)[] regexes = new Regex!(char)[pathPatterns.length];
+        string[][] pathParamNames = new string[][pathPatterns.length];
+        foreach (size_t i, string pathPattern; pathPatterns) {
+            auto t = compilePathPattern(pathPattern);
+            regexes[i] = t.regex;
+            pathParamNames[i] = t.pathParamNames;
+        }
+        import std.algorithm : map;
+        import std.array : array;
         this.handlerMappings ~= HandlerMapping(
-            pathPattern,
+            pathPatterns.idup,
             methodsMask,
             handler,
-            cast(immutable) t.regex,
-            cast(immutable) t.pathParamNames
+            cast(immutable Regex!(char)[]) regexes,
+            pathParamNames.map!(a => a.idup).array.idup // Dirty hack to turn string[][] into immutable.
         );
         return this;
     }
 
-    /** 
-     * Overloaded version of `addMapping` that accepts a handler function.
-     * Params:
-     *   methods = The methods that the handler accepts.
-     *   pathPattern = The path pattern the handler accepts.
-     *   handler = The handler to handle requests.
-     * Returns: This path delegating handler.
-     */
-    public PathDelegatingHandler addMapping(string[] methods, string pathPattern, HttpRequestHandlerFunction handler) {
-        return this.addMapping(methods, pathPattern, toHandler(handler));
+    unittest {
+        import std.exception;
+        // Check that a null handler results in an exception.
+        HttpRequestHandler nullHandler = null;
+        assertThrown!HandlerMappingException(
+            new PathDelegatingHandler().addMapping([Method.GET], ["/**"], nullHandler)
+        );
+        // Check that if no methods are given, then all methods are added to the method mask.
+        HttpRequestHandler dummyHandler = noOpHandler();
+        Method[] nullMethods = null;
+        PathDelegatingHandler p1 = new PathDelegatingHandler()
+            .addMapping([], ["/**"], dummyHandler)
+            .addMapping(nullMethods, ["/**"], dummyHandler);
+        assert(p1.handlerMappings.length == 2);
+        assert(p1.handlerMappings[0].methodsMask == methodMaskFromAll());
+        assert(p1.handlerMappings[1].methodsMask == methodMaskFromAll());
+        // Check that if no path patterns are given, then the all path pattern is given.
+        string[] nullPathPatterns = null;
+        PathDelegatingHandler p2 = new PathDelegatingHandler()
+            .addMapping([Method.GET], new string[0], dummyHandler)
+            .addMapping([Method.GET], nullPathPatterns, dummyHandler);
+        assert(p2.handlerMappings.length == 2);
+        assert(p2.handlerMappings[0].pathPatterns == ["**"]);
+        assert(p2.handlerMappings[1].pathPatterns == ["**"]);
     }
 
-    /** 
-     * Overloaded version of `addMapping` that accepts a single method.
-     * Params:
-     *   method = The methods that the handler accepts.
-     *   pathPattern = The path pattern the handler accepts.
-     *   handler = The handler to handle requests.
-     * Returns: This path delegating handler.
-     */
-    public PathDelegatingHandler addMapping(string method, string pathPattern, HttpRequestHandler handler) {
-        return this.addMapping([method], pathPattern, handler);
+    public PathDelegatingHandler addMapping(Method[] methods, string[] pathPatterns, HttpRequestHandlerFunction fn) {
+        return this.addMapping(methods, pathPatterns, toHandler(fn));
     }
 
-    /** 
-     * Overloaded version of `addMapping` that accepts a single method and a
-     * handler function.
-     * Params:
-     *   method = The methods that the handler accepts.
-     *   pathPattern = The path pattern the handler accepts.
-     *   handler = The handler to handle requests.
-     * Returns: This path delegating handler.
-     */
-    public PathDelegatingHandler addMapping(string method, string pathPattern, HttpRequestHandlerFunction handler) {
-        return this.addMapping([method], pathPattern, handler);
+    public PathDelegatingHandler addMapping(Method method, string[] pathPatterns, HttpRequestHandler handler) {
+        Method[1] arr = [method];
+        return this.addMapping(arr, pathPatterns, handler);
     }
 
-    /** 
-     * Overloaded version of `addMapping` that defaults to mapping all request
-     * methods to the given handler.
-     * Params:
-     *   pathPattern = The path pattern the handler accepts.
-     *   handler = The handler to handle requests.
-     * Returns: This path delegating handler.
-     */
-    public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandler handler) {
-        return this.addMapping(new string[0], pathPattern, handler);
+    public PathDelegatingHandler addMapping(Method method, string[] pathPatterns, HttpRequestHandlerFunction fn) {
+        return this.addMapping(method, pathPatterns, toHandler(fn));
     }
 
-    /** 
-     * Overloaded version of `addMapping` that defaults to mapping all request
-     * methods to the given handler function.
-     * Params:
-     *   pathPattern = The path pattern the handler accepts.
-     *   handler = The handler to handle requests.
-     * Returns: This path delegating handler.
-     */
-    public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandlerFunction handler) {
-        return this.addMapping(new string[0], pathPattern, handler);
+    public PathDelegatingHandler addMapping(Method[] methods, string pathPattern, HttpRequestHandler handler) {
+        string[1] arr = [pathPattern];
+        return this.addMapping(methods, arr, handler);
+    }
+
+    public PathDelegatingHandler addMapping(Method method, string pathPattern, HttpRequestHandler handler) {
+        Method[1] m = [method];
+        string[1] p = [pathPattern];
+        return this.addMapping(m, p, handler);
+    }
+
+    public PathDelegatingHandler addMapping(Method method, string pathPattern, HttpRequestHandlerFunction fn) {
+        return this.addMapping(method, pathPattern, toHandler(fn));
     }
 
     /** 
@@ -196,29 +205,32 @@ class PathDelegatingHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequestContext ctx) {
-        import std.algorithm : canFind;
-        auto log = getLogger();
         foreach (mapping; handlerMappings) {
             if ((mapping.methodsMask & ctx.request.method) > 0) {
-                // Now check if the URL matches.
-                log.traceF!"Checking if pattern %s matches url %s"(mapping.pathPattern, ctx.request.url);
-                Captures!string captures = matchFirst(ctx.request.url, mapping.compiledPattern);
-                if (!captures.empty) {
-                    log.debugF!"Found matching handler for %s %s (pattern: \"%s\")"(
-                        ctx.request.method,
-                        ctx.request.url,
-                        mapping.pathPattern
-                    );
-                    log.traceF!"Captures: %s"(captures);
-                    foreach (paramName; mapping.pathParamNames) {
-                        ctx.request.pathParams[paramName] = captures[paramName];
+                traceF!"Checking if patterns %s match url %s"(mapping.pathPatterns, ctx.request.url);
+                for (size_t patternIdx = 0; patternIdx < mapping.pathPatterns.length; patternIdx++) {
+                    string pathPattern = mapping.pathPatterns[patternIdx];
+                    immutable Regex!char compiledPattern = mapping.compiledPatterns[patternIdx];
+                    immutable string[] paramNames = mapping.pathParamNames[patternIdx];
+                    Captures!string captures = matchFirst(ctx.request.url, compiledPattern);
+                    if (!captures.empty) {
+                        debugF!"Found matching handler for %s %s (pattern: \"%s\")"(
+                            ctx.request.method,
+                            ctx.request.url,
+                            pathPattern
+                        );
+                        traceF!"Captures: %s"(captures);
+                        foreach (string paramName; paramNames) {
+                            ctx.request.pathParams[paramName] = captures[paramName];
+                        }
+                        ctx.request.pathPattern = pathPattern;
+                        mapping.handler.handle(ctx);
+                        return;
                     }
-                    mapping.handler.handle(ctx);
-                    return; // Exit once the request is handled.
                 }
             }
         }
-        log.debugF!"No matching handler found for %s %s"(ctx.request.method, ctx.request.url);
+        debugF!"No matching handler found for %s %s"(ctx.request.method, ctx.request.url);
         notFoundHandler.handle(ctx);
     }
 
@@ -227,17 +239,11 @@ class PathDelegatingHandler : HttpRequestHandler {
         import handy_httpd.components.responses;
         import handy_httpd.util.builders;
 
-        // import slf4d;
-        // import slf4d.default_provider;
-        // auto logProvider = new shared DefaultProvider();
-        // logProvider.getLoggerFactory().setRootLevel(Levels.TRACE);
-        // configureLoggingProvider(logProvider);
-
         auto handler = new PathDelegatingHandler()
-            .addMapping("GET", "/home", (ref ctx) {ctx.response.okResponse();})
-            .addMapping("GET", "/users", (ref ctx) {ctx.response.okResponse();})
-            .addMapping("GET", "/users/{id}", (ref ctx) {ctx.response.okResponse();})
-            .addMapping("GET", "/api/*", (ref ctx) {ctx.response.okResponse();});
+            .addMapping(Method.GET, "/home", (ref ctx) {ctx.response.okResponse();})
+            .addMapping(Method.GET, "/users", (ref ctx) {ctx.response.okResponse();})
+            .addMapping(Method.GET, "/users/{id}", (ref ctx) {ctx.response.okResponse();})
+            .addMapping(Method.GET, "/api/*", (ref ctx) {ctx.response.okResponse();});
 
         /*
         To test the handle() method, we create a pair of dummy sockets and a dummy
@@ -266,33 +272,34 @@ class PathDelegatingHandler : HttpRequestHandler {
  * Represents a mapping of a specific request handler to a subset of URLs
  * and/or request methods.
  */
-private struct HandlerMapping {
+struct HandlerMapping {
     /** 
-     * The original pattern used to match against URLs.
+     * The original pattern(s) used to match against URLs.
      */
-    private immutable string pathPattern;
+    immutable string[] pathPatterns;
 
     /** 
      * A bitmask that contains a 1 for each HTTP method this mapping applies to.
      */
-    private immutable ushort methodsMask;
+    immutable ushort methodsMask;
 
     /** 
      * The handler to apply to requests whose URL and method match this
      * mapping's path pattern and methods list.
      */
-    private HttpRequestHandler handler;
+    HttpRequestHandler handler;
 
     /** 
-     * The compiled regular expression used to match URLs.
+     * The compiled regular expression(s) used to match URLs.
      */
-    private immutable Regex!char compiledPattern;
+    immutable Regex!(char)[] compiledPatterns;
 
     /** 
      * A cached list of all expected path parameter names, which are used to
-     * get path params from a regex match.
+     * get path params from a regex match. There is one list of path parameter
+     * names for each pathPattern.
      */
-    private immutable string[] pathParamNames;
+    immutable string[][] pathParamNames;
 }
 
 /** 
@@ -315,7 +322,6 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
     auto pathParamRegex = ctRegex!(`\{(?P<name>[a-zA-Z][a-zA-Z0-9_-]*)(?::(?P<type>[^}]+))?\}`);
 
     string originalPattern = pattern;
-    auto log = getLogger();
 
     // First pass, where we tag all wildcards for replacement on a second pass.
     pattern = replaceAll(pattern, multiSegmentWildcardRegex, "--<<MULTI_SEGMENT>>--");
@@ -328,7 +334,7 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
     foreach (capture; pathParamMatches) {
         string paramName = capture["name"];
         if (canFind(pathParamNames, paramName)) {
-            throw new Exception(
+            throw new HandlerMappingException(
                 format!"Duplicate path parameter with name \"%s\" in pattern \"%s\"."(paramName, originalPattern)
             );
         }
@@ -357,7 +363,7 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
 
     // Add anchors to start and end of string.
     pattern = "^" ~ pattern ~ "$";
-    log.debugF!"Compiled path pattern \"%s\" to regex \"%s\""(originalPattern, pattern);
+    debugF!"Compiled path pattern \"%s\" to regex \"%s\""(originalPattern, pattern);
 
     return tuple!("regex", "pathParamNames")(regex(pattern), pathParamNames);
 }
