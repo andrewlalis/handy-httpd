@@ -24,11 +24,11 @@ void main() {
 
     PathDelegatingHandler handler = new PathDelegatingHandler();
 
-    handler.addMapping("GET", "/ready", (ref HttpRequestContext ctx) {
+    handler.addMapping(Method.GET, "/ready", (ref HttpRequestContext ctx) {
         ctx.response.status = HttpStatus.OK;
     });
 
-	handler.addMapping("POST", "/upload", (ref HttpRequestContext ctx) {
+	handler.addMapping(Method.POST, "/upload", (ref HttpRequestContext ctx) {
 		debug_("Receiving uploaded file...");
 		debugF!"Headers: %s"(ctx.request.headers);
 		
@@ -37,14 +37,14 @@ void main() {
 		ctx.response.writeBodyString("Thank you!");
 	});
 	
-	handler.addMapping("GET", "/source", (ref HttpRequestContext ctx) {
+	handler.addMapping(Method.GET, "/source", (ref HttpRequestContext ctx) {
 		debug_("Sending app source text.");
 		const fileToDownload = "server.d";
 		auto sIn = FileInputStream(toStringz(fileToDownload));
 		ctx.response.writeBody(sIn, getSize(fileToDownload), "text/plain");
 	});
 
-    handler.addMapping("POST", "/shutdown", (ref HttpRequestContext ctx) {
+    handler.addMapping(Method.POST, "/shutdown", (ref HttpRequestContext ctx) {
         debug_("Shutting down...");
         ctx.server.stop();
     });
