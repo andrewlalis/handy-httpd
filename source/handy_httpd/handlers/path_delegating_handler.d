@@ -141,6 +141,16 @@ class PathDelegatingHandler : HttpRequestHandler {
         return this.addMapping(method, pathPattern, toHandler(fn));
     }
 
+    /// Overload of `addMapping` which accepts a single path pattern and applies to all HTTP methods.
+    public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandler handler) {
+        return this.addMapping().forPath(pathPattern).withHandler(handler).add();
+    }
+
+    /// Overload of `addMapping` which accepts a single path pattern and function handler, and applies to all HTTP methods.
+    public PathDelegatingHandler addMapping(string pathPattern, HttpRequestHandlerFunction fn) {
+        return this.addMapping().forPath(pathPattern).withHandler(fn).add();
+    }
+
     /** 
      * Sets a handler to use when no matching handler was found for a request's
      * path.

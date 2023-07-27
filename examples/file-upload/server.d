@@ -29,9 +29,8 @@ void main() {
     cfg.workerPoolSize = 3;
     cfg.port = 8080;
     PathDelegatingHandler handler = new PathDelegatingHandler();
-    handler.addMapping("GET", "/**", &serveIndex);
-    // handler.addMapping("GET", "/index.html", &serveIndex);
-    handler.addMapping("POST", "/upload", &handleUpload);
+    handler.addMapping(Method.GET, "/**", &serveIndex);
+    handler.addMapping(Method.POST, "/upload", &handleUpload);
     new HttpServer(handler, cfg).start();
 }
 
