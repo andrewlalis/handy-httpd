@@ -160,6 +160,7 @@ class HttpRequestBuilder {
     private string[string] headers;
     private string[string] params;
     private string[string] pathParams;
+    private string pathPattern = null;
     private InputStream!ubyte inputStream = null;
     private Address remoteAddress = null;
 
@@ -219,6 +220,11 @@ class HttpRequestBuilder {
         return this;
     }
 
+    HttpRequestBuilder withPathPattern(string pathPattern) {
+        this.pathPattern = pathPattern;
+        return this;
+    }
+
     HttpRequestBuilder withInputStream(S)(S inputStream) if (isByteInputStream!S) {
         this.inputStream = inputStreamObjectFor(inputStream);
         return this;
@@ -255,6 +261,7 @@ class HttpRequestBuilder {
             this.headers,
             this.params,
             this.pathParams,
+            this.pathPattern,
             this.inputStream,
             new ubyte[8192],
             this.remoteAddress
