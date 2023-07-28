@@ -73,6 +73,10 @@ class PathDelegatingHandler : HttpRequestHandler {
      */
     private HttpRequestHandler notFoundHandler;
 
+    /**
+     * Constructs this handler with an empty list of mappings, and a default
+     * `notFoundHandler` that just sets a 404 status.
+     */
     this() {
         this.handlerMappings = [];
         this.notFoundHandler = toHandler((ref ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
@@ -388,45 +392,17 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
     import std.format : format;
     import std.array : replaceFirst;
 
-    auto multiSegmentWildcardRegex = ctRegex!(`/\*\*`);
-    auto singleSegmentWildcardRegex = ctRegex!(`/\*`);
-    auto singleCharWildcardRegex = ctRegex!(`\?`);
-    auto pathParamRegex = ctRegex!(`\{(?P<name>[a-zA-Z][a-zA-Z0-9_-]*)(?::(?P<type>[^}]+))?\}`);
-
-    string originalPattern = pattern;
+    immutable string originalPattern = pattern;
 
     // First pass, where we tag all wildcards for replacement on a second pass.
-    pattern = replaceAll(pattern, multiSegmentWildcardRegex, "--<<MULTI_SEGMENT>>--");
-    pattern = replaceAll(pattern, singleSegmentWildcardRegex, "--<<SINGLE_SEGMENT>>--");
-    pattern = replaceAll(pattern, singleCharWildcardRegex, "--<<SINGLE_CHAR>>--");
+    pattern = replaceAll(pattern, ctRegex!(`/\*\*`), "--<<MULTI_SEGMENT>>--");
+    pattern = replaceAll(pattern, ctRegex!(`/\*`), "--<<SINGLE_SEGMENT>>--");
+    pattern = replaceAll(pattern, ctRegex!(`\?`), "--<<SINGLE_CHAR>>--");
 
-    // Replace each path parameter expression with a named capture group for it.
-    auto pathParamMatches = matchAll(pattern, pathParamRegex);
-    string[] pathParamNames;
-    foreach (capture; pathParamMatches) {
-        string paramName = capture["name"];
-        if (canFind(pathParamNames, paramName)) {
-            throw new HandlerMappingException(
-                format!"Duplicate path parameter with name \"%s\" in pattern \"%s\"."(paramName, originalPattern)
-            );
-        }
-        pathParamNames ~= paramName;
-
-        string paramType = capture["type"];
-        string paramPattern = "[^/]+";
-        if (paramType !is null) {
-            if (paramType == "int") {
-                paramPattern = "-?[0-9]+";
-            } else if (paramType == "uint") {
-                paramPattern = "[0-9]+";
-            } else if (paramType == "string") {
-                paramPattern = `\w+`;
-            } else {
-                paramPattern = paramType;
-            }
-        }
-        pattern = replaceFirst(pattern, capture.hit, format!"(?P<%s>%s)"(paramName, paramPattern));
-    }
+    // Replace path parameter expressions with regex expressions for them, with named capture groups.
+    auto pathParamResults = parsePathParamExpressions(pattern, originalPattern);
+    pattern = pathParamResults.pattern;
+    string[] pathParamNames = pathParamResults.pathParamNames;
 
     // Finally, second pass where wildcard placeholders are swapped for their regex pattern.
     pattern = replaceAll(pattern, ctRegex!(`--<<MULTI_SEGMENT>>--`), `(?:/[^/]+)*/?`);
@@ -438,6 +414,63 @@ public Tuple!(Regex!char, "regex", string[], "pathParamNames") compilePathPatter
     debugF!"Compiled path pattern \"%s\" to regex \"%s\""(originalPattern, pattern);
 
     return tuple!("regex", "pathParamNames")(regex(pattern), pathParamNames);
+}
+
+/**
+ * Helper function that parses and replaces path parameter expressions, like
+ * "/users/{userId:uint}", with a regex that captures the path parameter, with
+ * support for matching the parameter's type.
+ * Params:
+ *   pattern = The full URL pattern string.
+ *   originalPattern = The original pattern that was provided when compiling.
+ * Returns: The URL pattern string, with path parameters replaced with an
+ * appropriate regex, and the list of path parameter names.
+ */
+private Tuple!(string, "pattern", string[], "pathParamNames") parsePathParamExpressions(
+    string pattern,
+    string originalPattern
+) {
+    import std.algorithm : canFind;
+    import std.string : format;
+    import std.array : replaceFirst;
+
+    auto pathParamRegex = ctRegex!(`\{(?P<name>[a-zA-Z][a-zA-Z0-9_-]*)(?::(?P<type>[^}]+))?\}`);
+    auto pathParamMatches = matchAll(pattern, pathParamRegex);
+    string[] pathParamNames;
+    foreach (capture; pathParamMatches) {
+        string paramName = capture["name"];
+        // Check that the name of this path parameter is unique.
+        if (canFind(pathParamNames, paramName)) {
+            throw new HandlerMappingException(
+                format!"Duplicate path parameter with name \"%s\" in pattern \"%s\"."(paramName, originalPattern)
+            );
+        }
+        pathParamNames ~= paramName;
+
+        string paramType = capture["type"];
+        string paramPattern = "[^/]+"; // The default parameter pattern if no type or pattern is defined.
+        if (paramType !is null) {
+            immutable string[string] DEFAULT_PATH_PARAMETER_TYPE_PATTERNS = [
+                "int": `-?[0-9]+`,
+                "uint": `[0-9]+`,
+                "string": `\w+`,
+                "uuid": `[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}`
+            ];
+            bool foundMatch = false;
+            foreach (typeName, typePattern; DEFAULT_PATH_PARAMETER_TYPE_PATTERNS) {
+                if (paramType == typeName) {
+                    paramPattern = typePattern;
+                    foundMatch = true;
+                    break;
+                }
+            }
+            if (!foundMatch) {
+                paramPattern = paramType; // No pre-defined type was found, use what the person wrote as a pattern itself.
+            }
+        }
+        pattern = replaceFirst(pattern, capture.hit, format!"(?P<%s>%s)"(paramName, paramPattern));
+    }
+    return tuple!("pattern", "pathParamNames")(pattern, pathParamNames);
 }
 
 unittest {
