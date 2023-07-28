@@ -61,6 +61,16 @@ Pattern                  Matches                Doesn't Match
 
 ### Parameter Types
 
-The following parameter types are built-in to the handler's path pattern parser: `int`, `uint`, `string`. If you'd like a different pattern, you can use a literal regex instead.
+The following parameter types are built-in to the handler's path pattern parser:
+
+| Name | Description | Regex |
+| ---  | ---         | ---   |
+| int | A signed integer number. | `-?[0-9]+` |
+| uint | An unsigned integer number. | `[0-9]+` |
+| string | A series of characters, excluding whitespaces. | `\w+` |
+| uuid | A [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) string. |Too long |
+
+If you'd like a different pattern, you can use a literal regex instead.
 
 Note that by specifying a type for a path parameter, you guarantee that you can safely call `ctx.request.getPathParamAs!uint("id")` from your handler, and rest assured that it has a value.
+
