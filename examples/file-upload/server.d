@@ -31,6 +31,7 @@ void main() {
     PathDelegatingHandler handler = new PathDelegatingHandler();
     handler.addMapping(Method.GET, "/**", &serveIndex);
     handler.addMapping(Method.POST, "/upload", &handleUpload);
+    info("Starting file-upload example server.");
     new HttpServer(handler, cfg).start();
 }
 

@@ -2,31 +2,29 @@
 
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
-Already using Handy-Httpd? Consider filling out this [feedback form](https://docs.google.com/forms/d/e/1FAIpQLSdazfaKLghGk1XpefOyDdHFfSZLaHQlCaeI9KAsaIMR5iNX6A/viewform?usp=sf_link) so we can keep improving!
-
-[Check out the full documentation here.](https://andrewlalis.github.io/handy-httpd/)
-
 ## Features
 - HTTP/1.1
 - Worker pool for request handling
-- Simple configuration
+- [Simple configuration](https://andrewlalis.github.io/handy-httpd/guide/configuration.html)
 - High performance
 - Beginner friendly
 - Extensible with custom handlers, exception handlers, and filters
 - Well-documented
-- Prioritises testability
+- [Prioritises testability](https://andrewlalis.github.io/handy-httpd/guide/testing.html)
 - Ships with some handy pre-made request handlers:
-	- Serve static files with the `FileResolvingHandler`
+	- Serve static files with the [FileResolvingHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/file-resolving-handler.html)
 	- Apply filters before and after handling requests with the `FilteredHandler`
-	- Handle complex URL paths, including path parameters and wildcards, with the `PathDelegatingHandler`
+	- Handle complex URL paths, including path parameters and wildcards, with the [PathDelegatingHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/path-delegating-handler.html)
+
+## Important Links
+- [Documentation](https://andrewlalis.github.io/handy-httpd/)
+- [Examples](https://github.com/andrewlalis/handy-httpd/tree/main/examples)
+- [Dub Package Page](https://code.dlang.org/packages/handy-httpd)
+- [Bugs/Feature Requests](https://github.com/andrewlalis/handy-httpd/issues)
+- [User Feedback Form](https://docs.google.com/forms/d/e/1FAIpQLSdazfaKLghGk1XpefOyDdHFfSZLaHQlCaeI9KAsaIMR5iNX6A/viewform?usp=sf_link)
 
 ## Simple Example
-In this example, we take advantage of the [Dub package manager](https://code.dlang.org/)'s single-file SDL syntax to declare HandyHttpd as a dependency. For this example, we'll call this `my_server.d`.
 ```d
-#!/usr/bin/env dub
-/+ dub.sdl:
-	dependency "handy-httpd" version="~>7"
-+/
 import handy_httpd;
 
 void main() {
@@ -39,11 +37,3 @@ void main() {
 	}).start();
 }
 ```
-To start the server, just mark the script as executable, and run it:
-
-```shell
-chmod +x my_server.d
-./my_server.d
-```
-
-And finally, if you navigate to http://localhost:8080/hello, you should see the `Hello world!` text appear.
