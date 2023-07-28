@@ -9,7 +9,7 @@ For example, suppose we have a handler named `userHandler` that we want to invok
 ```d
 auto userHandler = getUserHandler();
 auto pathHandler = new PathDelegatingHandler();
-pathHandler.addMapping("GET", "/users/{userId:int}", userHandler);
+pathHandler.addMapping(Method.GET, "/users/{userId:int}", userHandler);
 new HttpServer(pathHandler).start();
 ```
 
