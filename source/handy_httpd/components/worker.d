@@ -129,7 +129,6 @@ class ServerWorkerThread : Thread {
                 if (ctx.response.status != HttpStatus.SWITCHING_PROTOCOLS) {
                     clientSocket.shutdown(SocketShutdown.BOTH);
                     clientSocket.close();
-                    outputStream.closeStream();
                     // Destroy the request context's allocated objects.
                     destroy!(false)(ctx.request.inputStream);
                     destroy!(false)(ctx.response.outputStream);

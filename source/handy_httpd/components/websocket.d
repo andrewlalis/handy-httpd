@@ -12,6 +12,7 @@ import slf4d;
 import std.format;
 import std.typecons;
 import std.uuid;
+import std.socket;
 import core.thread;
 
 class WebSocketException : Exception {
@@ -33,11 +34,6 @@ struct WebSocketCloseMessage {
     string message;
 }
 
-/**
- * An abstract class defining methods for handling incoming websocket messages.
- * You may override any of the methods defined within this class to "listen"
- * for those messages.
- */
 abstract class WebSocketMessageHandler {
     void handleTextMessage(WebSocketTextMessage msg) {}
     void handleBinaryMessage(WebSocketBinaryMessage msg) {}
@@ -45,7 +41,9 @@ abstract class WebSocketMessageHandler {
 }
 
 struct WebSocketConnection {
-    immutable UUID id;
+    UUID id;
+    Socket socket;
+    WebSocketMessageHandler messageHandler;
 }
 
 /**
@@ -53,8 +51,13 @@ struct WebSocketConnection {
  * websocket connection handshakes.
  */
 class WebSocketHandler : HttpRequestHandler {
+    private WebSocketMessageHandler messageHandler;
+
+    this(WebSocketMessageHandler messageHandler) {
+        this.messageHandler = messageHandler;
+    }
+
     void handle(ref HttpRequestContext ctx) {
-        infoF!"Websocket request: %s %s, Headers: %s"(methodToName(ctx.request.method), ctx.request.url, ctx.request.headers);
         string origin = ctx.request.getHeader("origin");
         string key = ctx.request.getHeader("Sec-WebSocket-Key");
         if (key is null) {
@@ -68,8 +71,13 @@ class WebSocketHandler : HttpRequestHandler {
         ctx.response.addHeader("Sec-WebSocket-Accept", createSecWebSocketAcceptHeader(key));
         ctx.response.flushHeaders();
 
-        info("Starting websocket thread...");
-        new WebSocketThread(ctx.request.inputStream, ctx.response.outputStream).start();
+        WebSocketConnection conn = WebSocketConnection(
+            randomUUID(),
+            ctx.clientSocket,
+            this.messageHandler
+        );
+        infoF!"Registered websocket connection %s. Starting thread."(conn.id);
+        new WebSocketThread(conn).start();
     }
 }
 
@@ -78,27 +86,58 @@ class WebSocketHandler : HttpRequestHandler {
  * incoming messages to registered websocket message handlers.
  */
 class WebSocketThread : Thread {
-    private InputStream!ubyte inputStream;
-    private OutputStream!ubyte outputStream;
+    private WebSocketConnection conn;
+    private bool continuation = false;
+    private WebSocketFrame continuedFrame;
 
-    this(InputStream!ubyte input, OutputStream!ubyte output) {
+    this(WebSocketConnection conn) {
         super(&this.run);
-        this.inputStream = input;
-        this.outputStream = output;
+        this.conn = conn;
     }
 
     private void run() {
-        while (true) {
-            info("Waiting for message...");
-            WebSocketFrame frame = receiveWebSocketFrame(this.inputStream);
-            infoF!"Got frame: %s"(frame);
-            WebSocketFrame resp = WebSocketFrame(
-                true,
-                WebSocketFrameOpcode.TEXT_FRAME,
-                cast(ubyte[]) "Hello world"
-            );
-            sendWebSocketFrame(this.outputStream, resp);
+        SocketInputStream sIn = SocketInputStream(this.conn.socket);
+        SocketOutputStream sOut = SocketOutputStream(this.conn.socket);
+        while (this.conn.socket.isAlive()) {
+            WebSocketFrame frame = receiveWebSocketFrame(&sIn);
+            infoF!"Got frame: %s, length = %d"(frame.opcode, frame.payload.length);
+            if (frame.opcode == WebSocketFrameOpcode.CONNECTION_CLOSE) {
+                // The client has willfully closed the connection.
+                WebSocketCloseMessage msg = WebSocketCloseMessage(WebSocketCloseStatusCode.NO_CODE, null);
+                if (frame.payload.length >= 2) {
+                    union shortBytes { ushort s; ubyte[2] bytes; }
+                    shortBytes u;
+                    u.bytes = frame.payload[0 .. 2];
+                    msg.statusCode = u.s;
+                    msg.message = cast(string) frame.payload[2 .. $];
+                }
+                sendWebSocketFrame(&sOut, frame);
+                this.conn.messageHandler.handleCloseMessage(msg);
+                this.conn.socket.shutdown(SocketShutdown.BOTH);
+                this.conn.socket.close();
+            } else if (frame.opcode == WebSocketFrameOpcode.PING) {
+                // Client sent a ping. Send a PONG response.
+                WebSocketFrame pongFrame = WebSocketFrame(
+                    true,
+                    WebSocketFrameOpcode.PONG,
+                    frame.payload
+                );
+                sendWebSocketFrame(&sOut, pongFrame);
+            } else if (frame.opcode == WebSocketFrameOpcode.TEXT_FRAME) {
+                // Client sent a text message.
+                // TODO: Handle continuation.
+                WebSocketTextMessage msg;
+                msg.payload = cast(string) frame.payload;
+                this.conn.messageHandler.handleTextMessage(msg);
+            } else if (frame.opcode == WebSocketFrameOpcode.BINARY_FRAME) {
+                // Client sent a binary message.
+                // TODO: Handle continuation.
+                WebSocketBinaryMessage msg;
+                msg.payload = frame.payload;
+                this.conn.messageHandler.handleBinaryMessage(msg);
+            }
         }
+        infoF!"WebSocket thread for %s died"(this.conn.id);
     }
 }
 
@@ -153,9 +192,9 @@ unittest {
  * websocket frame.
  */
 private struct WebSocketFrame {
-    immutable bool finalFragment;
-    immutable WebSocketFrameOpcode opcode;
-    const ubyte[] payload;
+    bool finalFragment;
+    WebSocketFrameOpcode opcode;
+    ubyte[] payload;
 }
 
 /**
@@ -165,19 +204,24 @@ private struct WebSocketFrame {
  *   frame = The frame to write.
  */
 private void sendWebSocketFrame(S)(S stream, WebSocketFrame frame) if (isByteOutputStream!S) {
+    static if (isPointerToStream!S) {
+        S ptr = stream;
+    } else {
+        S* ptr = &stream;
+    }
     ubyte finAndOpcode = frame.opcode;
     if (frame.finalFragment) {
         finAndOpcode |= 128;
     }
-    writeDataOrThrow(stream, finAndOpcode);
+    writeDataOrThrow(ptr, finAndOpcode);
     if (frame.payload.length < 126) {
-        writeDataOrThrow(stream, cast(ubyte) frame.payload.length);
+        writeDataOrThrow(ptr, cast(ubyte) frame.payload.length);
     } else if (frame.payload.length <= ushort.max) {
-        writeDataOrThrow(stream, cast(ubyte) 126);
-        writeDataOrThrow(stream, cast(ushort) frame.payload.length);
+        writeDataOrThrow(ptr, cast(ubyte) 126);
+        writeDataOrThrow(ptr, cast(ushort) frame.payload.length);
     } else {
-        writeDataOrThrow(stream, cast(ubyte) 127);
-        writeDataOrThrow(stream, cast(ulong) frame.payload.length);
+        writeDataOrThrow(ptr, cast(ubyte) 127);
+        writeDataOrThrow(ptr, cast(ulong) frame.payload.length);
     }
     StreamResult result = stream.writeToStream(cast(ubyte[]) frame.payload);
     if (result.hasError) {
@@ -194,7 +238,12 @@ private void sendWebSocketFrame(S)(S stream, WebSocketFrame frame) if (isByteOut
  * Returns: The frame that was received.
  */
 private WebSocketFrame receiveWebSocketFrame(S)(S stream) if (isByteInputStream!S) {
-    auto finalAndOpcode = parseFinAndOpcode(&stream);
+    static if (isPointerToStream!S) {
+        S ptr = stream;
+    } else {
+        S* ptr = &stream;
+    }
+    auto finalAndOpcode = parseFinAndOpcode(ptr);
     immutable bool finalFragment = finalAndOpcode.finalFragment;
     immutable ubyte opcode = finalAndOpcode.opcode;
     immutable bool isControlFrame = (
@@ -203,23 +252,23 @@ private WebSocketFrame receiveWebSocketFrame(S)(S stream) if (isByteInputStream!
         opcode == WebSocketFrameOpcode.PONG
     );
 
-    immutable ubyte maskAndLength = readDataOrThrow!(ubyte)(&stream);
+    immutable ubyte maskAndLength = readDataOrThrow!(ubyte)(ptr);
     immutable bool payloadMasked = (maskAndLength & 128) > 0;
     immutable ubyte initialPayloadLength = maskAndLength & 127;
-    ulong payloadLength = readPayloadLength(initialPayloadLength, &stream);
+    ulong payloadLength = readPayloadLength(initialPayloadLength, ptr);
     if (isControlFrame && payloadLength > 125) {
         throw new WebSocketException("Control frame payload is too large.");
     }
 
     ubyte[4] maskingKey;
-    if (payloadMasked) maskingKey = readDataOrThrow!(ubyte[4])(&stream);
+    if (payloadMasked) maskingKey = readDataOrThrow!(ubyte[4])(ptr);
     debugF!"Receiving websocket frame: (FIN=%s,OP=%d,MASK=%s,LENGTH=%d)"(
         finalFragment,
         opcode,
         payloadMasked,
         payloadLength
     );
-    ubyte[] buffer = readPayload(payloadLength, &stream);
+    ubyte[] buffer = readPayload(payloadLength, ptr);
     if (payloadMasked) unmaskData(buffer, maskingKey);
 
     return WebSocketFrame(
