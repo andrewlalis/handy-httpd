@@ -1,4 +1,4 @@
-/** 
+/**
  * Internal parsing utilities for the server's HTTP request processing.
  */
 module handy_httpd.components.parse_utils;
@@ -14,7 +14,7 @@ import httparsed;
 
 import handy_httpd.components.request : HttpRequest, methodFromName;
 
-/** 
+/**
  * The header struct to use when parsing data.
  */
 public struct Header {
@@ -22,7 +22,7 @@ public struct Header {
     const(char)[] value;
 }
 
-/** 
+/**
  * The message struct to use when parsing HTTP requests, using the httparsed library.
  */
 public struct Msg {
@@ -61,7 +61,7 @@ public struct Msg {
     Header[] headers() return { return m_headers[0..m_headersLength]; }
 }
 
-/** 
+/**
  * Parses an HTTP request from a string.
  * Params:
  *   s = The raw HTTP request string.
@@ -92,7 +92,7 @@ public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string
     return tuple(request, result);
 }
 
-/** 
+/**
  * Parses a path and set of query parameters from a raw URL string.
  * Params:
  *   rawUrl = The raw url containing both path and query params.
@@ -115,7 +115,7 @@ public Tuple!(string, string[string]) parseUrlAndParams(string rawUrl) {
     return result;
 }
 
-/** 
+/**
  * Parses a set of query parameters from a query string.
  * Params:
  *   queryString = The raw query string to parse, including the preceding '?' character.

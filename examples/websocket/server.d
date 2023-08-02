@@ -10,11 +10,16 @@ import handy_httpd.handlers.path_delegating_handler;
 import slf4d;
 
 class MyWebSocketHandler : WebSocketMessageHandler {
-    override void handleTextMessage(WebSocketTextMessage msg) {
-        infoF!"Got TEXT: %s"(msg.payload);
+    override void onConnectionEstablished(WebSocketConnection conn) {
+        infoF!"Connection established with id %s"(conn.id);
     }
 
-    override void handleCloseMessage(WebSocketCloseMessage msg) {
+    override void onTextMessage(WebSocketTextMessage msg) {
+        infoF!"Got TEXT: %s"(msg.payload);
+        msg.conn.sendTextMessage("Hey yourself!");
+    }
+
+    override void onCloseMessage(WebSocketCloseMessage msg) {
         infoF!"Closed: %d, %s"(msg.statusCode, msg.message);
     }
 }

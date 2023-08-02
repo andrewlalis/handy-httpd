@@ -4,6 +4,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 
 ## Features
 - HTTP/1.1
+- Web Sockets (experimental)
 - Worker pool for request handling
 - [Simple configuration](https://andrewlalis.github.io/handy-httpd/guide/configuration.html)
 - High performance

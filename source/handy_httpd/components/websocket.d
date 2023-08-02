@@ -26,28 +26,71 @@ class WebSocketException : Exception {
 }
 
 struct WebSocketTextMessage {
+    WebSocketConnection conn;
     string payload;
 }
 
 struct WebSocketBinaryMessage {
+    WebSocketConnection conn;
     ubyte[] payload;
 }
 
 struct WebSocketCloseMessage {
+    WebSocketConnection conn;
     ushort statusCode;
     string message;
 }
 
+/**
+ * An abstract class that you should extend to define logic for handling
+ * websocket messages and events. Create a new class that inherits from this
+ * one, and overrides any "on..." methods.
+ */
 abstract class WebSocketMessageHandler {
-    void handleTextMessage(WebSocketTextMessage msg) {}
-    void handleBinaryMessage(WebSocketBinaryMessage msg) {}
-    void handleCloseMessage(WebSocketCloseMessage msg) {}
+    void onConnectionEstablished(WebSocketConnection conn) {}
+    void onTextMessage(WebSocketTextMessage msg) {}
+    void onBinaryMessage(WebSocketBinaryMessage msg) {}
+    void onCloseMessage(WebSocketCloseMessage msg) {}
 }
 
+/**
+ * All the data that represents a WebSocket connection tracked by the
+ * `WebSocketHandler`.
+ */
 struct WebSocketConnection {
     UUID id;
     Socket socket;
     WebSocketMessageHandler messageHandler;
+
+    void sendTextMessage(string text) {
+        sendWebSocketFrame(
+            SocketOutputStream(this.socket),
+            WebSocketFrame(true, WebSocketFrameOpcode.TEXT_FRAME, cast(ubyte[]) text)
+        );
+    }
+
+    void sendBinaryMessage(ubyte[] bytes) {
+        sendWebSocketFrame(
+            SocketOutputStream(this.socket),
+            WebSocketFrame(true, WebSocketFrameOpcode.BINARY_FRAME, bytes)
+        );
+    }
+
+    void sendCloseMessage(WebSocketCloseStatusCode status, string message) {
+        auto arrayOut = byteArrayOutputStream();
+        auto dOut = dataOutputStreamFor(&arrayOut);
+        dOut.writeToStream!ushort(status);
+        if (message !is null && message.length > 0) {
+            if (message.length > 123) {
+                throw new WebSocketException("Close message is too long! Maximum of 123 bytes allowed.");
+            }
+            arrayOut.writeToStream(cast(ubyte[]) message);
+        }
+        sendWebSocketFrame(
+            SocketOutputStream(this.socket),
+            WebSocketFrame(true, WebSocketFrameOpcode.CONNECTION_CLOSE, arrayOut.toArray())
+        );
+    }
 }
 
 /**
@@ -58,6 +101,7 @@ struct WebSocketConnection {
  */
 class WebSocketHandler : HttpRequestHandler {
     private WebSocketMessageHandler messageHandler;
+    private WebSocketConnection[UUID] connections;
 
     this(WebSocketMessageHandler messageHandler) {
         this.messageHandler = messageHandler;
@@ -69,11 +113,6 @@ class WebSocketHandler : HttpRequestHandler {
         if (ctx.request.method != Method.GET) {
             ctx.response.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
             ctx.response.writeBodyString("Only GET requests are allowed.");
-            return;
-        }
-        if (ctx.request.url[0 .. 2] != "ws") {
-            ctx.response.setStatus(HttpStatus.BAD_REQUEST);
-            ctx.response.writeBodyString("Only ws:// URLs are allowed.");
             return;
         }
         string key = ctx.request.getHeader("Sec-WebSocket-Key");
@@ -94,7 +133,25 @@ class WebSocketHandler : HttpRequestHandler {
             this.messageHandler
         );
         infoF!"Registered websocket connection %s. Starting thread."(conn.id);
+        this.messageHandler.onConnectionEstablished(conn);
         new WebSocketThread(conn).start();
+    }
+
+    private void registerNewConnection(Socket clientSocket) {
+        WebSocketConnection conn = WebSocketConnection(
+            randomUUID(),
+            clientSocket,
+            this.messageHandler
+        );
+        this.connections[conn.id] = conn;
+        this.messageHandler.onConnectionEstablished(conn);
+    }
+
+    private synchronized void deregisterConnection(UUID id) {
+        bool removed = this.connections.remove(id);
+        if (removed) {
+            infoF!"Deregistered websocket connection %s."(id);
+        }
     }
 }
 
@@ -102,85 +159,137 @@ class WebSocketHandler : HttpRequestHandler {
  * A separate thread that manages persistent websocket connections and relays
  * incoming messages to registered websocket message handlers.
  */
-class WebSocketThread : Thread {
+private class WebSocketThread : Thread {
     private WebSocketConnection conn;
+    private SocketInputStream inputStream;
+    private SocketOutputStream outputStream;
 
     private WebSocketFrame continuedFrame;
 
     this(WebSocketConnection conn) {
         super(&this.run);
         this.conn = conn;
+        this.inputStream = SocketInputStream(this.conn.socket);
+        this.outputStream = SocketOutputStream(this.conn.socket);
     }
 
     private void run() {
-        SocketInputStream sIn = SocketInputStream(this.conn.socket);
-        SocketOutputStream sOut = SocketOutputStream(this.conn.socket);
         while (this.conn.socket.isAlive()) {
-            WebSocketFrame frame = receiveWebSocketFrame(&sIn);
+            WebSocketFrame frame = receiveWebSocketFrame(&this.inputStream);
             debugF!"Got frame: %s, length = %d"(frame.opcode, frame.payload.length);
-            if (frame.opcode == WebSocketFrameOpcode.CONNECTION_CLOSE) {
-                // The client has willfully closed the connection.
-                WebSocketCloseMessage msg = WebSocketCloseMessage(WebSocketCloseStatusCode.NO_CODE, null);
-                if (frame.payload.length >= 2) {
-                    union shortBytes { ushort s; ubyte[2] bytes; }
-                    shortBytes u;
-                    u.bytes = frame.payload[0 .. 2];
-                    msg.statusCode = u.s;
-                    msg.message = cast(string) frame.payload[2 .. $];
-                }
-                sendWebSocketFrame(&sOut, frame);
-                this.conn.messageHandler.handleCloseMessage(msg);
-                this.conn.socket.shutdown(SocketShutdown.BOTH);
-                this.conn.socket.close();
-            } else if (frame.opcode == WebSocketFrameOpcode.PING) {
-                // Client sent a ping. Send a PONG response.
-                WebSocketFrame pongFrame = WebSocketFrame(
-                    true,
-                    WebSocketFrameOpcode.PONG,
-                    frame.payload
-                );
-                sendWebSocketFrame(&sOut, pongFrame);
-            } else if (frame.opcode == WebSocketFrameOpcode.TEXT_FRAME) {
-                // Client sent a text message.
-                if (!frame.finalFragment) {
-                    this.continuedFrame = frame;
-                } else {
-                    handleText(frame);
-                }
-            } else if (frame.opcode == WebSocketFrameOpcode.BINARY_FRAME) {
-                // Client sent a binary message.
-                if (!frame.finalFragment) {
-                    this.continuedFrame = frame;
-                } else {
-                    handleBinary(frame);
-                }
-            } else if (frame.opcode == WebSocketFrameOpcode.CONTINUATION) {
-                // Client is continuing data for a previous message.
-                this.continuedFrame.payload ~= frame.payload;
-                if (frame.finalFragment) {
-                    if (continuedFrame.opcode == WebSocketFrameOpcode.TEXT_FRAME) {
-                        handleText(continuedFrame);
-                    } else {
-                        handleBinary(continuedFrame);
-                    }
-                }
+            switch (frame.opcode) {
+                case WebSocketFrameOpcode.CONNECTION_CLOSE:
+                    this.handleClientClose(frame);
+                    break;
+                case WebSocketFrameOpcode.PING:
+                    this.handleClientPing(frame);
+                    break;
+                case WebSocketFrameOpcode.TEXT_FRAME:
+                case WebSocketFrameOpcode.BINARY_FRAME:
+                    this.handleClientDataFrame(frame);
+                    break;
+                case WebSocketFrameOpcode.CONTINUATION:
+                    this.handleFrameContinuation(frame);
+                    break;
+                default:
+                    break;
             }
         }
         infoF!"WebSocket thread for %s stopped because socket closed."(this.conn.id);
         // "Handle" a fake close message so the message handler is aware that we're done.
-        this.conn.messageHandler.handleCloseMessage(WebSocketCloseMessage(WebSocketCloseStatusCode.CLOSED_ABNORMALLY, null));
+        this.conn.messageHandler.onCloseMessage(WebSocketCloseMessage(
+            this.conn,
+            WebSocketCloseStatusCode.CLOSED_ABNORMALLY,
+            null
+        ));
+    }
+
+    /**
+     * Handles a client's "close" control message by echoing the data frame
+     * back to the client, closing the underlying socket connection, and
+     * notifying the message handler of the event.
+     * Params:
+     *   closeFrame = The close frame sent by the client.
+     */
+    private void handleClientClose(WebSocketFrame closeFrame) {
+        WebSocketCloseMessage msg = WebSocketCloseMessage(this.conn, WebSocketCloseStatusCode.NO_CODE, null);
+        if (closeFrame.payload.length >= 2) {
+            union U { ushort value; ubyte[2] bytes; }
+            U u;
+            u.bytes = closeFrame.payload[0 .. 2];
+            msg.statusCode = u.value;
+            msg.message = cast(string) closeFrame.payload[2 .. $];
+        }
+        sendWebSocketFrame(&this.outputStream, closeFrame);
+        this.conn.socket.shutdown(SocketShutdown.BOTH);
+        this.conn.socket.close();
+        this.conn.messageHandler.onCloseMessage(msg);
+    }
+
+    /**
+     * Handles a client's "ping" control message by echoing the payload of the
+     * data frame back in a "pong" response.
+     * Params:
+     *   pingFrame = The ping frame sent by the client.
+     */
+    private void handleClientPing(WebSocketFrame pingFrame) {
+        WebSocketFrame pongFrame = WebSocketFrame(
+            true,
+            WebSocketFrameOpcode.PONG,
+            pingFrame.payload
+        );
+        sendWebSocketFrame(&this.outputStream, pongFrame);
+    }
+
+    /**
+     * Handles a client's data frame (text or binary) by checking if it's a
+     * single fragment, and if so, passing off handling to the message handler.
+     * Otherwise, saves the frame as the current "continued" frame so that we
+     * can append to it in `handleFrameContinuation`.
+     * Params:
+     *   frame = The frame that the client sent.
+     */
+    private void handleClientDataFrame(WebSocketFrame frame) {
+        bool isText = frame.opcode == WebSocketFrameOpcode.TEXT_FRAME;
+        if (frame.finalFragment) {
+            if (isText) {
+                this.handleText(frame);
+            } else {
+                this.handleBinary(frame);
+            }
+        } else {
+            this.continuedFrame = frame;
+        }
+    }
+
+    /**
+     * Handles a client's continuation frame, which is an additional data frame
+     * that appends content to a previous frame's payload to form a larger
+     * message.
+     * Params:
+     *   frame = The frame that was received.
+     */
+    private void handleFrameContinuation(WebSocketFrame frame) {
+        this.continuedFrame.payload ~= frame.payload;
+        if (frame.finalFragment) {
+            bool isText = this.continuedFrame.opcode == WebSocketFrameOpcode.TEXT_FRAME;
+            if (isText) {
+                this.handleText(this.continuedFrame);
+            } else {
+                this.handleBinary(this.continuedFrame);
+            }
+            continuedFrame.payload.length = 0;
+        }
     }
 
     private void handleText(WebSocketFrame frame) {
-        WebSocketTextMessage msg;
-        msg.payload = cast(string) frame.payload;
-        this.conn.messageHandler.handleTextMessage(msg);
+        auto msg = WebSocketTextMessage(this.conn, cast(string) frame.payload);
+        this.conn.messageHandler.onTextMessage(msg);
     }
 
     private void handleBinary(WebSocketFrame frame) {
-        WebSocketBinaryMessage msg;
-        msg.payload = frame.payload;
-        this.conn.messageHandler.handleBinaryMessage(msg);
+        auto msg = WebSocketBinaryMessage(this.conn, frame.payload);
+        this.conn.messageHandler.onBinaryMessage(msg);
     }
 }
 
