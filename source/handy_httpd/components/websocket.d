@@ -15,6 +15,10 @@ import std.uuid;
 import std.socket;
 import core.thread;
 
+/**
+ * An exception that's thrown if an unexpected situation arises while dealing
+ * with a websocket connection.
+ */
 class WebSocketException : Exception {
     import std.exception : basicExceptionCtors;
     import streams.primitives;
