@@ -48,7 +48,9 @@ struct WebSocketConnection {
 
 /**
  * A special HttpRequestHandler implementation that exclusively handles
- * websocket connection handshakes.
+ * websocket connection handshakes. Currently, this simply spawns a new thread
+ * to handle each websocket connection. I plan on implementing a better, non-
+ * threaded approach, but this will work for 90% of use cases.
  */
 class WebSocketHandler : HttpRequestHandler {
     private WebSocketMessageHandler messageHandler;
@@ -59,6 +61,17 @@ class WebSocketHandler : HttpRequestHandler {
 
     void handle(ref HttpRequestContext ctx) {
         string origin = ctx.request.getHeader("origin");
+        // TODO: Verify correct origin.
+        if (ctx.request.method != Method.GET) {
+            ctx.response.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
+            ctx.response.writeBodyString("Only GET requests are allowed.");
+            return;
+        }
+        if (ctx.request.url[0 .. 2] != "ws") {
+            ctx.response.setStatus(HttpStatus.BAD_REQUEST);
+            ctx.response.writeBodyString("Only ws:// URLs are allowed.");
+            return;
+        }
         string key = ctx.request.getHeader("Sec-WebSocket-Key");
         if (key is null) {
             ctx.response.setStatus(HttpStatus.BAD_REQUEST);
@@ -87,7 +100,7 @@ class WebSocketHandler : HttpRequestHandler {
  */
 class WebSocketThread : Thread {
     private WebSocketConnection conn;
-    private bool continuation = false;
+
     private WebSocketFrame continuedFrame;
 
     this(WebSocketConnection conn) {
@@ -100,7 +113,7 @@ class WebSocketThread : Thread {
         SocketOutputStream sOut = SocketOutputStream(this.conn.socket);
         while (this.conn.socket.isAlive()) {
             WebSocketFrame frame = receiveWebSocketFrame(&sIn);
-            infoF!"Got frame: %s, length = %d"(frame.opcode, frame.payload.length);
+            debugF!"Got frame: %s, length = %d"(frame.opcode, frame.payload.length);
             if (frame.opcode == WebSocketFrameOpcode.CONNECTION_CLOSE) {
                 // The client has willfully closed the connection.
                 WebSocketCloseMessage msg = WebSocketCloseMessage(WebSocketCloseStatusCode.NO_CODE, null);
@@ -125,19 +138,45 @@ class WebSocketThread : Thread {
                 sendWebSocketFrame(&sOut, pongFrame);
             } else if (frame.opcode == WebSocketFrameOpcode.TEXT_FRAME) {
                 // Client sent a text message.
-                // TODO: Handle continuation.
-                WebSocketTextMessage msg;
-                msg.payload = cast(string) frame.payload;
-                this.conn.messageHandler.handleTextMessage(msg);
+                if (!frame.finalFragment) {
+                    this.continuedFrame = frame;
+                } else {
+                    handleText(frame);
+                }
             } else if (frame.opcode == WebSocketFrameOpcode.BINARY_FRAME) {
                 // Client sent a binary message.
-                // TODO: Handle continuation.
-                WebSocketBinaryMessage msg;
-                msg.payload = frame.payload;
-                this.conn.messageHandler.handleBinaryMessage(msg);
+                if (!frame.finalFragment) {
+                    this.continuedFrame = frame;
+                } else {
+                    handleBinary(frame);
+                }
+            } else if (frame.opcode == WebSocketFrameOpcode.CONTINUATION) {
+                // Client is continuing data for a previous message.
+                this.continuedFrame.payload ~= frame.payload;
+                if (frame.finalFragment) {
+                    if (continuedFrame.opcode == WebSocketFrameOpcode.TEXT_FRAME) {
+                        handleText(continuedFrame);
+                    } else {
+                        handleBinary(continuedFrame);
+                    }
+                }
             }
         }
-        infoF!"WebSocket thread for %s died"(this.conn.id);
+        infoF!"WebSocket thread for %s stopped because socket closed."(this.conn.id);
+        // "Handle" a fake close message so the message handler is aware that we're done.
+        this.conn.messageHandler.handleCloseMessage(WebSocketCloseMessage(WebSocketCloseStatusCode.CLOSED_ABNORMALLY, null));
+    }
+
+    private void handleText(WebSocketFrame frame) {
+        WebSocketTextMessage msg;
+        msg.payload = cast(string) frame.payload;
+        this.conn.messageHandler.handleTextMessage(msg);
+    }
+
+    private void handleBinary(WebSocketFrame frame) {
+        WebSocketBinaryMessage msg;
+        msg.payload = frame.payload;
+        this.conn.messageHandler.handleBinaryMessage(msg);
     }
 }
 
