@@ -97,12 +97,12 @@ class ServerWorkerThread : Thread {
                 Socket clientSocket = nullableSocket.get();
                 this.logger.debugF!"Got client socket: %s"(clientSocket.remoteAddress());
 
-                auto inputStream = SocketInputStream(clientSocket);
-                auto outputStream = SocketOutputStream(clientSocket);
+                SocketInputStream inputStream = SocketInputStream(clientSocket);
+                SocketOutputStream outputStream = SocketOutputStream(clientSocket);
 
                 // Then try and parse their request and obtain a request context.
                 Nullable!HttpRequestContext nullableCtx = receiveRequest(
-                    &inputStream, &outputStream, clientSocket.remoteAddress
+                    &inputStream, &outputStream, clientSocket.remoteAddress, clientSocket
                 );
                 if (nullableCtx.isNull) {
                     this.logger.debug_("Skipping this request because we couldn't get a context.");
@@ -125,18 +125,22 @@ class ServerWorkerThread : Thread {
                         this.logger.error("Exception occurred in the server's exception handler.", e2);
                     }
                 }
-                outputStream.closeStream();
-                clientSocket.shutdown(SocketShutdown.BOTH);
-                clientSocket.close();
+                // Only close the socket if we're not switching protocols.
+                if (ctx.response.status != HttpStatus.SWITCHING_PROTOCOLS) {
+                    clientSocket.shutdown(SocketShutdown.BOTH);
+                    clientSocket.close();
+                    outputStream.closeStream();
+                    // Destroy the request context's allocated objects.
+                    destroy!(false)(ctx.request.inputStream);
+                    destroy!(false)(ctx.response.outputStream);
+                } else {
+                    this.logger.info("Keeping socket due to SWITCHING_PROTOCOLS status.");
+                }
 
                 this.logger.infoF!"Response: Status=%d %s"(ctx.response.status.code, ctx.response.status.text);
 
                 // Reset the request parser so we're ready for the next request.
                 requestParser.msg.reset();
-                
-                // Destroy the request context's allocated objects.
-                destroy!(false)(ctx.request.inputStream);
-                destroy!(false)(ctx.response.outputStream);
             }
         } catch (Exception e) {
             this.logger.error(e);
@@ -149,6 +153,7 @@ class ServerWorkerThread : Thread {
      *   inputStream = The input stream to read the request from.
      *   outputStream = The output stream to write response content to.
      *   remoteAddress = The client's address.
+     *   clientSocket = The underlying socket to the client.
      * Returns: A nullable request context, which if present, can be used to
      * further handle the request. If null, no further action should be taken
      * beyond closing the socket.
@@ -156,7 +161,8 @@ class ServerWorkerThread : Thread {
     private Nullable!HttpRequestContext receiveRequest(StreamIn, StreamOut)(
         StreamIn inputStream,
         StreamOut outputStream,
-        Address remoteAddress
+        Address remoteAddress,
+        Socket clientSocket
     ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
         this.logger.trace("Reading the initial request into the receive buffer.");
         StreamResult initialReadResult = inputStream.readFromStream(this.receiveBuffer);
@@ -183,7 +189,8 @@ class ServerWorkerThread : Thread {
                 initialReadResult.count,
                 inputStream,
                 outputStream,
-                remoteAddress
+                remoteAddress,
+                clientSocket
             ));
         } catch (Exception e) {
             this.logger.warnF!"Failed to parse HTTP request: %s"(e.msg);
@@ -201,6 +208,7 @@ class ServerWorkerThread : Thread {
      *   inputStream = The stream to read the request from.
      *   outputStream = The stream to write response content to.
      *   remoteAddress = The client's address.
+     *   clientSocket = The underlying socket to the client.
      * Returns: A request context that is ready for handling.
      */
     private HttpRequestContext prepareRequestContext(StreamIn, StreamOut)(
@@ -209,7 +217,8 @@ class ServerWorkerThread : Thread {
         size_t bytesReceived,
         StreamIn inputStream,
         StreamOut outputStream,
-        Address remoteAddress
+        Address remoteAddress,
+        Socket clientSocket
     ) if (isByteInputStream!StreamIn && isByteOutputStream!StreamOut) {
         HttpRequestContext ctx = HttpRequestContext(
             parsedRequest,
@@ -227,6 +236,7 @@ class ServerWorkerThread : Thread {
             ctx.request.inputStream = inputStreamObjectFor(bufferedInputStreamFor(inputStream));
         }
         ctx.request.remoteAddress = remoteAddress;
+        ctx.clientSocket = clientSocket;
         ctx.response.outputStream = outputStreamObjectFor(outputStream);
         this.logger.traceF!"Preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
             ctx.request.inputStream,
