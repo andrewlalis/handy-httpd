@@ -10,6 +10,7 @@ import handy_httpd.server;
 
 import std.range : InputRange, OutputRange;
 import std.conv : to;
+import std.socket : Socket;
 import slf4d;
 
 /**
@@ -31,15 +32,22 @@ struct HttpRequestContext {
      */
     public HttpResponse response;
 
-    /** 
+    /**
      * The server from which this context was created.
      */
     public HttpServer server;
 
-    /** 
+    /**
      * The worker thread that's handling this request.
      */
     public ServerWorkerThread worker;
+
+    /**
+     * The underlying socket to this request's client. In the vast majority of
+     * use cases, you do not need to use this directly, as there are more
+     * convenient and safer facilities available.
+     */
+    public Socket clientSocket;
 }
 
 /** 
