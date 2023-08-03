@@ -14,6 +14,7 @@ import std.typecons;
 import std.uuid;
 import std.socket;
 import core.thread;
+import core.sync.rwmutex;
 
 /**
  * An exception that's thrown if an unexpected situation arises while dealing
@@ -21,20 +22,29 @@ import core.thread;
  */
 class WebSocketException : Exception {
     import std.exception : basicExceptionCtors;
-    import streams.primitives;
     mixin basicExceptionCtors;
 }
 
+/**
+ * A text-based websocket message.
+ */
 struct WebSocketTextMessage {
     WebSocketConnection conn;
     string payload;
 }
 
+/**
+ * A binary websocket message.
+ */
 struct WebSocketBinaryMessage {
     WebSocketConnection conn;
     ubyte[] payload;
 }
 
+/**
+ * A "close" control websocket message indicating the client is closing the
+ * connection.
+ */
 struct WebSocketCloseMessage {
     WebSocketConnection conn;
     ushort statusCode;
@@ -58,10 +68,26 @@ abstract class WebSocketMessageHandler {
  * `WebSocketHandler`.
  */
 struct WebSocketConnection {
+    /**
+     * The internal id Handy-Httpd has assigned to this connection.
+     */
     UUID id;
+
+    /**
+     * The underlying socket used to communicate with this connection.
+     */
     Socket socket;
+
+    /**
+     * The message handler that is called to handle this connection's events.
+     */
     WebSocketMessageHandler messageHandler;
 
+    /**
+     * Sends a text message to the connected client.
+     * Params:
+     *   text = The text to send. Should be valid UTF-8.
+     */
     void sendTextMessage(string text) {
         sendWebSocketFrame(
             SocketOutputStream(this.socket),
@@ -69,6 +95,11 @@ struct WebSocketConnection {
         );
     }
 
+    /**
+     * Sends a binary message to the connected client.
+     * Params:
+     *   bytes = The binary data to send.
+     */
     void sendBinaryMessage(ubyte[] bytes) {
         sendWebSocketFrame(
             SocketOutputStream(this.socket),
@@ -76,6 +107,13 @@ struct WebSocketConnection {
         );
     }
 
+    /**
+     * Sends a close message to the client, indicating that we'll be closing
+     * the connection.
+     * Params:
+     *   status = The status code for closing.
+     *   message = A message explaining why we're closing. Length must be <= 123.
+     */
     void sendCloseMessage(WebSocketCloseStatusCode status, string message) {
         auto arrayOut = byteArrayOutputStream();
         auto dOut = dataOutputStreamFor(&arrayOut);
@@ -102,8 +140,10 @@ struct WebSocketConnection {
 class WebSocketHandler : HttpRequestHandler {
     private WebSocketMessageHandler messageHandler;
     private WebSocketConnection[UUID] connections;
+    private ReadWriteMutex connectionsMutex;
 
     this(WebSocketMessageHandler messageHandler) {
+        this.connectionsMutex = new ReadWriteMutex();
         this.messageHandler = messageHandler;
     }
 
@@ -134,7 +174,7 @@ class WebSocketHandler : HttpRequestHandler {
         );
         infoF!"Registered websocket connection %s. Starting thread."(conn.id);
         this.messageHandler.onConnectionEstablished(conn);
-        new WebSocketThread(conn).start();
+        new WebSocketThread(this, conn).start();
     }
 
     private void registerNewConnection(Socket clientSocket) {
@@ -143,14 +183,33 @@ class WebSocketHandler : HttpRequestHandler {
             clientSocket,
             this.messageHandler
         );
-        this.connections[conn.id] = conn;
+        synchronized(this.connectionsMutex.writer) {
+            this.connections[conn.id] = conn;
+        }
         this.messageHandler.onConnectionEstablished(conn);
     }
 
-    private synchronized void deregisterConnection(UUID id) {
-        bool removed = this.connections.remove(id);
-        if (removed) {
-            infoF!"Deregistered websocket connection %s."(id);
+    private void deregisterConnection(UUID id) {
+        synchronized(this.connectionsMutex.writer) {
+            bool removed = this.connections.remove(id);
+            if (removed) {
+                infoF!"Deregistered websocket connection %s."(id);
+            }
+        }
+    }
+
+    /**
+     * Gets a connection by its id.
+     * Params:
+     *   id = The id of the connection.
+     * Returns: The connection, if one exists with that id, or null.
+     */
+    Nullable!WebSocketConnection getConnection(UUID id) {
+        synchronized(this.connectionsMutex.reader) {
+            if (id in this.connections) {
+                return nullable(this.connections[id]);
+            }
+            return Nullable!WebSocketConnection.init;
         }
     }
 }
@@ -160,14 +219,16 @@ class WebSocketHandler : HttpRequestHandler {
  * incoming messages to registered websocket message handlers.
  */
 private class WebSocketThread : Thread {
+    private WebSocketHandler handler;
     private WebSocketConnection conn;
     private SocketInputStream inputStream;
     private SocketOutputStream outputStream;
 
     private WebSocketFrame continuedFrame;
 
-    this(WebSocketConnection conn) {
+    this(WebSocketHandler handler, WebSocketConnection conn) {
         super(&this.run);
+        this.handler = handler;
         this.conn = conn;
         this.inputStream = SocketInputStream(this.conn.socket);
         this.outputStream = SocketOutputStream(this.conn.socket);
@@ -196,6 +257,7 @@ private class WebSocketThread : Thread {
             }
         }
         infoF!"WebSocket thread for %s stopped because socket closed."(this.conn.id);
+        this.handler.deregisterConnection(this.conn.id);
         // "Handle" a fake close message so the message handler is aware that we're done.
         this.conn.messageHandler.onCloseMessage(WebSocketCloseMessage(
             this.conn,
@@ -379,7 +441,9 @@ private void sendWebSocketFrame(S)(S stream, WebSocketFrame frame) if (isByteOut
     if (result.hasError) {
         throw new WebSocketException(cast(string) result.error.message);
     } else if (result.count != frame.payload.length) {
-        throw new WebSocketException(format!"Wrote %d bytes instead of expected %d."(result.count, frame.payload.length));
+        throw new WebSocketException(format!"Wrote %d bytes instead of expected %d."(
+            result.count, frame.payload.length
+        ));
     }
 }
 
@@ -495,7 +559,9 @@ private ubyte[] readPayload(S)(ulong payloadLength, S stream) if (isByteInputStr
     if (readResult.hasError) {
         throw new WebSocketException(cast(string) readResult.error.message);
     } else if (readResult.count != payloadLength) {
-        throw new WebSocketException(format!"Read %d bytes instead of expected %d for message payload."(readResult.count, payloadLength));
+        throw new WebSocketException(format!"Read %d bytes instead of expected %d for message payload."(
+            readResult.count, payloadLength
+        ));
     }
     return buffer;
 }
@@ -590,7 +656,8 @@ unittest {
 
     ubyte[] binaryExample2 = new ubyte[65_536];
     for (int i = 0; i < binaryExample2.length; i++) binaryExample2[i] = cast(ubyte) i % ubyte.max;
-    ubyte[] binaryExample2Full = cast(ubyte[]) [0x82, 0x7F, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00] ~ binaryExample2;
+    ubyte[] binaryExample2Full = cast(ubyte[]) [0x82, 0x7F, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00] ~
+        binaryExample2;
     WebSocketFrame binaryFrame2 = receiveWebSocketFrame(arrayInputStreamFor(binaryExample2Full));
     assert(binaryFrame2.finalFragment);
     assert(binaryFrame2.opcode == WebSocketFrameOpcode.BINARY_FRAME);
