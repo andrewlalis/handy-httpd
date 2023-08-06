@@ -15,6 +15,7 @@ import std.uuid;
 import std.socket;
 import core.thread;
 import core.sync.rwmutex;
+import core.atomic;
 
 /**
  * An exception that's thrown if an unexpected situation arises while dealing
@@ -61,27 +62,46 @@ abstract class WebSocketMessageHandler {
     void onTextMessage(WebSocketTextMessage msg) {}
     void onBinaryMessage(WebSocketBinaryMessage msg) {}
     void onCloseMessage(WebSocketCloseMessage msg) {}
+    void onConnectionClosed(WebSocketConnection conn) {}
 }
 
 /**
  * All the data that represents a WebSocket connection tracked by the
  * `WebSocketHandler`.
  */
-struct WebSocketConnection {
+class WebSocketConnection {
     /**
      * The internal id Handy-Httpd has assigned to this connection.
      */
-    UUID id;
+    private UUID id;
 
     /**
      * The underlying socket used to communicate with this connection.
      */
-    Socket socket;
+    private Socket socket;
 
     /**
      * The message handler that is called to handle this connection's events.
      */
-    WebSocketMessageHandler messageHandler;
+    private WebSocketMessageHandler messageHandler;
+
+    this(Socket socket, WebSocketMessageHandler messageHandler) {
+        this.socket = socket;
+        this.messageHandler = messageHandler;
+        this.id = randomUUID();
+    }
+
+    UUID getId() {
+        return this.id;
+    }
+
+    Socket getSocket() {
+        return this.socket;
+    }
+
+    WebSocketMessageHandler getMessageHandler() {
+        return this.messageHandler;
+    }
 
     /**
      * Sends a text message to the connected client.
@@ -133,137 +153,219 @@ struct WebSocketConnection {
 
 /**
  * A special HttpRequestHandler implementation that exclusively handles
- * websocket connection handshakes. Currently, this simply spawns a new thread
- * to handle each websocket connection. I plan on implementing a better, non-
- * threaded approach, but this will work for 90% of use cases.
+ * websocket connection handshakes.
  */
 class WebSocketHandler : HttpRequestHandler {
     private WebSocketMessageHandler messageHandler;
-    private WebSocketConnection[UUID] connections;
-    private ReadWriteMutex connectionsMutex;
 
     this(WebSocketMessageHandler messageHandler) {
-        this.connectionsMutex = new ReadWriteMutex();
         this.messageHandler = messageHandler;
     }
 
     void handle(ref HttpRequestContext ctx) {
+        if (!this.verifyRequest(ctx)) return;
+        this.sendSwitchingProtocolsResponse(ctx);
+        ctx.server.getWebSocketManager().registerConnection(ctx.clientSocket, this.messageHandler);
+    }
+
+    /**
+     * Verifies a websocket request.
+     * Params:
+     *   ctx = The request context to verify.
+     * Returns: True if the request is valid can a websocket connection can be
+     * created, or false if we should reject. A response message will already
+     * be written in that case.
+     */
+    private bool verifyRequest(ref HttpRequestContext ctx) {
         string origin = ctx.request.getHeader("origin");
         // TODO: Verify correct origin.
         if (ctx.request.method != Method.GET) {
             ctx.response.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
             ctx.response.writeBodyString("Only GET requests are allowed.");
-            return;
+            return false;
         }
         string key = ctx.request.getHeader("Sec-WebSocket-Key");
         if (key is null) {
             ctx.response.setStatus(HttpStatus.BAD_REQUEST);
             ctx.response.writeBodyString("Missing Sec-WebSocket-Key header.");
-            return;
+            return false;
         }
+        return true;
+    }
+
+    /**
+     * Sends an HTTP 101 SWITCHING PROTOCOLS response to a client, to indicate
+     * that we'll be switching to the websocket protocol for all future
+     * communications.
+     * Params:
+     *   ctx = The request context to send the response to.
+     */
+    private void sendSwitchingProtocolsResponse(ref HttpRequestContext ctx) {
+        string key = ctx.request.getHeader("Sec-WebSocket-Key");
         ctx.response.setStatus(HttpStatus.SWITCHING_PROTOCOLS);
         ctx.response.addHeader("Upgrade", "websocket");
         ctx.response.addHeader("Connection", "Upgrade");
         ctx.response.addHeader("Sec-WebSocket-Accept", createSecWebSocketAcceptHeader(key));
         ctx.response.flushHeaders();
+    }
+}
 
-        WebSocketConnection conn = WebSocketConnection(
-            randomUUID(),
-            ctx.clientSocket,
-            this.messageHandler
-        );
-        infoF!"Registered websocket connection %s. Starting thread."(conn.id);
-        this.messageHandler.onConnectionEstablished(conn);
-        new WebSocketThread(this, conn).start();
+/**
+ * An event-loop based websocket manager thread that handles incoming messages
+ * and passes them off to their connection's message handler. This manager is
+ * enabled by setting the configuration option `enableWebSockets` to `true`.
+ *
+ * This manager controls the list of connected websocket clients, so in
+ * practice, you will most often use the manager for its `broadcast` methods to
+ * send out messages to all clients. You can get an instance of this manager
+ * from a request context like so: `ctx.server.getWebSocketManager()`
+ */
+class WebSocketManager : Thread {
+    private WebSocketConnection[UUID] connections;
+    private ReadWriteMutex connectionsMutex;
+    private SocketSet readableSocketSet;
+    private WebSocketFrame[UUID] continuationFrames;
+    private shared bool running = false;
+
+    this() {
+        super(&this.run);
+        this.connectionsMutex = new ReadWriteMutex();
+        this.readableSocketSet = new SocketSet();
     }
 
-    private void registerNewConnection(Socket clientSocket) {
-        WebSocketConnection conn = WebSocketConnection(
-            randomUUID(),
-            clientSocket,
-            this.messageHandler
-        );
+    void registerConnection(Socket socket, WebSocketMessageHandler handler) {
+        socket.blocking(false);
+        auto conn = new WebSocketConnection(socket, handler);
         synchronized(this.connectionsMutex.writer) {
             this.connections[conn.id] = conn;
         }
-        this.messageHandler.onConnectionEstablished(conn);
+        conn.messageHandler.onConnectionEstablished(conn);
     }
 
-    private void deregisterConnection(UUID id) {
+    void deregisterConnection(WebSocketConnection conn) {
         synchronized(this.connectionsMutex.writer) {
-            bool removed = this.connections.remove(id);
-            if (removed) {
-                infoF!"Deregistered websocket connection %s."(id);
+            this.connections.remove(conn.id);
+        }
+        if (conn.socket.isAlive()) {
+            conn.sendCloseMessage(WebSocketCloseStatusCode.NORMAL, null);
+            conn.socket.shutdown(SocketShutdown.BOTH);
+            conn.socket.close();
+            conn.messageHandler.onConnectionClosed(conn);
+        }
+    }
+
+    /**
+     * Broadcasts a binary message to all connected clients.
+     * Params:
+     *   bytes = The content to send.
+     */
+    void broadcast(ubyte[] bytes) {
+        synchronized(this.connectionsMutex.reader) {
+            foreach (id, conn; this.connections) {
+                try {
+                    conn.sendBinaryMessage(bytes);
+                } catch (WebSocketException e) {
+                    warn("Failed to broadcast to client" ~ id.toString() ~ ".", e);
+                }
             }
         }
     }
 
     /**
-     * Gets a connection by its id.
+     * Broadcasts a text message to all connected clients.
      * Params:
-     *   id = The id of the connection.
-     * Returns: The connection, if one exists with that id, or null.
+     *   text = The text to send.
      */
-    Nullable!WebSocketConnection getConnection(UUID id) {
-        synchronized(this.connectionsMutex.reader) {
-            if (id in this.connections) {
-                return nullable(this.connections[id]);
-            }
-            return Nullable!WebSocketConnection.init;
-        }
-    }
-}
-
-/**
- * A separate thread that manages persistent websocket connections and relays
- * incoming messages to registered websocket message handlers.
- */
-private class WebSocketThread : Thread {
-    private WebSocketHandler handler;
-    private WebSocketConnection conn;
-    private SocketInputStream inputStream;
-    private SocketOutputStream outputStream;
-
-    private WebSocketFrame continuedFrame;
-
-    this(WebSocketHandler handler, WebSocketConnection conn) {
-        super(&this.run);
-        this.handler = handler;
-        this.conn = conn;
-        this.inputStream = SocketInputStream(this.conn.socket);
-        this.outputStream = SocketOutputStream(this.conn.socket);
+    void broadcast(string text) {
+        broadcast(cast(ubyte[]) text);
     }
 
     private void run() {
-        while (this.conn.socket.isAlive()) {
-            WebSocketFrame frame = receiveWebSocketFrame(&this.inputStream);
-            debugF!"Got frame: %s, length = %d"(frame.opcode, frame.payload.length);
-            switch (frame.opcode) {
-                case WebSocketFrameOpcode.CONNECTION_CLOSE:
-                    this.handleClientClose(frame);
-                    break;
-                case WebSocketFrameOpcode.PING:
-                    this.handleClientPing(frame);
-                    break;
-                case WebSocketFrameOpcode.TEXT_FRAME:
-                case WebSocketFrameOpcode.BINARY_FRAME:
-                    this.handleClientDataFrame(frame);
-                    break;
-                case WebSocketFrameOpcode.CONTINUATION:
-                    this.handleFrameContinuation(frame);
-                    break;
-                default:
-                    break;
+        atomicStore(this.running, true);
+        debug_("WebSocket manager thread started.");
+        while (atomicLoad(this.running)) {
+            synchronized(this.connectionsMutex.reader) {
+                foreach (id, conn; this.connections) {
+                    if (conn.socket.isAlive()) {
+                        this.readableSocketSet.add(conn.socket);
+                    } else {
+                        debugF!"Connection has died: %s"(conn.id);
+                        this.connections.remove(conn.id);
+                        conn.messageHandler.onConnectionClosed(conn);
+                    }
+                }
             }
+
+            int count = Socket.select(this.readableSocketSet, null, null, msecs(100));
+            if (count == -1) {
+                warn("Interrupted while waiting for a socket status update.");
+            } else if (count > 0) {
+                synchronized(this.connectionsMutex.reader) {
+                    foreach (id, conn; this.connections) {
+                        if (this.readableSocketSet.isSet(conn.socket)) {
+                            try {
+                                this.handleIncomingMessage(conn);
+                            } catch (WebSocketException wex) {
+                                error("Failed to handle incoming message.", wex);
+                            } catch (Exception e) {
+                                error("Exception occurred while handling message.", e);
+                            }
+                        }
+                    }
+                }
+            }
+            this.readableSocketSet.reset();
         }
-        infoF!"WebSocket thread for %s stopped because socket closed."(this.conn.id);
-        this.handler.deregisterConnection(this.conn.id);
-        // "Handle" a fake close message so the message handler is aware that we're done.
-        this.conn.messageHandler.onCloseMessage(WebSocketCloseMessage(
-            this.conn,
-            WebSocketCloseStatusCode.CLOSED_ABNORMALLY,
-            null
-        ));
+        debug_("WebSocket manager thread stopped.");
+        // After stopping, we should try and send a close frame to each connection.
+        WebSocketConnection[] connList;
+        synchronized(this.connectionsMutex.writer) {
+            connList = this.connections.values();
+            this.connections.clear();
+        }
+        foreach (conn; connList) {
+            this.deregisterConnection(conn);
+        }
+    }
+
+    /**
+     * Stops the manager thread.
+     */
+    void stop() {
+        atomicStore(this.running, false);
+    }
+
+    /**
+     * Reads and handles any incoming websocket frame from the given connection.
+     * Params:
+     *   conn = The connection to receive a websocket frame from.
+     */
+    private void handleIncomingMessage(ref WebSocketConnection conn) {
+        SocketInputStream sIn = SocketInputStream(conn.socket);
+        WebSocketFrame frame = receiveWebSocketFrame(sIn);
+        debugF!"Received websocket frame from connection %s @ %s: %s, payload length = %d"(
+            conn.id,
+            conn.socket.remoteAddress(),
+            frame.opcode,
+            frame.payload.length
+        );
+        switch (frame.opcode) {
+            case WebSocketFrameOpcode.CONNECTION_CLOSE:
+                this.handleClientClose(frame, conn);
+                break;
+            case WebSocketFrameOpcode.PING:
+                this.handleClientPing(frame, conn);
+                break;
+            case WebSocketFrameOpcode.TEXT_FRAME:
+            case WebSocketFrameOpcode.BINARY_FRAME:
+                this.handleClientDataFrame(frame, conn);
+                break;
+            case WebSocketFrameOpcode.CONTINUATION:
+                this.handleFrameContinuation(frame, conn);
+                break;
+            default:
+                break;
+        }
     }
 
     /**
@@ -272,20 +374,28 @@ private class WebSocketThread : Thread {
      * notifying the message handler of the event.
      * Params:
      *   closeFrame = The close frame sent by the client.
+     *   conn = The connection that received the close frame.
      */
-    private void handleClientClose(WebSocketFrame closeFrame) {
-        WebSocketCloseMessage msg = WebSocketCloseMessage(this.conn, WebSocketCloseStatusCode.NO_CODE, null);
+    private void handleClientClose(WebSocketFrame closeFrame, ref WebSocketConnection conn) {
+        WebSocketCloseMessage msg = WebSocketCloseMessage(conn, WebSocketCloseStatusCode.NO_CODE, null);
+        conn.messageHandler.onCloseMessage(msg);
         if (closeFrame.payload.length >= 2) {
             union U { ushort value; ubyte[2] bytes; }
             U u;
             u.bytes = closeFrame.payload[0 .. 2];
             msg.statusCode = u.value;
-            msg.message = cast(string) closeFrame.payload[2 .. $];
+            if (closeFrame.payload.length > 2) {
+                msg.message = cast(string) closeFrame.payload[2 .. $];
+            }
         }
-        sendWebSocketFrame(&this.outputStream, closeFrame);
-        this.conn.socket.shutdown(SocketShutdown.BOTH);
-        this.conn.socket.close();
-        this.conn.messageHandler.onCloseMessage(msg);
+        try {
+            sendWebSocketFrame(SocketOutputStream(conn.socket), closeFrame);
+        } catch (WebSocketException e) {
+            // Ignore any failure in sending an echo response back.
+        }
+        conn.socket.shutdown(SocketShutdown.BOTH);
+        conn.socket.close();
+        conn.messageHandler.onConnectionClosed(conn);
     }
 
     /**
@@ -293,14 +403,15 @@ private class WebSocketThread : Thread {
      * data frame back in a "pong" response.
      * Params:
      *   pingFrame = The ping frame sent by the client.
+     *   conn = The connection that received the ping frame.
      */
-    private void handleClientPing(WebSocketFrame pingFrame) {
+    private void handleClientPing(WebSocketFrame pingFrame, ref WebSocketConnection conn) {
         WebSocketFrame pongFrame = WebSocketFrame(
             true,
             WebSocketFrameOpcode.PONG,
             pingFrame.payload
         );
-        sendWebSocketFrame(&this.outputStream, pongFrame);
+        sendWebSocketFrame(SocketOutputStream(conn.socket), pongFrame);
     }
 
     /**
@@ -310,17 +421,18 @@ private class WebSocketThread : Thread {
      * can append to it in `handleFrameContinuation`.
      * Params:
      *   frame = The frame that the client sent.
+     *   conn = The connection that received the data frame.
      */
-    private void handleClientDataFrame(WebSocketFrame frame) {
+    private void handleClientDataFrame(WebSocketFrame frame, ref WebSocketConnection conn) {
         bool isText = frame.opcode == WebSocketFrameOpcode.TEXT_FRAME;
         if (frame.finalFragment) {
             if (isText) {
-                this.handleText(frame);
+                conn.messageHandler.onTextMessage(WebSocketTextMessage(conn, cast(string) frame.payload));
             } else {
-                this.handleBinary(frame);
+                conn.messageHandler.onBinaryMessage(WebSocketBinaryMessage(conn, frame.payload));
             }
         } else {
-            this.continuedFrame = frame;
+            this.continuationFrames[conn.id] = frame;
         }
     }
 
@@ -330,28 +442,24 @@ private class WebSocketThread : Thread {
      * message.
      * Params:
      *   frame = The frame that was received.
+     *   conn = The connection that received the frame.
      */
-    private void handleFrameContinuation(WebSocketFrame frame) {
-        this.continuedFrame.payload ~= frame.payload;
-        if (frame.finalFragment) {
-            bool isText = this.continuedFrame.opcode == WebSocketFrameOpcode.TEXT_FRAME;
-            if (isText) {
-                this.handleText(this.continuedFrame);
-            } else {
-                this.handleBinary(this.continuedFrame);
-            }
-            continuedFrame.payload.length = 0;
+    private void handleFrameContinuation(WebSocketFrame frame, ref WebSocketConnection conn) {
+        WebSocketFrame* continuedFrame = conn.id in this.continuationFrames;
+        if (continuedFrame is null) {
+            return; // Ignore a continuation frame if we aren't yet tracking an initial frame for a connection.
         }
-    }
-
-    private void handleText(WebSocketFrame frame) {
-        auto msg = WebSocketTextMessage(this.conn, cast(string) frame.payload);
-        this.conn.messageHandler.onTextMessage(msg);
-    }
-
-    private void handleBinary(WebSocketFrame frame) {
-        auto msg = WebSocketBinaryMessage(this.conn, frame.payload);
-        this.conn.messageHandler.onBinaryMessage(msg);
+        continuedFrame.payload ~= frame.payload;
+        if (frame.finalFragment) {
+            bool isText = continuedFrame.opcode == WebSocketFrameOpcode.TEXT_FRAME;
+            if (isText) {
+                conn.messageHandler.onTextMessage(WebSocketTextMessage(conn, cast(string) continuedFrame.payload));
+            } else {
+                conn.messageHandler.onBinaryMessage(WebSocketBinaryMessage(conn, continuedFrame.payload));
+            }
+            // Remove the continuation frame now that we've received the final frame.
+            this.continuationFrames.remove(conn.id);
+        }
     }
 }
 

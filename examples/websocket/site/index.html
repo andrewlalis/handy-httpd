@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Handy-Httpd WebSocket Example</title>
+    <style>
+        .boxes-container {
+            background-color: green;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .message-box-container {
+            background-color: lightgray;
+            border: 1px solid black;
+        }
+        .message-box-container h3 {
+            text-decoration: underline;
+            background-color: lightblue;
+            margin: 0;
+            padding: 2px;
+            font-size: small;
+        }
+        .message-box {
+            padding: 2px;
+            width: 50ch;
+            height: 30ch;
+            overflow-y: scroll;
+            overflow-x: auto;
+            font-family: monospace;
+        }
+        .message-box p {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>WebSocket Example</h1>
+
+    <label for="count-input">Number of websockets to open:</label>
+    <input id="count-input" type="number" min="1" max="100" step="1" value="1"/>
+    <button id="test-button">Click here to test!</button>
+
+    <h3>Messages will appear below:</h3>
+
+    <div class="boxes-container"></div>
+
+    <script src="ws-test.js"></script>
+</body>
+
+</html>

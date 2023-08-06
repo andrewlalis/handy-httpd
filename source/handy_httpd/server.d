@@ -20,6 +20,7 @@ import handy_httpd.components.config;
 import handy_httpd.components.parse_utils : parseRequest, Msg;
 import handy_httpd.components.worker;
 import handy_httpd.components.worker_pool;
+import handy_httpd.components.websocket;
 
 import httparsed : MsgParser, initParser;
 import slf4d;
@@ -83,6 +84,11 @@ class HttpServer {
      */
     private WorkerPool workerPool;
 
+    /**
+     * A manager thread for handling all websocket connections.
+     */
+    private WebSocketManager websocketManager;
+
     /** 
      * Constructs a new server using the supplied handler to handle all
      * incoming requests.
@@ -101,6 +107,9 @@ class HttpServer {
         this.requestQueueMutex = new ReadWriteMutex();
         this.exceptionHandler = new BasicServerExceptionHandler();
         this.workerPool = new WorkerPool(this);
+        if (config.enableWebSockets) {
+            this.websocketManager = new WebSocketManager();
+        }
     }
 
     /** 
@@ -140,6 +149,9 @@ class HttpServer {
         debug_("Started listening for connections.");
         atomicStore(this.ready, true);
         this.workerPool.start();
+        if (this.websocketManager !is null) {
+            this.websocketManager.start();
+        }
 
         info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
@@ -157,6 +169,10 @@ class HttpServer {
         }
         atomicStore(this.ready, false);
         this.workerPool.stop();
+        if (this.websocketManager !is null) {
+            this.websocketManager.stop();
+            this.websocketManager.join();
+        }
         info("Server shut down.");
     }
 
@@ -244,5 +260,15 @@ class HttpServer {
      */
     public void setExceptionHandler(ServerExceptionHandler exceptionHandler) {
         this.exceptionHandler = exceptionHandler;
+    }
+
+    /**
+     * Gets the server's websocket manager, used to register new websocket
+     * connections, or to broadcast a message to all connected websockets.
+     * Returns: The websocket manager, or `null` if `enableWebSockets` is set
+     * to `false` in this server's configuration.
+     */
+    public WebSocketManager getWebSocketManager() {
+        return this.websocketManager;
     }
 }

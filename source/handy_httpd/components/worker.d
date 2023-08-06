@@ -133,7 +133,7 @@ class ServerWorkerThread : Thread {
                     destroy!(false)(ctx.request.inputStream);
                     destroy!(false)(ctx.response.outputStream);
                 } else {
-                    this.logger.info("Keeping socket due to SWITCHING_PROTOCOLS status.");
+                    this.logger.debug_("Keeping socket alive due to SWITCHING_PROTOCOLS status.");
                 }
 
                 this.logger.infoF!"Response: Status=%d %s"(ctx.response.status.code, ctx.response.status.text);

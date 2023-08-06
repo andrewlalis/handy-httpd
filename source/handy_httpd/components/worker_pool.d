@@ -149,5 +149,16 @@ package class PoolManager : Thread {
             }
         }
         this.logger.debugF!"Worker pool: %d busy, %d waiting, %d dead."(busyCount, waitingCount, deadCount);
+        if (waitingCount == 0) {
+            this.logger.warnF!(
+                "There are no worker threads available to take requests. %d are busy. " ~
+                "This may be an indication of a deadlock or indefinite blocking operation."
+            )(busyCount);
+        }
+        // Temp check websocket manager health:
+        auto manager = pool.server.getWebSocketManager();
+        if (manager !is null && !manager.isRunning()) {
+            this.logger.error("The WebSocketManager has died! Please report this issue to the author of handy-httpd.");
+        }
     }
 }

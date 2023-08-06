@@ -61,6 +61,13 @@ struct ServerConfig {
      */
     string[string] defaultHeaders;
 
+    /**
+     * Whether to enable websocket functionality. If enabled, an extra thread
+     * is spawned to manage websocket connections, separate from the main
+     * worker pool.
+     */
+    bool enableWebSockets;
+
     static ServerConfig defaultValues() {
         ServerConfig cfg;
         cfg.hostname = "127.0.0.1";
@@ -70,6 +77,7 @@ struct ServerConfig {
         cfg.reuseAddress = true;
         cfg.workerPoolSize = 25;
         cfg.workerPoolManagerIntervalMs = 60_000;
+        cfg.enableWebSockets = true;
         return cfg;
     }
 }
