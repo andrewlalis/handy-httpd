@@ -71,3 +71,9 @@ The number of worker threads to use to process incoming requests. Increasing thi
 The number of milliseconds that the worker pool manager should wait between each health check it performs. Each health check can find and replace worker threads that have died due to an uncaught error or exception.
 
 This interval shouldn't need to be very small, unless a high percentage of your requests end up killing their worker thread with a fatal error.
+
+### `enableWebSockets`
+| Type | Default Value |
+|---   |---            |
+| `bool` | `true` |
+Whether to enable websocket functionality for the server. If set to true, starting the server will also start an additional thread that handles websocket traffic in a nonblocking fashion.

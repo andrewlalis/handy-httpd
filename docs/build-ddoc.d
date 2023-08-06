@@ -41,7 +41,6 @@ int main() {
     pid = spawnProcess([
         DOC_GEN_SRC ~ "/doc2",
         "-i",
-        "--case-insensitive-filenames",
         "--document-undocumented",
         "-o", DOC_OUT,
         "../source"

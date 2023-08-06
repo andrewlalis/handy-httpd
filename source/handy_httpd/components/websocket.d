@@ -58,10 +58,40 @@ struct WebSocketCloseMessage {
  * one, and overrides any "on..." methods.
  */
 abstract class WebSocketMessageHandler {
+    /**
+     * Called when a new websocket connection is established.
+     * Params:
+     *   conn = The new connection.
+     */
     void onConnectionEstablished(WebSocketConnection conn) {}
+
+    /**
+     * Called when a text message is received.
+     * Params:
+     *   msg = The message that was received.
+     */
     void onTextMessage(WebSocketTextMessage msg) {}
+
+    /**
+     * Called when a binary message is received.
+     * Params:
+     *   msg = The message that was received.
+     */
     void onBinaryMessage(WebSocketBinaryMessage msg) {}
+
+    /**
+     * Called when a CLOSE message is received. Note that this is called before
+     * the socket is necessarily guaranteed to be closed.
+     * Params:
+     *   msg = The close message.
+     */
     void onCloseMessage(WebSocketCloseMessage msg) {}
+
+    /**
+     * Called when a websocket connection is closed.
+     * Params:
+     *   conn = The connection that was closed.
+     */
     void onConnectionClosed(WebSocketConnection conn) {}
 }
 
@@ -158,10 +188,25 @@ class WebSocketConnection {
 class WebSocketHandler : HttpRequestHandler {
     private WebSocketMessageHandler messageHandler;
 
+    /**
+     * Constructs the websocket handler using the given message handler for
+     * any websocket messages received via this handler.
+     * Params:
+     *   messageHandler = The message handler to use.
+     */
     this(WebSocketMessageHandler messageHandler) {
         this.messageHandler = messageHandler;
     }
 
+    /**
+     * Handles an HTTP request by verifying that it's a legitimate websocket
+     * request, then sends a 101 SWITCHING PROTOCOLS response, and finally,
+     * registers a new websocket connection with the server's manager. If an
+     * invalid request is given, then a client error response code will be
+     * sent back.
+     * Params:
+     *   ctx = The request context.
+     */
     void handle(ref HttpRequestContext ctx) {
         if (!this.verifyRequest(ctx)) return;
         this.sendSwitchingProtocolsResponse(ctx);
