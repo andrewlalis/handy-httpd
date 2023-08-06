@@ -329,10 +329,12 @@ class WebSocketManager : Thread {
         atomicStore(this.running, true);
         debug_("WebSocket manager thread started.");
         while (atomicLoad(this.running)) {
+            uint socketCount = 0;
             synchronized(this.connectionsMutex.reader) {
                 foreach (id, conn; this.connections) {
                     if (conn.socket.isAlive()) {
                         this.readableSocketSet.add(conn.socket);
+                        socketCount++;
                     } else {
                         debugF!"Connection has died: %s"(conn.id);
                         this.connections.remove(conn.id);
@@ -341,6 +343,12 @@ class WebSocketManager : Thread {
                 }
             }
 
+            // If there are no connections at all to read from, just wait and try again.
+            if (socketCount == 0) {
+                Thread.sleep(msecs(1));
+                continue;
+            }
+            
             int count = Socket.select(this.readableSocketSet, null, null, msecs(100));
             if (count == -1) {
                 warn("Interrupted while waiting for a socket status update.");
