@@ -4,13 +4,13 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 
 ## Features
 - HTTP/1.1
-- Web Sockets
+- [Web Sockets](https://andrewlalis.github.io/handy-httpd/guide/handlers/websocket-handler.html)
 - Worker pool for request handling
 - [Simple configuration](https://andrewlalis.github.io/handy-httpd/guide/configuration.html)
 - High performance
 - Beginner friendly
 - Extensible with custom handlers, exception handlers, and filters
-- Well-documented
+- [Well-documented](https://andrewlalis.github.io/handy-httpd/)
 - [Prioritises testability](https://andrewlalis.github.io/handy-httpd/guide/testing.html)
 - Ships with some handy pre-made request handlers:
 	- Serve static files with the [FileResolvingHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/file-resolving-handler.html)
