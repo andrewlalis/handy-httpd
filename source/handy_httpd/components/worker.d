@@ -83,8 +83,8 @@ class ServerWorkerThread : Thread {
      * 3. Handle the request using the server's handler.
      */
     private void run() {
-        try {
-            while (server.isReady) {
+        while (server.isReady) {
+            try {
                 // First try and get a socket to the client.
                 Nullable!Socket nullableSocket = server.waitForNextClient();
                 if (nullableSocket.isNull || !nullableSocket.get().isAlive()) {
@@ -140,9 +140,9 @@ class ServerWorkerThread : Thread {
 
                 // Reset the request parser so we're ready for the next request.
                 requestParser.msg.reset();
+            } catch (Exception e) {
+                logger.error("An unhandled exception occurred in this worker's `run` method.", e);
             }
-        } catch (Exception e) {
-            this.logger.error(e);
         }
     }
 
