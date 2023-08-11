@@ -88,6 +88,7 @@ class ServerWorkerThread : Thread {
                 // First try and get a socket to the client.
                 Nullable!Socket nullableSocket = server.waitForNextClient();
                 if (nullableSocket.isNull || !nullableSocket.get().isAlive()) {
+                    if (!nullableSocket.isNull) nullableSocket.get().close();
                     continue;
                 }
                 atomicStore(this.busy, true); // Since we got a legit client, mark this worker as busy.
