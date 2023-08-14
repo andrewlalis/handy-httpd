@@ -77,6 +77,7 @@ module.exports = {
           children: [
             'handlers/path-delegating-handler',
             'handlers/file-resolving-handler',
+            'handlers/filtered-handler',
             'handlers/websocket-handler',
             'handlers/profiling-handler'
           ]
