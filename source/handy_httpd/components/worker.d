@@ -133,6 +133,7 @@ class ServerWorkerThread : Thread {
                     // Destroy the request context's allocated objects.
                     destroy!(false)(ctx.request.inputStream);
                     destroy!(false)(ctx.response.outputStream);
+                    destroy!(false)(ctx.metadata);
                 } else {
                     this.logger.debug_("Keeping socket alive due to SWITCHING_PROTOCOLS status.");
                 }

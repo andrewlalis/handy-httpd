@@ -15,11 +15,8 @@ import slf4d;
 
 /**
  * A simple container for the components that are available in the context of
- * handling an HttpRequest. This includes:
- * - The HttpRequest.
- * - The HttpResponse.
- * - The HttpServer.
- * - The worker thread.
+ * handling an HttpRequest. This includes the request, response, server, worker,
+ * and other associated objects.
  */
 struct HttpRequestContext {
     /**
@@ -48,20 +45,29 @@ struct HttpRequestContext {
      * convenient and safer facilities available.
      */
     public Socket clientSocket;
+
+    /**
+     * An associative array of objects, indexed by string names, that pertain
+     * to this request context. Filters, handlers, and other middlewares may
+     * add data to this mapping for later usage. Think of it as "request-local"
+     * storage, similar to thread-local storage. All objects in this mapping
+     * are discarded once this request context has completed its processing.
+     */
+    public Object[string] metadata;
 }
 
-/** 
+/**
  * An alias for the signature of a function capable of handling requests. It's
  * just a `void` function that takes a single `HttpRequestContext` parameter.
  * It is acceptable to throw exceptions from the function.
  */
 alias HttpRequestHandlerFunction = void function(ref HttpRequestContext);
 
-/** 
+/**
  * Interface for any component that handles HTTP requests.
  */
 interface HttpRequestHandler {
-    /** 
+    /**
      * Handles an HTTP request. Note that this method may be called from
      * multiple threads, as requests may be processed in parallel, so you
      * should avoid performing actions which are not thread-safe.
@@ -75,12 +81,12 @@ interface HttpRequestHandler {
     void handle(ref HttpRequestContext ctx);
 }
 
-/** 
+/**
  * A specialized handler which is used for situations in which you'd like to
  * gracefully handle an exception that occurs during processing a request.
  */
 interface ServerExceptionHandler {
-    /** 
+    /**
      * Handles an HTTP request associated with an exception.
      * Params:
      *   ctx = The request context.
@@ -107,7 +113,7 @@ class HttpStatusException : Exception {
     }
 }
 
-/** 
+/**
  * A basic implementation of the `ServerExceptionHandler` which gracefully
  * handles `HttpStatusException` by setting the response status, and defaults
  * to a 500 INTERNAL SERVER ERROR respones for all other exceptions. If the
@@ -141,7 +147,7 @@ class BasicServerExceptionHandler : ServerExceptionHandler {
     }
 }
 
-/** 
+/**
  * Helper method to produce an HttpRequestHandler from a function.
  * Params:
  *   fn = The function that will handle requests.
@@ -155,7 +161,7 @@ HttpRequestHandler toHandler(HttpRequestHandlerFunction fn) {
     };
 }
 
-/** 
+/**
  * Helper method for an HttpRequestHandler that simply responds with a 503 to
  * any request.
  * Returns: The request handler.
