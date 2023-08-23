@@ -24,7 +24,7 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
 
-/** 
+/**
  * The server worker thread is a thread that processes incoming requests from
  * an `HttpServer`.
  */
@@ -59,7 +59,7 @@ class ServerWorkerThread : Thread {
      */
     private shared bool busy = false;
 
-    /** 
+    /**
      * Constructs this worker thread for the given server, with the given id.
      * Params:
      *   server = The server that this thread belongs to.
@@ -74,7 +74,7 @@ class ServerWorkerThread : Thread {
         this.logger = getLogger(super.name());
     }
 
-    /** 
+    /**
      * Runs the worker thread. This will run continuously until the server
      * stops. The worker will do the following:
      * 
@@ -148,7 +148,7 @@ class ServerWorkerThread : Thread {
         }
     }
 
-    /** 
+    /**
      * Attempts to receive an HTTP request from the given socket.
      * Params:
      *   inputStream = The input stream to read the request from.
@@ -199,7 +199,7 @@ class ServerWorkerThread : Thread {
         }
     }
 
-    /** 
+    /**
      * Helper method to build the request context from the basic components
      * obtained from parsing a request.
      * Params:
@@ -239,6 +239,7 @@ class ServerWorkerThread : Thread {
         ctx.request.remoteAddress = remoteAddress;
         ctx.clientSocket = clientSocket;
         ctx.response.outputStream = outputStreamObjectFor(outputStream);
+        ctx.response.headers["Connection"] = "close"; // Always set Connection: close. Handler must set keep-alive manually if they wish to do so.
         this.logger.traceF!"Preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
             ctx.request.inputStream,
             ctx.response.outputStream
@@ -249,7 +250,7 @@ class ServerWorkerThread : Thread {
         return ctx;
     }
 
-    /** 
+    /**
      * Gets a pointer to this worker's internal pre-allocated receive buffer.
      * Returns: A pointer to the worker's receive buffer.
      */
@@ -257,7 +258,7 @@ class ServerWorkerThread : Thread {
         return &receiveBuffer;
     }
 
-    /** 
+    /**
      * Gets the server that this worker was created for.
      * Returns: The server.
      */
