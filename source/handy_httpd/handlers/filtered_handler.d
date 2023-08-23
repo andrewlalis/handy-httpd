@@ -94,14 +94,8 @@ class FilterChain {
     }
 }
 
-/**
- * An internal component that marks the end of a filter chain. The last filter
- * in the chain will call this, ending the chain of calls.
- */
 private class FilterChainEnd : FilterChain {
-    override void doFilter(ref HttpRequestContext ctx) {
-        // No-OP
-    }
+    override void doFilter(ref HttpRequestContext ctx) {} // Don't do anything.
 }
 
 /** 
@@ -200,40 +194,32 @@ unittest {
 class FilteredRequestHandler : HttpRequestHandler {
     private FilterChain filterChain;
 
-    /** 
-     * Constructs a filtered request handler that applies the pre-request
-     * filter chain, followed by provided handler (if all filters pass), and
-     * then finally followed by the post-request filter chain.
+    /**
+     * Constructs a filtered request handler that simply applies a given filter
+     * chain to any incoming requests.
      * Params:
-     *   handler = The handler to call.
-     *   preRequest = A pre-request filter chain to apply before calling the
-     *                handler.
-     *   postRequest = A post-request filter chain to apply after calling the
-     *                 handler.
+     *   filterChain = The filter chain to apply to requests.
      */
-    this(HttpRequestHandler handler, FilterChain preRequest = null, FilterChain postRequest = null) {
-        FilterChain handlerFilterChain = new FilterChain();
-        handlerFilterChain.filter = new HandlerFilter(handler);
-        handlerFilterChain.next = postRequest;
-
-        if (preRequest !is null) {// If there are pre-request filters, start there.
-            this.filterChain = preRequest.append(filterChain);
-        } else {// Otherwise, start at the handler.
-            this.filterChain = handlerFilterChain;
-        }
-        this.filterChain.append(new FilterChainEnd());
+    this(FilterChain filterChain) {
+        this.filterChain = filterChain;
     }
 
+    /**
+     * Constructs a filtered request handler that applies pre-request filters,
+     * then handles a request, and then post-request filters.
+     * Params:
+     *   handler = The handler for requests.
+     *   preRequestFilters = Filters to run, in order, before the handler.
+     *   postRequestFilters = Filters to run, in order, after the handler.
+     */
     this(
         HttpRequestHandler handler,
         HttpRequestFilter[] preRequestFilters = [],
         HttpRequestFilter[] postRequestFilters = []
     ) {
-        this(
-            handler,
-            FilterChain.build(preRequestFilters),
-            FilterChain.build(postRequestFilters)
-        );
+        this(FilterChain.build(
+            preRequestFilters ~ [cast(HttpRequestFilter) new HandlerFilter(handler)] ~ postRequestFilters
+        ));
     }
 
     void handle(ref HttpRequestContext ctx) {
