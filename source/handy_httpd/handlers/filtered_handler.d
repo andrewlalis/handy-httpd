@@ -221,6 +221,7 @@ class FilteredRequestHandler : HttpRequestHandler {
         } else {// Otherwise, start at the handler.
             this.filterChain = handlerFilterChain;
         }
+        this.filterChain.append(new FilterChainEnd());
     }
 
     this(
