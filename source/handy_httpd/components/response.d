@@ -64,6 +64,23 @@ struct HttpResponse {
         return this;
     }
 
+    /**
+     * Makes the response's body use "chunked" transfer-encoding. See here for
+     * more info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding
+     * Only call this method if you have not flushed the response's headers yet
+     * and you haven't written anything to the response body.
+     * Returns: The response object, for method chaining.
+     */
+    public HttpResponse chunked() {
+        if (flushed) {
+            warn("Attempted to set response body as chunked-encoded after headers have been flushed.");
+            return this;
+        }
+        this.headers["Transfer-Encoding"] = "chunked";
+        this.outputStream = outputStreamObjectFor(ChunkedEncodingOutputStream!(OutputStream!ubyte)(this.outputStream));
+        return this;
+    }
+
     /** 
      * Flushes the headers for this request. Once this is done, header
      * information can no longer be modified.
