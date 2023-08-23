@@ -22,7 +22,9 @@ class FilterChain {
      *   ctx = The request context.
      */
     void doFilter(ref HttpRequestContext ctx) {
-        if (next !is null) filter.apply(ctx, next);
+        if (this.next !is null) {
+            filter.apply(ctx, this.next);
+        }
     }
 
     /** 
@@ -59,11 +61,15 @@ class FilterChain {
             current.next = links[i];
             current = links[i];
         }
+        current.next = new FilterChainEnd();
         return root;
     }
 
     unittest {
         import std.conv;
+
+        assert(FilterChain.build([]) is null);
+
         class SimpleFilter : HttpRequestFilter {
             int id;
             this(int id) {
@@ -84,7 +90,17 @@ class FilterChain {
         assert(fc.filter == f1);
         assert(fc.next.filter == f2);
         assert(fc.next.next.filter == f3);
-        assert(fc.next.next.next is null);
+        assert(cast(FilterChainEnd) fc.next.next.next);
+    }
+}
+
+/**
+ * An internal component that marks the end of a filter chain. The last filter
+ * in the chain will call this, ending the chain of calls.
+ */
+private class FilterChainEnd : FilterChain {
+    override void doFilter(ref HttpRequestContext ctx) {
+        // No-OP
     }
 }
 
@@ -133,6 +149,39 @@ private class HandlerFilter : HttpRequestFilter {
         handler.handle(ctx);
         filterChain.doFilter(ctx);
     }
+}
+
+unittest {
+    import handy_httpd.util.builders;
+    import handy_httpd.components.request;
+    import slf4d;
+
+    // Test that when applied, it calls the handler's handle() method, and then continues the filter chain.
+    class TestingFilter : HttpRequestFilter {
+        uint callCount;
+        void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
+            this.callCount++;
+            filterChain.doFilter(ctx);
+        }
+    }
+
+    class TestingHandler : HttpRequestHandler {
+        uint callCount;
+        void handle(ref HttpRequestContext ctx) {
+            this.callCount++;
+        }
+    }
+
+    auto ctx = buildCtxForRequest(Method.GET, "/data");
+    auto testingHandler = new TestingHandler();
+    auto testingFilter = new TestingFilter();
+    auto handlerFilter = new HandlerFilter(testingHandler);
+    HttpRequestFilter[] filters = cast(HttpRequestFilter[])[handlerFilter, testingFilter];
+    auto filterChain = FilterChain.build(filters);
+    filterChain.doFilter(ctx);
+    // Assert that both the handler filter, and the subsequent testing filter were called.
+    assert(testingHandler.callCount == 1);
+    assert(testingFilter.callCount == 1);
 }
 
 /** 
