@@ -16,5 +16,6 @@
 	},
 	"description": "Extremely lightweight HTTP server for D.",
 	"license": "MIT",
-	"name": "handy-httpd"
+	"name": "handy-httpd",
+	"buildRequirements": ["allowWarnings"]
 }
