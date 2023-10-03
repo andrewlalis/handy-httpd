@@ -6,6 +6,7 @@ module handy_httpd.components.websocket;
 import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
+import handy_httpd.util.byte_utils;
 import streams;
 import slf4d;
 
@@ -362,6 +363,12 @@ class WebSocketManager : Thread {
                                 error("Failed to handle incoming message.", wex);
                             } catch (Exception e) {
                                 error("Exception occurred while handling message.", e);
+                            } catch (Throwable t) {
+                                errorF!
+                                    "A fatal error occurred while handling message: %s, file %s, line %d\nInfo:\n%s"
+                                (t.msg, t.file, t.line, t.info);
+                                error("The websocket manager thread will now be killed.");
+                                throw t;
                             }
                         }
                     }
@@ -632,6 +639,7 @@ private WebSocketFrame receiveWebSocketFrame(S)(S stream) if (isByteInputStream!
     immutable ubyte maskAndLength = readDataOrThrow!(ubyte)(ptr);
     immutable bool payloadMasked = (maskAndLength & 128) > 0;
     immutable ubyte initialPayloadLength = maskAndLength & 127;
+    debugF!"Websocket data frame Mask bit = %s, Initial payload length = %d"(payloadMasked, initialPayloadLength);
     ulong payloadLength = readPayloadLength(initialPayloadLength, ptr);
     if (isControlFrame && payloadLength > 125) {
         throw new WebSocketException("Control frame payload is too large.");
@@ -735,8 +743,7 @@ private ubyte[] readPayload(S)(ulong payloadLength, S stream) if (isByteInputStr
  * Returns: The value that was read.
  */
 private T readDataOrThrow(T, S)(S stream) if (isByteInputStream!S) {
-    auto dIn = dataInputStreamFor(stream);
-    DataReadResult!T result = dIn.readFromStream!T();
+    DataReadResult!T result = readNetworkData!(T, S)(stream);
     if (result.hasError) {
         throw new WebSocketException(cast(string) result.error.message);
     }
@@ -809,7 +816,7 @@ unittest {
     ubyte[] binaryExample1 = new ubyte[256];
     // Populate the data with some expected values.
     for (int i = 0; i < binaryExample1.length; i++) binaryExample1[i] = cast(ubyte) i % ubyte.max;
-    ubyte[] binaryExample1Full = cast(ubyte[]) [0x82, 0x7E, 0x00, 0x01] ~ binaryExample1;
+    ubyte[] binaryExample1Full = cast(ubyte[]) [0x82, 0x7E, 0x01, 0x00] ~ binaryExample1;
     WebSocketFrame binaryFrame1 = receiveWebSocketFrame(arrayInputStreamFor(binaryExample1Full));
     assert(binaryFrame1.finalFragment);
     assert(binaryFrame1.opcode == WebSocketFrameOpcode.BINARY_FRAME);
@@ -817,7 +824,7 @@ unittest {
 
     ubyte[] binaryExample2 = new ubyte[65_536];
     for (int i = 0; i < binaryExample2.length; i++) binaryExample2[i] = cast(ubyte) i % ubyte.max;
-    ubyte[] binaryExample2Full = cast(ubyte[]) [0x82, 0x7F, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00] ~
+    ubyte[] binaryExample2Full = cast(ubyte[]) [0x82, 0x7F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00] ~
         binaryExample2;
     WebSocketFrame binaryFrame2 = receiveWebSocketFrame(arrayInputStreamFor(binaryExample2Full));
     assert(binaryFrame2.finalFragment);

@@ -11,6 +11,7 @@ import core.sync.semaphore : Semaphore;
 import core.sync.exception;
 import core.sync.rwmutex;
 import core.atomic;
+import core.thread : Thread;
 import core.thread.threadgroup : ThreadGroup;
 
 import handy_httpd.components.request;
@@ -176,6 +177,16 @@ class HttpServer {
         info("Server shut down.");
     }
 
+    /**
+     * Starts the server running in a new thread.
+     * Returns: The thread that the server is running in.
+     */
+    public Thread startInNewThread() {
+        Thread t = new Thread(&this.start);
+        t.start();
+        return t;
+    }
+
     /** 
      * Shuts down the server by closing the server socket, if possible. This
      * will block until all pending requests have been fulfilled.
@@ -270,5 +281,15 @@ class HttpServer {
      */
     public WebSocketManager getWebSocketManager() {
         return this.websocketManager;
+    }
+
+    /**
+     * Attempts to revive a dead websocket manager thread by simply replacing
+     * it with a new one and starting that. This is only meant as a means to
+     * minimize damage when there's a severe bug in websocket logic.
+     */
+    public void reviveWebSocketManager() {
+        this.websocketManager = new WebSocketManager();
+        this.websocketManager.start();
     }
 }

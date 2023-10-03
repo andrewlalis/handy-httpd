@@ -159,6 +159,7 @@ package class PoolManager : Thread {
         auto manager = pool.server.getWebSocketManager();
         if (manager !is null && !manager.isRunning()) {
             this.logger.error("The WebSocketManager has died! Please report this issue to the author of handy-httpd.");
+            pool.server.reviveWebSocketManager();
         }
     }
 }
