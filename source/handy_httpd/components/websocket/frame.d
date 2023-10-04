@@ -1,5 +1,7 @@
 /**
- * Contains the low-level implementation of the WebSocket data frame spec.
+ * Contains the low-level implementation of the WebSocket data frame spec,
+ * as well as some friendly functions for reading and writing data frames
+ * from D types.
  */
 module handy_httpd.components.websocket.frame;
 
@@ -23,6 +25,25 @@ enum WebSocketFrameOpcode : ubyte {
 }
 
 /**
+ * An enumeration of possible closing status codes for websocket connections,
+ * as per https://datatracker.ietf.org/doc/html/rfc6455#section-7.4
+ */
+enum WebSocketCloseStatusCode : ushort {
+    NORMAL = 1000,
+    GOING_AWAY = 1001,
+    PROTOCOL_ERROR = 1002,
+    UNACCEPTABLE_DATA = 1003,
+    NO_CODE = 1005,
+    CLOSED_ABNORMALLY = 1006,
+    INCONSISTENT_DATA = 1007,
+    POLICY_VIOLATION = 1008,
+    MESSAGE_TOO_BIG = 1009,
+    EXTENSION_NEGOTIATION_FAILURE = 1010,
+    UNEXPECTED_CONDITION = 1011,
+    TLS_HANDSHAKE_FAILURE = 1015
+}
+
+/**
  * Internal intermediary structure used to hold the results of parsing a
  * websocket frame.
  */
@@ -30,6 +51,50 @@ struct WebSocketFrame {
     bool finalFragment;
     WebSocketFrameOpcode opcode;
     ubyte[] payload;
+}
+
+void sendWebSocketTextFrame(S)(S stream, string text) if (isByteOutputStream!S) {
+    sendWebSocketFrame!S(
+        stream,
+        WebSocketFrame(true, WebSocketFrameOpcode.TEXT_FRAME, cast(ubyte[]) text)
+    );
+}
+
+void sendWebSocketBinaryFrame(S)(S stream, ubyte[] bytes) if (isByteOutputStream!S) {
+    sendWebSocketFrame!S(
+        stream,
+        WebSocketFrame(true, WebSocketFrameOpcode.BINARY_FRAME, bytes)
+    );
+}
+
+void sendWebSocketCloseFrame(S)(S stream, WebSocketCloseStatusCode code, string message) {
+    auto bufferOut = byteArrayOutputStream();
+    auto dOut = dataOutputStreamFor(&bufferOut);
+    dOut.writeToStream!ushort(code);
+    if (message !is null && message.length > 0) {
+        if (message.length > 123) {
+            throw new WebSocketException("Close message is too long! Maximum of 123 bytes allowed.");
+        }
+        bufferOut.writeToStream(cast(ubyte[]) message);
+    }
+    sendWebSocketFrame!S(
+        stream,
+        WebSocketFrame(true, WebSocketFrameOpcode.CONNECTION_CLOSE, bufferOut.toArrayRaw())
+    );
+}
+
+void sendWebSocketPingFrame(S)(S stream, ubyte[] payload) if (isByteOutputStream!S) {
+    sendWebSocketFrame!S(
+        stream,
+        WebSocketFrame(true, WebSocketFrameOpcode.PING, payload)
+    );
+}
+
+void sendWebSocketPongFrame(S)(S stream, ubyte[] pingPayload) if (isByteOutputStream!S) {
+    sendWebSocketFrame!S(
+        stream,
+        WebSocketFrame(true, WebSocketFrameOpcode.PONG, pingPayload)
+    );
 }
 
 /**

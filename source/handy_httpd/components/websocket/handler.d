@@ -42,28 +42,9 @@ struct WebSocketCloseMessage {
 }
 
 /**
- * An enumeration of possible closing status codes for websocket connections,
- * as per https://datatracker.ietf.org/doc/html/rfc6455#section-7.4
- */
-enum WebSocketCloseStatusCode : ushort {
-    NORMAL = 1000,
-    GOING_AWAY = 1001,
-    PROTOCOL_ERROR = 1002,
-    UNACCEPTABLE_DATA = 1003,
-    NO_CODE = 1005,
-    CLOSED_ABNORMALLY = 1006,
-    INCONSISTENT_DATA = 1007,
-    POLICY_VIOLATION = 1008,
-    MESSAGE_TOO_BIG = 1009,
-    EXTENSION_NEGOTIATION_FAILURE = 1010,
-    UNEXPECTED_CONDITION = 1011,
-    TLS_HANDSHAKE_FAILURE = 1015
-}
-
-/**
  * An abstract class that you should extend to define logic for handling
  * websocket messages and events. Create a new class that inherits from this
- * one, and overrides any "on..." methods.
+ * one, and overrides any "on..." methods that you'd like.
  */
 abstract class WebSocketMessageHandler {
     /**
@@ -109,7 +90,7 @@ abstract class WebSocketMessageHandler {
  */
 class WebSocketConnection {
     import std.uuid : UUID, randomUUID;
-    import std.socket : Socket;
+    import std.socket : Socket, SocketShutdown;
     import handy_httpd.components.websocket.frame;
     import streams : SocketOutputStream, byteArrayOutputStream, dataOutputStreamFor;
 
@@ -148,10 +129,8 @@ class WebSocketConnection {
      *   text = The text to send. Should be valid UTF-8.
      */
     void sendTextMessage(string text) {
-        sendWebSocketFrame(
-            SocketOutputStream(this.socket),
-            WebSocketFrame(true, WebSocketFrameOpcode.TEXT_FRAME, cast(ubyte[]) text)
-        );
+        throwIfClosed();
+        sendWebSocketTextFrame(SocketOutputStream(this.socket), text);
     }
 
     /**
@@ -160,10 +139,8 @@ class WebSocketConnection {
      *   bytes = The binary data to send.
      */
     void sendBinaryMessage(ubyte[] bytes) {
-        sendWebSocketFrame(
-            SocketOutputStream(this.socket),
-            WebSocketFrame(true, WebSocketFrameOpcode.BINARY_FRAME, bytes)
-        );
+        throwIfClosed();
+        sendWebSocketBinaryFrame(SocketOutputStream(this.socket), bytes);
     }
 
     /**
@@ -174,19 +151,30 @@ class WebSocketConnection {
      *   message = A message explaining why we're closing. Length must be <= 123.
      */
     void sendCloseMessage(WebSocketCloseStatusCode status, string message) {
-        auto arrayOut = byteArrayOutputStream();
-        auto dOut = dataOutputStreamFor(&arrayOut);
-        dOut.writeToStream!ushort(status);
-        if (message !is null && message.length > 0) {
-            if (message.length > 123) {
-                throw new WebSocketException("Close message is too long! Maximum of 123 bytes allowed.");
-            }
-            arrayOut.writeToStream(cast(ubyte[]) message);
+        throwIfClosed();
+        sendWebSocketCloseFrame(SocketOutputStream(this.socket), status, message);
+    }
+
+    /**
+     * Helper method to throw a WebSocketException if our socket is no longer
+     * alive, so we know right away if the connection stopped abruptly.
+     */
+    private void throwIfClosed() {
+        if (!this.socket.isAlive()) {
+            throw new WebSocketException("Connection " ~ this.id.toString() ~ "'s socket is closed.");
         }
-        sendWebSocketFrame(
-            SocketOutputStream(this.socket),
-            WebSocketFrame(true, WebSocketFrameOpcode.CONNECTION_CLOSE, arrayOut.toArray())
-        );
+    }
+
+    /**
+     * Closes this connection, if it's alive, sending a websocket close message.
+     */
+    void close() {
+        if (this.socket.isAlive()) {
+            this.sendCloseMessage(WebSocketCloseStatusCode.NORMAL, null);
+            this.socket.shutdown(SocketShutdown.BOTH);
+            this.socket.close();
+            this.messageHandler.onConnectionClosed(this);
+        }
     }
 }
 
@@ -245,6 +233,11 @@ class WebSocketHandler : HttpRequestHandler {
         if (key is null) {
             ctx.response.setStatus(HttpStatus.BAD_REQUEST);
             ctx.response.writeBodyString("Missing Sec-WebSocket-Key header.");
+            return false;
+        }
+        if (!ctx.server.config.enableWebSockets) {
+            ctx.response.setStatus(HttpStatus.SERVICE_UNAVAILABLE);
+            ctx.response.writeBodyString("This server does not support websockets.");
             return false;
         }
         return true;

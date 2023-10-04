@@ -31,12 +31,22 @@ class WebSocketManager : Thread {
     private WebSocketFrame[UUID] continuationFrames;
     private shared bool running = false;
 
+    /**
+     * Constructs a new manager with an initially empty socket set.
+     */
     this() {
         super(&this.run);
         this.connectionsMutex = new ReadWriteMutex();
         this.readableSocketSet = new SocketSet();
     }
 
+    /**
+     * Registers a new websocket connection to this manager, and begins
+     * listening for messages to pass on to the given handler.
+     * Params:
+     *   socket = The socket that's connected.
+     *   handler = The handler to handle any websocket messages.
+     */
     void registerConnection(Socket socket, WebSocketMessageHandler handler) {
         socket.blocking(false);
         auto conn = new WebSocketConnection(socket, handler);
@@ -46,16 +56,17 @@ class WebSocketManager : Thread {
         conn.getMessageHandler().onConnectionEstablished(conn);
     }
 
+    /**
+     * Removes an existing websocket connection from this manager and closes
+     * the socket.
+     * Params:
+     *   conn = The connection to remove.
+     */
     void deregisterConnection(WebSocketConnection conn) {
         synchronized(this.connectionsMutex.writer) {
             this.connections.remove(conn.id);
         }
-        if (conn.getSocket().isAlive()) {
-            conn.sendCloseMessage(WebSocketCloseStatusCode.NORMAL, null);
-            conn.getSocket().shutdown(SocketShutdown.BOTH);
-            conn.getSocket().close();
-            conn.getMessageHandler().onConnectionClosed(conn);
-        }
+        conn.close();
     }
 
     /**
@@ -69,7 +80,7 @@ class WebSocketManager : Thread {
                 try {
                     conn.sendBinaryMessage(bytes);
                 } catch (WebSocketException e) {
-                    warn("Failed to broadcast to client" ~ id.toString() ~ ".", e);
+                    warn("Failed to broadcast to client " ~ id.toString() ~ ".", e);
                 }
             }
         }
@@ -81,9 +92,21 @@ class WebSocketManager : Thread {
      *   text = The text to send.
      */
     void broadcast(string text) {
-        broadcast(cast(ubyte[]) text);
+        synchronized(this.connectionsMutex.reader) {
+            foreach (id, conn; this.connections) {
+                try {
+                    conn.sendTextMessage(text);
+                } catch (WebSocketException e) {
+                    warn("Failed to broadcast to client " ~ id.toString() ~ ".", e);
+                }
+            }
+        }
     }
 
+    /**
+     * The main method of the manager thread, which repeatedly checks for
+     * sockets to read from.
+     */
     private void run() {
         import core.atomic : atomicStore, atomicLoad;
         import std.datetime : msecs;
@@ -175,7 +198,7 @@ class WebSocketManager : Thread {
                 this.handleClientClose(frame, conn);
                 break;
             case WebSocketFrameOpcode.PING:
-                this.handleClientPing(frame, conn);
+                sendWebSocketPongFrame(SocketOutputStream(conn.getSocket()), frame.payload);
                 break;
             case WebSocketFrameOpcode.TEXT_FRAME:
             case WebSocketFrameOpcode.BINARY_FRAME:
@@ -217,22 +240,6 @@ class WebSocketManager : Thread {
         conn.getSocket().shutdown(SocketShutdown.BOTH);
         conn.getSocket().close();
         conn.getMessageHandler().onConnectionClosed(conn);
-    }
-
-    /**
-     * Handles a client's "ping" control message by echoing the payload of the
-     * data frame back in a "pong" response.
-     * Params:
-     *   pingFrame = The ping frame sent by the client.
-     *   conn = The connection that received the ping frame.
-     */
-    private void handleClientPing(WebSocketFrame pingFrame, ref WebSocketConnection conn) {
-        WebSocketFrame pongFrame = WebSocketFrame(
-            true,
-            WebSocketFrameOpcode.PONG,
-            pingFrame.payload
-        );
-        sendWebSocketFrame(SocketOutputStream(conn.getSocket()), pongFrame);
     }
 
     /**
