@@ -114,7 +114,7 @@ class WebSocketManager : Thread {
         debug_("WebSocket manager thread started.");
         while (atomicLoad(this.running)) {
             uint socketCount = 0;
-            synchronized(this.connectionsMutex.reader) {
+            synchronized(this.connectionsMutex.writer) {
                 foreach (id, conn; this.connections) {
                     if (conn.getSocket().isAlive()) {
                         this.readableSocketSet.add(conn.getSocket());
@@ -137,7 +137,7 @@ class WebSocketManager : Thread {
             if (count == -1) {
                 warn("Interrupted while waiting for a socket status update.");
             } else if (count > 0) {
-                synchronized(this.connectionsMutex.reader) {
+                synchronized(this.connectionsMutex.writer) {
                     foreach (id, conn; this.connections) {
                         if (this.readableSocketSet.isSet(conn.getSocket())) {
                             try {
@@ -184,9 +184,17 @@ class WebSocketManager : Thread {
      * Params:
      *   conn = The connection to receive a websocket frame from.
      */
-    private void handleIncomingMessage(ref WebSocketConnection conn) {
+    private void handleIncomingMessage(WebSocketConnection conn) {
         SocketInputStream sIn = SocketInputStream(conn.getSocket());
-        WebSocketFrame frame = receiveWebSocketFrame(sIn);
+        WebSocketFrame frame;
+        try {
+            frame = receiveWebSocketFrame(sIn);
+        } catch (WebSocketException e) {
+            warn("Failed to receive a websocket frame from connection. Closing the connection. Error: " ~ e.msg);
+            this.connections.remove(conn.id);
+            conn.close();
+            return;
+        }
         debugF!"Received websocket frame from connection %s @ %s: %s, payload length = %d"(
             conn.id,
             conn.getSocket().remoteAddress(),

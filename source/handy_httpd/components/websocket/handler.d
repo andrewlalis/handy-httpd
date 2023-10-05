@@ -5,6 +5,7 @@
 module handy_httpd.components.websocket.handler;
 
 import handy_httpd.components.handler : HttpRequestHandler, HttpRequestContext;
+import slf4d;
 
 /**
  * An exception that's thrown if an unexpected situation arises while dealing
@@ -170,7 +171,11 @@ class WebSocketConnection {
      */
     void close() {
         if (this.socket.isAlive()) {
-            this.sendCloseMessage(WebSocketCloseStatusCode.NORMAL, null);
+            try {
+                this.sendCloseMessage(WebSocketCloseStatusCode.NORMAL, null);
+            } catch (WebSocketException e) {
+                warn("Failed to send a CLOSE message when closing connection " ~ this.id.toString(), e);
+            }
             this.socket.shutdown(SocketShutdown.BOTH);
             this.socket.close();
             this.messageHandler.onConnectionClosed(this);
