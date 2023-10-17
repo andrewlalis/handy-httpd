@@ -5,36 +5,68 @@ module handy_httpd.handlers.path_handler;
 
 import handy_httpd.components.handler;
 import handy_httpd.components.request;
+import handy_httpd.components.response;
+import path_matcher;
+import slf4d;
 
-struct HandlerMapping {
+private struct HandlerMapping {
     HttpRequestHandler handler;
     immutable ushort methodsMask;
-    immutable string[] patterns;
-    immutable string[][] pathParamNames;
+    immutable(string[]) patterns;
 }
 
-private immutable struct PathParam {
-    string name;
-    string type;
-}
+class PathHandler : HttpRequestHandler {
+    private HandlerMapping[] mappings;
+    private HttpRequestHandler notFoundHandler;
 
-private immutable struct PathPattern {
-    string[] segments;
-    PathParam[] pathParams;
-}
+    this() {
+        this.mappings = [];
+        this.notFoundHandler = toHandler((ref ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
+    }
 
-private PathPattern compilePattern(string path) {
-    import std.string : split;
-    import std.algorithm : filter;
-    import std.array : array, appender, Appender;
-    string[] segments = split(path, "/")
-        .filter!(s => s.length > 0)
-        .array;
-    Appender!(PathParam[]) pathParamAppender;
-    return PathPattern(segments.idup);
-}
+    PathHandler addMapping(Method method, string pattern, HttpRequestHandler handler) {
+        this.mappings ~= HandlerMapping(handler, method, [pattern]);
+        return this;
+    }
 
-unittest {
-    assert(compilePattern("/test/bleh") == PathPattern(["test", "bleh"]));
-    assert(compilePattern("/") == PathPattern([]));
+    PathHandler addMapping(Method[] methods, string pattern, HttpRequestHandler handler) {
+        this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), [pattern]);
+        return this;
+    }
+
+    PathHandler addMapping(Method method, string[] patterns, HttpRequestHandler handler) {
+        this.mappings ~= HandlerMapping(handler, method, patterns.idup);
+        return this;
+    }
+
+    PathHandler addMapping(Method[] methods, string[] patterns, HttpRequestHandler handler) {
+        this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), patterns.idup);
+        return this;
+    }
+
+    void handle(ref HttpRequestContext ctx) {
+        foreach (HandlerMapping mapping; mappings) {
+            if ((mapping.methodsMask & ctx.request.method) > 0) {
+                foreach (string pattern; mapping.patterns) {
+                    PathMatchResult result = matchPath(ctx.request.url, pattern);
+                    if (result.matches) {
+                        debugF!"Found matching handler for %s request to %s: %s"(
+                            methodToName(ctx.request.method),
+                            ctx.request.url,
+                            mapping.handler
+                        );
+                        string[string] paramsMap;
+                        foreach (PathParam param; result.pathParams) {
+                            paramsMap[param.name] = param.value;
+                        }
+                        ctx.request.pathParams = paramsMap;
+                        mapping.handler.handle(ctx);
+                        return;
+                    }
+                }
+            }
+        }
+        debug_("No matching handler found. Using notFoundHandler.");
+        notFoundHandler.handle(ctx);
+    }
 }
