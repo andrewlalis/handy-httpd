@@ -1,5 +1,7 @@
 /**
- * A work-in-progress module to replace path_delegating_handler with something more efficient.
+ * This module defines a [PathHandler] that delegates handling of requests to
+ * other handlers based on the request's HTTP verb (GET, POST, etc.), and its
+ * path.
  */
 module handy_httpd.handlers.path_handler;
 
@@ -8,17 +10,39 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import path_matcher;
 import slf4d;
+import  std.typecons;
 
+/// Internal struct holding details about a handler mapping.
 private struct HandlerMapping {
     HttpRequestHandler handler;
     immutable ushort methodsMask;
     immutable(string[]) patterns;
 }
 
+/**
+ * A request handler that maps incoming requests to a particular handler based
+ * on the request's URL path and/or HTTP method (GET, POST, etc.).
+ *
+ * Use the various overloaded versions of the `addMapping(...)` method to add
+ * handlers to this path handler. When handling requests, this path handler
+ * will look for matches deterministically in the order you add them. Therefore,
+ * adding mappings with conflicting or duplicate paths will cause the first one
+ * to always be called.
+ *
+ * Path patterns should be defined according to the rules from the path-matcher
+ * library, found here: https://github.com/andrewlalis/path-matcher
+ */
 class PathHandler : HttpRequestHandler {
+    /// The internal list of all mapped handlers.
     private HandlerMapping[] mappings;
+
+    /// The handler to use when no mapping is found for a request.
     private HttpRequestHandler notFoundHandler;
 
+    /**
+     * Constructs a new path handler with initially no mappings, and a default
+     * notFoundHandler that simply sets a 404 status.
+     */
     this() {
         this.mappings = [];
         this.notFoundHandler = toHandler((ref ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
@@ -44,29 +68,92 @@ class PathHandler : HttpRequestHandler {
         return this;
     }
 
+    PathHandler addMapping(Method method, string pattern, HttpRequestHandlerFunction func) {
+        this.mappings ~= HandlerMapping(toHandler(func), method, [pattern]);
+        return this;
+    }
+
+    PathHandler setNotFoundHandler(HttpRequestHandler handler) {
+        if (handler is null) throw new Exception("Cannot set PathHandler's notFoundHandler to null.");
+        this.notFoundHandler = handler;
+        return this;
+    }
+
+    /**
+     * Handles a request by looking for a mapped handler whose method and pattern
+     * match the request's, and letting that handler handle the request. If no
+     * match is found, the notFoundHandler will take care of it.
+     * Params:
+     *   ctx = The request context.
+     */
     void handle(ref HttpRequestContext ctx) {
+        HttpRequestHandler mappedHandler = findMappedHandler(ctx.request);
+        if (mappedHandler !is null) {
+            mappedHandler.handle(ctx);
+        } else {
+            notFoundHandler.handle(ctx);
+        }
+    }
+
+    private HttpRequestHandler findMappedHandler(ref HttpRequest request) {
         foreach (HandlerMapping mapping; mappings) {
-            if ((mapping.methodsMask & ctx.request.method) > 0) {
+            if ((mapping.methodsMask & request.method) > 0) {
                 foreach (string pattern; mapping.patterns) {
-                    PathMatchResult result = matchPath(ctx.request.url, pattern);
+                    PathMatchResult result = matchPath(request.url, pattern);
                     if (result.matches) {
-                        debugF!"Found matching handler for %s request to %s: %s"(
-                            methodToName(ctx.request.method),
-                            ctx.request.url,
-                            mapping.handler
+                        debugF!"Found matching handler for %s %s: %s via pattern \"%s\""(
+                            request.method,
+                            request.url,
+                            mapping.handler,
+                            pattern
                         );
-                        string[string] paramsMap;
                         foreach (PathParam param; result.pathParams) {
-                            paramsMap[param.name] = param.value;
+                            request.pathParams[param.name] = param.value;
                         }
-                        ctx.request.pathParams = paramsMap;
-                        mapping.handler.handle(ctx);
-                        return;
+                        return mapping.handler;
                     }
                 }
             }
         }
-        debug_("No matching handler found. Using notFoundHandler.");
-        notFoundHandler.handle(ctx);
+        debugF!("No handler found for %s %s.")(request.method, request.url);
+        return null;
     }
+}
+
+// Test PathHandler.setNotFoundHandler
+unittest {
+    import std.exception;
+    auto handler = new PathHandler();
+    assertThrown!Exception(handler.setNotFoundHandler(null));
+    auto notFoundHandler = toHandler((ref ctx) {
+        ctx.response.status = HttpStatus.NOT_FOUND;
+    });
+    assertNotThrown!Exception(handler.setNotFoundHandler(notFoundHandler));
+}
+
+// Test PathHandler.handle
+unittest {
+    import handy_httpd.util.builders;
+    import handy_httpd.components.responses;
+    PathHandler handler = new PathHandler()
+        .addMapping(Method.GET, "/home", (ref ctx) {ctx.response.okResponse();})
+        .addMapping(Method.GET, "/users", (ref ctx) {ctx.response.okResponse();})
+        .addMapping(Method.GET, "/users/:id:ulong", (ref ctx) {ctx.response.okResponse();})
+        .addMapping(Method.GET, "/api/*", (ref ctx) {ctx.response.okResponse();});
+
+    HttpRequestContext generateHandledCtx(Method method, string url) {
+        auto ctx = buildCtxForRequest(method, url);
+        handler.handle(ctx);
+        return ctx;
+    }
+
+    assert(generateHandledCtx(Method.GET, "/home").response.status == HttpStatus.OK);
+    assert(generateHandledCtx(Method.GET, "/home-not-exists").response.status == HttpStatus.NOT_FOUND);
+    assert(generateHandledCtx(Method.GET, "/users").response.status == HttpStatus.OK);
+    assert(generateHandledCtx(Method.GET, "/users/34").response.status == HttpStatus.OK);
+    assert(generateHandledCtx(Method.GET, "/users/34").request.getPathParamAs!ulong("id") == 34);
+    assert(generateHandledCtx(Method.GET, "/api/test").response.status == HttpStatus.OK);
+    assert(generateHandledCtx(Method.GET, "/api/test/bleh").response.status == HttpStatus.NOT_FOUND);
+    assert(generateHandledCtx(Method.GET, "/api").response.status == HttpStatus.NOT_FOUND);
+    assert(generateHandledCtx(Method.GET, "/").response.status == HttpStatus.NOT_FOUND);
 }

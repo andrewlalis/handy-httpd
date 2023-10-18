@@ -2,7 +2,7 @@
 	"fileVersion": 1,
 	"versions": {
 		"httparsed": "1.2.1",
-		"path-matcher": "1.0.0",
+		"path-matcher": "1.1.2",
 		"slf4d": "2.4.2",
 		"streams": "3.5.0"
 	}
