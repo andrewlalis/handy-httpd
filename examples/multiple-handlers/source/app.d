@@ -1,13 +1,13 @@
 import handy_httpd;
-import handy_httpd.handlers.path_delegating_handler;
+import handy_httpd.handlers.path_handler;
 import slf4d;
 
 void main() {
-	auto pathHandler = new PathDelegatingHandler();
-	pathHandler.addMapping(Method.GET, "/users", &handleUsers);
-	pathHandler.addMapping(Method.GET, "/users/{userId:uint}", &handleUser);
-	pathHandler.addMapping(Method.GET, "/items", &handleItems);
-	pathHandler.addMapping("/error", &handleWithError);
+	auto pathHandler = new PathHandler()
+		.addMapping(Method.GET, "/users", &handleUsers)
+		.addMapping(Method.GET, "/users/:userId:uint", &handleUser)
+		.addMapping(Method.GET, "/items", &handleItems)
+		.addMapping("/error", &handleWithError);
 	auto server = new HttpServer(pathHandler);
 	server.start();
 }

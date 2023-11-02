@@ -5,7 +5,7 @@
 import handy_httpd;
 import slf4d;
 import slf4d.default_provider;
-import handy_httpd.handlers.path_delegating_handler;
+import handy_httpd.handlers.path_handler;
 
 const indexContent = `
 <html>
@@ -28,9 +28,9 @@ void main() {
     ServerConfig cfg = ServerConfig.defaultValues();
     cfg.workerPoolSize = 3;
     cfg.port = 8080;
-    PathDelegatingHandler handler = new PathDelegatingHandler();
-    handler.addMapping(Method.GET, "/**", &serveIndex);
-    handler.addMapping(Method.POST, "/upload", &handleUpload);
+    PathHandler handler = new PathHandler()
+        .addMapping(Method.GET, "/**", &serveIndex)
+        .addMapping(Method.POST, "/upload", &handleUpload);
     info("Starting file-upload example server.");
     new HttpServer(handler, cfg).start();
 }

@@ -10,12 +10,15 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import path_matcher;
 import slf4d;
-import  std.typecons;
+import std.typecons;
 
 /// Internal struct holding details about a handler mapping.
 private struct HandlerMapping {
+    /// The handler that will handle requests that match this mapping.
     HttpRequestHandler handler;
+    /// A bitmask with bits enabled for the HTTP methods that this mapping matches to.
     immutable ushort methodsMask;
+    /// A list of string patterns that this mapping matches to.
     immutable(string[]) patterns;
 }
 
@@ -48,31 +51,63 @@ class PathHandler : HttpRequestHandler {
         this.notFoundHandler = toHandler((ref ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
     }
 
+    /**
+     * Adds a mapping to this handler, such that requests which match the given
+     * method and pattern will be handed off to the given handler.
+     *
+     * Overloaded variations of this method are defined for your convenience,
+     * which allow you to add a mapping for multiple HTTP methods and/or path
+     * patterns.
+     *
+     * Params:
+     *   method = The HTTP method to match against.
+     *   pattern = The path pattern to match against. See https://github.com/andrewlalis/path-matcher
+     *             for more details on the pattern's format.
+     *   handler = The handler that will handle matching requests.
+     * Returns: This path handler, for method chaining.
+     */
     PathHandler addMapping(Method method, string pattern, HttpRequestHandler handler) {
         this.mappings ~= HandlerMapping(handler, method, [pattern]);
         return this;
     }
-
+    ///
     PathHandler addMapping(Method[] methods, string pattern, HttpRequestHandler handler) {
         this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), [pattern]);
         return this;
     }
-
+    ///
     PathHandler addMapping(Method method, string[] patterns, HttpRequestHandler handler) {
         this.mappings ~= HandlerMapping(handler, method, patterns.idup);
         return this;
     }
-
+    ///
     PathHandler addMapping(Method[] methods, string[] patterns, HttpRequestHandler handler) {
         this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), patterns.idup);
         return this;
     }
-
+    ///
+    PathHandler addMapping(string pattern, HttpRequestHandler handler) {
+        this.mappings ~= HandlerMapping(handler, methodMaskFromAll(), [pattern]);
+        return this;
+    }
+    ///
     PathHandler addMapping(Method method, string pattern, HttpRequestHandlerFunction func) {
         this.mappings ~= HandlerMapping(toHandler(func), method, [pattern]);
         return this;
     }
-
+    ///
+    PathHandler addMapping(string pattern, HttpRequestHandlerFunction func) {
+        this.mappings ~= HandlerMapping(toHandler(func), methodMaskFromAll(), [pattern]);
+        return this;
+    }
+    
+    /**
+     * Sets the handler that will be called for requests that don't match any
+     * pre-configured mappings.
+     * Params:
+     *   handler = The handler to use.
+     * Returns: This path handler, for method chaining.
+     */
     PathHandler setNotFoundHandler(HttpRequestHandler handler) {
         if (handler is null) throw new Exception("Cannot set PathHandler's notFoundHandler to null.");
         this.notFoundHandler = handler;
@@ -95,6 +130,13 @@ class PathHandler : HttpRequestHandler {
         }
     }
 
+    /**
+     * Finds the handler to use to handle a given request, using our list of
+     * pre-configured mappings.
+     * Params:
+     *   request = The request to find a handler for.
+     * Returns: The handler that matches the request, or null if none is found.
+     */
     private HttpRequestHandler findMappedHandler(ref HttpRequest request) {
         foreach (HandlerMapping mapping; mappings) {
             if ((mapping.methodsMask & request.method) > 0) {

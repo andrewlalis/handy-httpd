@@ -1,4 +1,6 @@
-/** 
+/**
+ * Notice! This module is deprecated in favor of the [PathHandler].
+ *
  * This module defines a [PathDelegatingHandler] that delegates the handling of
  * requests to other handlers, using some matching logic.
  *

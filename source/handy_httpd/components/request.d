@@ -524,12 +524,7 @@ unittest {
  * Returns: The bit mask.
  */
 public ushort methodMaskFromAll() {
-    import std.traits : EnumMembers;
-    ushort mask;
-    static foreach (member; EnumMembers!Method) {
-        mask |= member;
-    }
-    return mask;
+    return ushort.max;
 }
 
 /** 

@@ -5,9 +5,9 @@
 module file_test_server;
 
 import handy_httpd;
+import handy_httpd.handlers.path_handler;
 import slf4d;
 import slf4d.default_provider;
-import handy_httpd.handlers.path_delegating_handler;
 import streams;
 
 import std.path;
@@ -22,32 +22,28 @@ void main() {
     config.workerPoolSize = 3;
     config.port = 8080;
 
-    PathDelegatingHandler handler = new PathDelegatingHandler();
-
-    handler.addMapping(Method.GET, "/ready", (ref HttpRequestContext ctx) {
-        ctx.response.status = HttpStatus.OK;
-    });
-
-	handler.addMapping(Method.POST, "/upload", (ref HttpRequestContext ctx) {
-		debug_("Receiving uploaded file...");
-		debugF!"Headers: %s"(ctx.request.headers);
-		
-		ulong size = ctx.request.readBodyToFile("uploaded-file.txt", true);
-		debugF!"Received %d bytes"(size);
-		ctx.response.writeBodyString("Thank you!");
-	});
-	
-	handler.addMapping(Method.GET, "/source", (ref HttpRequestContext ctx) {
-		debug_("Sending app source text.");
-		const fileToDownload = "server.d";
-		auto sIn = FileInputStream(toStringz(fileToDownload));
-		ctx.response.writeBody(sIn, getSize(fileToDownload), "text/plain");
-	});
-
-    handler.addMapping(Method.POST, "/shutdown", (ref HttpRequestContext ctx) {
-        debug_("Shutting down...");
-        ctx.server.stop();
-    });
+    PathHandler handler = new PathHandler()
+        .addMapping(Method.GET, "/ready", (ref HttpRequestContext ctx) {
+            ctx.response.status = HttpStatus.OK;
+        })
+        .addMapping(Method.POST, "/upload", (ref HttpRequestContext ctx) {
+            debug_("Receiving uploaded file...");
+            debugF!"Headers: %s"(ctx.request.headers);
+            
+            ulong size = ctx.request.readBodyToFile("uploaded-file.txt", true);
+            debugF!"Received %d bytes"(size);
+            ctx.response.writeBodyString("Thank you!");
+        })
+        .addMapping(Method.GET, "/source", (ref HttpRequestContext ctx) {
+            debug_("Sending app source text.");
+            const fileToDownload = "server.d";
+            auto sIn = FileInputStream(toStringz(fileToDownload));
+            ctx.response.writeBody(sIn, getSize(fileToDownload), "text/plain");
+        })
+        .addMapping(Method.POST, "/shutdown", (ref HttpRequestContext ctx) {
+            debug_("Shutting down...");
+            ctx.server.stop();
+        });
 
     HttpServer server = new HttpServer(handler, config);
     server.start();

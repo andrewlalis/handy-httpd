@@ -13,7 +13,7 @@
 		"httparsed": "~>1.2.1",
 		"slf4d": "~>2",
 		"streams": "~>3",
-		"path-matcher": "~>1.1.2"
+		"path-matcher": "~>1.1.3"
 	},
 	"description": "Extremely lightweight HTTP server for D.",
 	"license": "MIT",
