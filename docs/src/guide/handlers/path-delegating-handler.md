@@ -1,5 +1,7 @@
 # Path Delegating Handler
 
+**This handler is deprecated in favor of the [PathHandler](./path-handler.md).**
+
 As you may have read in [Handling Requests](./handling-requests.md), Handy-Httpd offers a pre-made [PathDelegatingHandler](ddoc-handy_httpd.handlers.path_delegating_handler.PathDelegatingHandler) that can match HTTP methods and URLs to specific handlers; a common use case for web servers.
 
 A PathDelegatingHandler is an implementation of [HttpRequestHandler](ddoc-handy_httpd.components.handler.HttpRequestHandler) that will _delegate_ incoming requests to _other_ handlers based on the request's HTTP method and URL. Handlers are registered with the PathDelegatingHandler via one of the overloaded `addMapping` methods.

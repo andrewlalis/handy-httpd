@@ -75,7 +75,7 @@ module.exports = {
           title: 'Useful Handlers',
           collapsable: false,
           children: [
-            'handlers/path-delegating-handler',
+            'handlers/path-handler',
             'handlers/file-resolving-handler',
             'handlers/filtered-handler',
             'handlers/websocket-handler',
