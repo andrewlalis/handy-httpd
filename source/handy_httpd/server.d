@@ -202,12 +202,8 @@ class HttpServer {
      */
     public Nullable!Socket waitForNextClient() {
         Nullable!Socket result;
-        try {
-            Socket s = this.requestQueue.dequeue();
-            if (s !is null) result = s;
-        } catch (SyncError e) {
-            errorF!"SyncError occurred while waiting for the next client: %s"(e.msg);
-        }
+        Socket s = this.requestQueue.dequeue();
+        if (s !is null) result = s;
         return result;
     }
 
