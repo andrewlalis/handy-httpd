@@ -63,25 +63,11 @@ class HttpServer {
      */
     private Socket serverSocket = null;
 
-    private RequestQueue requestQueue2;
-
-    /** 
-     * A semaphore that's used to coordinate worker threads so that they can
-     * each take from the request queue.
+    /**
+     * The queue to which incoming client sockets are sent, and that workers
+     * pull from.
      */
-    private Semaphore requestSemaphore;
-
-    /** 
-     * The queue of requests to process, from which worker threads will pull.
-     */
-    private DList!Socket requestQueue;
-
-    /** 
-     * A mutex for controlling multi-threaded access to the request queue. This
-     * is primarily used when adding Sockets to the request queue, and removing
-     * them when a worker has been notified.
-     */
-    private ReadWriteMutex requestQueueMutex;
+    private RequestQueue requestQueue;
 
     /** 
      * The managed thread pool containing workers to handle requests.
@@ -107,8 +93,7 @@ class HttpServer {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
-        this.requestSemaphore = new Semaphore();
-        this.requestQueueMutex = new ReadWriteMutex();
+        this.requestQueue = new ConcurrentBlockingRequestQueue();
         this.exceptionHandler = new BasicServerExceptionHandler();
         this.workerPool = new WorkerPool(this);
         if (config.enableWebSockets) {
@@ -161,10 +146,7 @@ class HttpServer {
         while (this.serverSocket.isAlive()) {
             try {
                 Socket clientSocket = this.serverSocket.accept();
-                synchronized(requestQueueMutex.writer) {
-                    this.requestQueue.insertBack(clientSocket);
-                }
-                this.requestSemaphore.notify();
+                this.requestQueue.enqueue(clientSocket);
             } catch (SocketAcceptException acceptException) {
                 if (this.serverSocket.isAlive()) {
                     warnF!"Socket accept failed: %s"(acceptException.msg);
@@ -222,17 +204,10 @@ class HttpServer {
      * ready for request processing.
      */
     public Nullable!Socket waitForNextClient() {
-        import std.datetime : seconds;
         Nullable!Socket result;
         try {
-            bool notified = this.requestSemaphore.wait(seconds(10));
-            if (notified) {
-                synchronized(requestQueueMutex.writer) {
-                    if (!this.requestQueue.empty) {
-                        result = this.requestQueue.removeAny();
-                    }
-                }
-            }
+            Socket s = this.requestQueue.dequeue();
+            if (s !is null) result = s;
         } catch (SyncError e) {
             errorF!"SyncError occurred while waiting for the next client: %s"(e.msg);
         }
@@ -244,9 +219,10 @@ class HttpServer {
      * by the worker pool when it shuts down, to cause all workers to quit waiting.
      */
     public void notifyWorkerThreads() {
+        ConcurrentBlockingRequestQueue q = cast(ConcurrentBlockingRequestQueue) this.requestQueue;
         for (int i = 0; i < this.config.workerPoolSize; i++) {
-            this.requestSemaphore.notify();
-            this.requestSemaphore.notify();
+            q.notify();
+            q.notify();
         }
     }
 

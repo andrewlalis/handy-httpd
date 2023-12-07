@@ -90,4 +90,8 @@ class ConcurrentBlockingRequestQueue : RequestQueue {
         }
         return null;
     }
+
+    void notify() {
+        semaphore.notify();
+    }
 }

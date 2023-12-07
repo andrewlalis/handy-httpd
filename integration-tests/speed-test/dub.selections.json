@@ -5,6 +5,7 @@
 		"cachetools": "0.4.1",
 		"handy-httpd": {"path":"../../"},
 		"httparsed": "1.2.1",
+		"path-matcher": "1.1.3",
 		"requests": "2.0.9",
 		"slf4d": "2.4.1",
 		"streams": "3.5.0",
