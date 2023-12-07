@@ -1,36 +1,45 @@
 module requester;
 
 import std.datetime;
+import std.array;
 import core.thread;
 import slf4d;
 
+enum LimitType {
+	RequestCount,
+	Time
+}
+
 class RequesterThread : Thread {
     const ulong id;
-	ulong requestCount;
-	ulong successCount;
-	bool running;
+	const LimitType limitType;
+	const ulong limit;
+	private Logger logger;
 
-    Logger logger;
+	private ulong requestCount;
+	private ulong successCount;
+	private Appender!(Duration[]) durationAppender;
 
-	this(ulong id) {
+	this(ulong id, LimitType limitType, ulong limit) {
 		super(&this.run);
         this.id = id;
+		this.limitType = limitType;
+		this.limit = limit;
         import std.format : format;
         this.logger = getLoggerFactory().getLogger(format!"requester-%d"(id));
 	}
 
 	private void run() {
 		import requests;
-
-        logger.info("Starting.");
-		running = true;
-		while (isActive()) {
+		const SysTime testStartTime = Clock.currTime();
+		while (
+			(limitType == LimitType.RequestCount && requestCount < limit) ||
+			(limitType == LimitType.Time && (Clock.currTime() - testStartTime).total!"msecs" < limit)
+		) {
 			try {
-                logger.debug_("Fetching content...");
-                SysTime requestStart = Clock.currTime();
+                const SysTime requestStart = Clock.currTime();
 				string content = cast(string) getContent("http://localhost:8080/").data;
-				Duration dur = Clock.currTime() - requestStart;
-                logger.debugF!"Got response in %d ms."(dur.total!"msecs");
+				durationAppender ~= Clock.currTime() - requestStart;
                 if (content == "Testing server") {
 					successCount++;
 				}
@@ -43,16 +52,16 @@ class RequesterThread : Thread {
         logger.info("Stopped.");
 	}
 
-	public void shutdown() {
-		synchronized {
-			running = false;
-		}
-		logger.debug_("shutdown() called.");
+	ulong totalRequests() const {
+		return requestCount;
 	}
 
-	bool isActive() {
-		synchronized {
-			return running;
-		}
+	ulong totalSuccessfulRequests() const {
+		return successCount;
+	}
+
+	double meanRequestDurationMs() const {
+		import std.algorithm;
+		return durationAppender.data.map!(d => d.total!"msecs").mean;
 	}
 }
