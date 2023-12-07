@@ -22,7 +22,9 @@ interface RequestQueue {
     void enqueue(Socket s);
 
     /**
-     * Attempts to remove a socket from the queue.
+     * Attempts to remove a socket from the queue. This method may cause the
+     * calling thread to block for some amount of time until a socket is
+     * available to obtain.
      * Returns: The socket that was removed, or null if none was found.
      */
     Socket dequeue();
@@ -85,8 +87,7 @@ class ConcurrentBlockingRequestQueue : RequestQueue {
                 return s;
             }
         } catch (SyncError e) {
-            error("Error occurred while waiting for request queue semaphore.");
-            throw e;
+            error("SyncError occurred while waiting for request queue semaphore.");
         }
         return null;
     }
