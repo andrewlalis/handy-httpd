@@ -56,7 +56,6 @@ class ConcurrentBlockingRequestQueue : RequestQueue {
             queue[back++] = s;
             shouldNotify = true;
             if (back == size) {
-                debug_("The request queue has reached the end of the array, shifting elements to start.");
                 if (front == 0) {
                     errorF!"The request queue is completely full. Cannot shift contents to make room for more."();
                     return;
@@ -78,6 +77,7 @@ class ConcurrentBlockingRequestQueue : RequestQueue {
             if (success) {
                 Socket s;
                 synchronized {
+                    if (front >= back) return null; // Another thread took it first.
                     s = queue[front];
                     queue[front] = null;
                     front++;

@@ -2,22 +2,33 @@ import slf4d;
 import slf4d.default_provider;
 import handy_httpd;
 
+import std.datetime;
 import core.cpuid;
 import core.thread;
 
+import requester;
+
 int main() {
 	auto prov = new shared DefaultProvider(false, Levels.INFO);
-	prov.getLoggerFactory().setModuleLevel("handy_http", Levels.WARN);
+	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd", Levels.WARN);
+	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd.components.request_queue", Levels.DEBUG);
+	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd.components.worker_pool", Levels.DEBUG);
+	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd.server", Levels.DEBUG);
+	prov.getLoggerFactory().setModuleLevelPrefix("requester-", Levels.DEBUG);
+	// prov.getLoggerFactory().setModuleLevel("handy_http", Levels.WARN);
 	configureLoggingProvider(prov);
 	auto log = getLogger();
 
 	HttpServer server = getTestingServer();
 	Thread serverThread = new Thread(&server.start);
 	serverThread.start();
+	while (!server.isReady()) {
+		Thread.sleep(msecs(1));
+	}
 
 	RequesterThread[] requesters;
-	for (int i = 0; i < threadsPerCPU / 2; i++) {
-		requesters ~= new RequesterThread();
+	for (int i = 0; i < 4; i++) {
+		requesters ~= new RequesterThread(i);
 	}
 
 	foreach (r; requesters) {
@@ -25,13 +36,18 @@ int main() {
 	}
 	log.info("Started requesters.");
 
-	Thread.sleep(seconds(10));
+	Thread.sleep(seconds(3));
 	log.info("Shutting down requesters.");
-	foreach (r; requesters) r.shutdown();
-	foreach (r; requesters) r.join();
+	foreach (r; requesters) {
+		r.shutdown();
+	}
+	foreach (r; requesters) {
+		r.join();
+	}
 	log.info("Shutdown requesters.");
 	log.info("Shutting down server.");
 	server.stop();
+	log.info("Joining the server thread...");
 	serverThread.join();
 	log.info("Server stopped.");
 
@@ -66,38 +82,4 @@ HttpServer getTestingServer() {
 	return new HttpServer((ref ctx) {
 		ctx.response.writeBodyString("Testing server");
 	}, config);
-}
-
-class RequesterThread : Thread {
-	import core.atomic;
-
-	ulong requestCount;
-	ulong successCount;
-	bool running;
-
-	this() {
-		super(&this.run);
-	}
-
-	private void run() {
-		import requests;
-
-		atomicStore(running, true);
-		while (atomicLoad(running)) {
-			try {
-				string content = cast(string) getContent("http://localhost:8080/").data;
-				if (content == "Testing server") {
-					successCount++;
-				}
-			} catch (Exception e) {
-				// getLogger().error(e);
-			} finally {
-				requestCount++;
-			}
-		}
-	}
-
-	public void shutdown() {
-		atomicStore(running, false);
-	}
 }

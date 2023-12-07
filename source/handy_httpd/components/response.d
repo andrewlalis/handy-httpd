@@ -117,7 +117,9 @@ struct HttpResponse {
             addHeader("Content-Type", contentType);
             flushHeaders();
         }
+        warnF!"About to write %d bytes of %s to the socket."(size, contentType);
         StreamResult result = transferTo(stream, this.outputStream, Optional!ulong(size));
+        warn("Written.");
         if (result.hasError) {
             throw new Exception("Failed to write body to output stream: " ~ cast(string) result.error.message);
         }
