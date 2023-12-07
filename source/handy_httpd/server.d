@@ -5,11 +5,8 @@ module handy_httpd.server;
 
 import std.socket;
 import std.conv : to, ConvException;
-import std.container.dlist : DList;
 import std.typecons : Nullable;
-import core.sync.semaphore : Semaphore;
 import core.sync.exception;
-import core.sync.rwmutex;
 import core.atomic;
 import core.thread : Thread;
 import core.thread.threadgroup : ThreadGroup;
@@ -224,6 +221,7 @@ class HttpServer {
             q.notify();
             q.notify();
         }
+        debug_("Notified all worker threads.");
     }
 
     /** 

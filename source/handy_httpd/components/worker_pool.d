@@ -55,11 +55,13 @@ class WorkerPool {
      * `start()`.
      */
     void stop() {
+        debug_("Stopping the manager thread.");
         this.managerThread.stop();
         this.managerThread.notify();
         synchronized(this.workersMutex.writer) {
             this.server.notifyWorkerThreads();
             this.workerThreadGroup.joinAll();
+            debug_("All worker threads have terminated.");
             foreach (worker; this.workers) {
                 this.workerThreadGroup.remove(worker);
             }
@@ -67,6 +69,7 @@ class WorkerPool {
             this.nextWorkerId = 1;
         }
         this.managerThread.join();
+        debug_("The manager thread has terminated.");
     }
 
     /**
