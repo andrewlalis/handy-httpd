@@ -7,73 +7,39 @@ import core.cpuid;
 import core.thread;
 
 import requester;
+import test;
 
 int main() {
 	auto prov = new shared DefaultProvider(false, Levels.INFO);
 	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd", Levels.WARN);
-	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd.components.request_queue", Levels.INFO);
-	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd.components.worker_pool", Levels.INFO);
-	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd.server", Levels.DEBUG);
 	prov.getLoggerFactory().setModuleLevelPrefix("requester-", Levels.INFO);
 	configureLoggingProvider(prov);
 
-	HttpServer server = getTestingServer();
-	Thread serverThread = new Thread(&server.start);
-	serverThread.start();
-	while (!server.isReady()) {
-		Thread.sleep(msecs(1));
-	}
-
-	RequesterThread[] requesters;
-	for (int i = 0; i < 4; i++) {
-		requesters ~= new RequesterThread(i);
-	}
-
-	foreach (r; requesters) {
-		r.start();
-	}
-	info("Started requesters.");
-
-	Thread.sleep(seconds(3));
-	info("Shutting down requesters.");
-	foreach (r; requesters) {
-		r.shutdown();
-	}
-	foreach (r; requesters) {
-		r.join();
-	}
-	info("Shutdown requesters.");
-	info("Shutting down server.");
-	server.stop();
-	info("Joining the server thread...");
-	serverThread.join();
-	info("Server stopped.");
-
-	ulong totalRequests = 0;
-	ulong successfulRequests = 0;
-	foreach (r; requesters) {
-		totalRequests += r.requestCount;
-		successfulRequests += r.successCount;
-	}
-	double successRate = cast(double) totalRequests / successfulRequests;
-	double requestsPerSecond = cast(double) successfulRequests / 3;
-	infoF!"%d requests, %d successful, success rate %.3f, %.3f avg requests per second"(
-		totalRequests,
-		successfulRequests,
-		successRate,
-		requestsPerSecond
+	SpeedTest singleThreadTest = new SpeedTest(
+		getTestingServer(1),
+		1,
+		LimitType.Time,
+		10_000
 	);
-	
-	if (successRate < 0.95) {
-		errorF!"Success rate of %.3f is less than 0.95."(successRate);
-		return 1;
-	}
+	if (!singleThreadTest.run()) return 1;
+
+	SpeedTest balancedThreadTest = new SpeedTest(
+		getTestingServer(threadsPerCPU / 2),
+		threadsPerCPU / 2,
+		LimitType.Time,
+		10_000
+	);
+	if (!balancedThreadTest.run()) return 1;
+
 	return 0;
 }
 
-HttpServer getTestingServer() {
+HttpServer getTestingServer(uint workerPoolSize) {
 	ServerConfig config = ServerConfig.defaultValues();
-	config.workerPoolSize = 4;
+	config.workerPoolSize = workerPoolSize;
+	config.enableWebSockets = false;
+	config.connectionQueueSize = 1000;
+	config.receiveBufferSize = 1024;
 	infoF!"Starting testing server with %d workers."(config.workerPoolSize);
 	config.port = 8080;
 
