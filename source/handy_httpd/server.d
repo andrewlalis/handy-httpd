@@ -20,6 +20,7 @@ import handy_httpd.components.handler;
 import handy_httpd.components.config;
 import handy_httpd.components.parse_utils : parseRequest, Msg;
 import handy_httpd.components.worker;
+import handy_httpd.components.request_queue;
 import handy_httpd.components.worker_pool;
 import handy_httpd.components.websocket;
 
@@ -61,6 +62,8 @@ class HttpServer {
      * The server socket that accepts connections.
      */
     private Socket serverSocket = null;
+
+    private RequestQueue requestQueue2;
 
     /** 
      * A semaphore that's used to coordinate worker threads so that they can
