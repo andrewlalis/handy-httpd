@@ -21,6 +21,6 @@ void main() {
 }
 ```
 
-TIf you open your browser to [http://localhost:8080](http://localhost:8080), you should see the text, "Hello world!". The full example is available [on GitHub](https://github.com/andrewlalis/handy-httpd/tree/main/examples/single-file-server).
+If you open your browser to [http://localhost:8080](http://localhost:8080), you should see the text, "Hello world!". The full example is available [on GitHub](https://github.com/andrewlalis/handy-httpd/tree/main/examples/single-file-server).
 
 
