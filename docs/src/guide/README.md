@@ -15,12 +15,12 @@ import handy_httpd;
 
 void main() {
     auto server = new HttpServer((ref ctx) {
-        ctx.response.setStatus(HttpStatus.OK);
+        ctx.response.writeBodyString("Hello world!");
     });
     server.start();
 }
 ```
 
-The above code creates and starts an HTTP server that simple responds with a `200 OK` response to any request. The full example is available [on GitHub](https://github.com/andrewlalis/handy-httpd/tree/main/examples/single-file-server).
+TIf you open your browser to [http://localhost:8080](http://localhost:8080), you should see the text, "Hello world!". The full example is available [on GitHub](https://github.com/andrewlalis/handy-httpd/tree/main/examples/single-file-server).
 
 

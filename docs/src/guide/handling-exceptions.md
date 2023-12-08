@@ -29,4 +29,4 @@ It's rare, but you may encounter fatal errors while handling a request, to the t
 
 Handy-Httpd will try and resurrect dead workers periodically, and it'll warn you each time it does, but it's recommended that you try and address the underlying cause instead of relying on brute-force thread resurrection.
 
-> Note that D programmers are discouraged from catching `Error` or any subclass of it. Most errors are a symptom of unsafe code.
+> ⚠️ D programmers are discouraged from catching `Error` or any subclass of it. Most errors are a symptom of unsafe code.

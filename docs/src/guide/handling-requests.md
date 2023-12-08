@@ -53,7 +53,7 @@ void handle(ref HttpRequestContext ctx) {
 
 #### Path Parameters
 
-If a request is handled by a [PathHandler](ddoc-handy_httpd.handlers.path_handler.PathHandler), then its `pathParams` associative array will be populated with any path parameters that were parsed from the URL.
+If a request is handled by a [PathHandler](handlers/path-handler.md) *(or the now-deprecated [PathDelegatingHandler](handlers/path-delegating-handler.md))*, then its `pathParams` associative array will be populated with any path parameters that were parsed from the URL.
 
 The easiest way to understand this behavior is through an example. Suppose we define our top-level PathHandler with the following mapping, so that a `userSettingsHandler` will handle requests to that endpoint:
 
@@ -86,9 +86,9 @@ Some requests that your server receives may include a body, which is any content
 | [readBodyAsJson](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsJson) | Reads the entire request body as a [JSONValue](https://dlang.org/phobos/std_json.html#.JSONValue). |
 | [readBodyToFile](ddoc-handy_httpd.components.request.HttpRequest.readBodyToFile) | Reads the entire request body and writes it to a given file. |
 
-> Note: While Handy-Httpd doesn't force you to limit the amount of data you read, please be careful when reading an entire request body at once, like with `readBodyAsString`. This will load the entire request body into memory, and **will** crash your program if the body is too large.
+> ⚠️ While Handy-Httpd doesn't force you to limit the amount of data you read, please be careful when reading an entire request body at once, like with `readBodyAsString`. This will load the entire request body into memory, and **will** crash your program if the body is too large.
 
-Sometimes, the body content of a request may be encoded if the `Transfer-Encoding=chunked` header is provided. In that case, Handy-Httpd will automatically wrap the underlying input stream with one that reads the chunked encoding and provides you with the raw data. In short, you Handy-Httpd will manage chunked encoded requests for you. However, it *will not* automatically apply chunked encoding to your server's responses.
+Sometimes, the body content of a request will be encoded if the `Transfer-Encoding=chunked` header is provided. In that case, Handy-Httpd will automatically wrap the underlying input stream with one that reads the chunked encoding and provides you with the raw data. In short, Handy-Httpd will manage chunked-encoded requests for you. However, it *will not* automatically apply chunked encoding to your server's responses. If you'd like to send chunked-encoded responses, consider using the [ChunkedEncodingOutputStream](https://github.com/andrewlalis/streams/blob/main/source/streams/types/chunked.d#L127) from the [streams](https://github.com/andrewlalis/streams) library to do so, since Handy-Httpd already includes it as a dependency.
 
 ### Response
 
@@ -113,7 +113,7 @@ The first thing you should do when responding to a request is to send a status, 
 
 You can add headers via [addHeader(string name, string value)](ddoc-handy_httpd.components.response.HttpResponse.addHeader).
 
-> Note that setting the status and headers is only possible before they've been flushed, i.e. before any body content is sent.
+> ⚠️ Setting the status and headers is only possible before they've been flushed, i.e. before any body content is sent.
 
 #### Writing the Response Body
 
@@ -121,7 +121,7 @@ After setting a status and headers, you can write the response body. This can be
 
 | <div style="width: 150px;">Method</div> | Description |
 |---     |---          |
-| [writeBody](ddoc-handy_httpd.components.response.HttpResponse.writeBodyRange) | Writes the response body using data taken from an input stream of bytes. The size and content type must be explicitly specified before anything is written. |
+| [writeBody](ddoc-handy_httpd.components.response.HttpResponse.writeBody) | Writes the response body using data taken from an input stream of bytes. The size and content type must be explicitly specified before anything is written. |
 | [writeBodyBytes](ddoc-handy_httpd.components.response.HttpResponse.writeBodyBytes) | Writes the given bytes to the response body. You can optionally specify a content type, or it'll default to `application/octet-stream`. |
 | [writeBodyString](ddoc-handy_httpd.components.response.HttpResponse.writeBodyString) | Writes the given text to the response body. You can optionally specify a content type, or it'll default to `text/plain; charset=utf-8`. |
 

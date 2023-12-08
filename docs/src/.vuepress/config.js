@@ -68,7 +68,9 @@ module.exports = {
             'handling-exceptions',
             'logging',
             'configuration',
-            'testing'
+            'testing',
+            'deployment',
+            'architecture'
           ]
         },
         {

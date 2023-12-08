@@ -6,10 +6,10 @@ The documentation for Handy-Httpd is built using [Vuepress](https://vuepress.vue
 
 To help improve the consistency of the documentation, we roll our own D-documentation via the `build-ddoc.d` script. It builds all documentation for Handy-Httpd, and places it into `docs/src/.vuepress/public/ddoc/`, so it can be served as static content along with the rest of the documentation site.
 
-To link to a D symbol in a documentation markdown file, use the `ddoc-link` plugin by writing a specially-formatted link that starts with `ddoc-`, followed by the fully-qualified symbol name. In the example below, we create a link to the `PathDelegatingHandler` class.
+To link to a D symbol in a documentation markdown file, use the `ddoc-link` plugin by writing a specially-formatted link that starts with `ddoc-`, followed by the fully-qualified symbol name. In the example below, we create a link to the `PathHandler` class.
 
 ```markdown
-Click on the [PathDelegatingHandler](ddoc-handy_httpd.handlers.path_delegating_handler.PathDelegatingHandler) link to learn more!
+Click on the [PathHandler](ddoc-handy_httpd.handlers.path_handler.PathHandler) link to learn more!
 ```
 
 ## Deployment

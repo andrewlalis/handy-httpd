@@ -1,6 +1,6 @@
 # Path Delegating Handler
 
-**This handler is deprecated in favor of the [PathHandler](./path-handler.md).**
+**⚠️ This handler is deprecated in favor of the [PathHandler](./path-handler.md). It will no longer receive any updates, and you should consider switching over to the PathHandler for improved performance and support.**
 
 As you may have read in [Handling Requests](./handling-requests.md), Handy-Httpd offers a pre-made [PathDelegatingHandler](ddoc-handy_httpd.handlers.path_delegating_handler.PathDelegatingHandler) that can match HTTP methods and URLs to specific handlers; a common use case for web servers.
 

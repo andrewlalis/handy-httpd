@@ -2,7 +2,7 @@
 
 Handy-Httpd servers are highly-configurable thanks to a simple [ServerConfig](ddoc-handy_httpd.components.config.ServerConfig) struct that's passed to the server on initialization. On this page, we'll cover all of the available configuration options, what they mean, and how changing them can affect your server.
 
-> Note: Configuration options **cannot** be changed during runtime.
+> ⚠️ Configuration options **cannot** be changed at runtime.
 
 ## Socket Options
 
@@ -70,7 +70,7 @@ Note that internally, the queue is implemented with a fixed-size array.
 | Type | Default Value |
 |---   |---            |
 | `size_t` | `25` |
-The number of worker threads to use to process incoming requests. Increasing this number can improve performance for servers where the bottleneck is in the number of concurrent requests.
+The number of worker threads to use to process incoming requests. Increasing this number can improve performance for servers where the bottleneck is in the number of concurrent requests. Each worker thread pre-allocates its own receive buffer (whose size is defined by [receiveBufferSize](#receivebuffersize)) as well as its own thread stack and other variables, so keep in mind that while more workers may increase performance in certain situations, it will play a large role in your app's memory consumption.
 
 ### `workerPoolManagerIntervalMs`
 | Type | Default Value |
