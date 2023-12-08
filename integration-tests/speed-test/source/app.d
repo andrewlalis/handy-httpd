@@ -2,15 +2,13 @@ import slf4d;
 import slf4d.default_provider;
 import handy_httpd;
 
-import std.datetime;
 import core.cpuid;
-import core.thread;
 
 import requester;
 import test;
 
 int main() {
-	auto prov = new shared DefaultProvider(false, Levels.INFO);
+	auto prov = new shared DefaultProvider(true, Levels.INFO);
 	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd", Levels.WARN);
 	prov.getLoggerFactory().setModuleLevelPrefix("requester-", Levels.INFO);
 	configureLoggingProvider(prov);

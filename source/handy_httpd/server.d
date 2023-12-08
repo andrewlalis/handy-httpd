@@ -154,7 +154,11 @@ class HttpServer {
         this.workerPool.stop();
         if (this.websocketManager !is null) {
             this.websocketManager.stop();
-            this.websocketManager.join();
+            try {
+                this.websocketManager.join();
+            } catch (Exception e) {
+                error("Failed to join websocketManager thread because an exception was thrown.", e);
+            }
         }
         info("Server shut down.");
     }

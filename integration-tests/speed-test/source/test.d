@@ -34,10 +34,17 @@ class SpeedTest {
         const SysTime testStartTime = Clock.currTime();
         foreach (r; requesters) r.start();
         info("Started requester threads.");
-        foreach (r; requesters) r.join();
+        foreach (r; requesters) {
+            try {
+                r.join();
+            } catch (Exception e) {
+                error("Failed to join requester thread "~r.name, e);
+            }
+        }
         const Duration testDuration = Clock.currTime() - testStartTime;
         info("Joined all requester threads.");
         server.stop();
+        serverThread.join();
         info("Stopped the server.");
         return showStats(testDuration);
     }

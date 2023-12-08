@@ -60,7 +60,11 @@ class WorkerPool {
         this.managerThread.notify();
         synchronized(this.workersMutex.writer) {
             this.server.notifyWorkerThreads();
-            this.workerThreadGroup.joinAll();
+            try {
+                this.workerThreadGroup.joinAll();
+            } catch (Exception e) {
+                error("An exception was thrown by a joined worker thread.", e);
+            }
             debug_("All worker threads have terminated.");
             foreach (worker; this.workers) {
                 this.workerThreadGroup.remove(worker);
@@ -68,7 +72,11 @@ class WorkerPool {
             this.workers = [];
             this.nextWorkerId = 1;
         }
-        this.managerThread.join();
+        try {
+            this.managerThread.join();
+        } catch (Exception e) {
+            error("An exception was thrown when the managerThread was joined.", e);
+        }
         debug_("The manager thread has terminated.");
     }
 
