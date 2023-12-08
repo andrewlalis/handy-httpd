@@ -30,13 +30,15 @@ module.exports = {
    * ref：https://v1.vuepress.vuejs.org/theme/default-theme-config.html
    */
   themeConfig: {
-    repo: '',
-    editLinks: false,
-    docsDir: '',
-    editLinkText: '',
-    lastUpdated: false,
+    repo: 'andrewlalis/handy-httpd',
+    editLinks: true,
+    docsDir: 'docs/src',
+    docsBranch: 'main',
+    editLinkText: 'Help improve this page!',
+    lastUpdated: true,
     sidebarDepth: 3,
     displayAllHeaders: false,
+    logo: '/images/icon-sm_64.png',
     nav: [
       {
         text: 'Guide',
