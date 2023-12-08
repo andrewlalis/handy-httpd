@@ -45,10 +45,6 @@ module.exports = {
         link: '/guide/',
       },
       {
-        text: 'GitHub',
-        link: 'https://github.com/andrewlalis/handy-httpd'
-      },
-      {
         text: 'dub',
         link: 'https://code.dlang.org/packages/handy-httpd'
       },
