@@ -90,7 +90,7 @@ class HttpServer {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
-        this.requestQueue = new ConcurrentBlockingRequestQueue();
+        this.requestQueue = new ConcurrentBlockingRequestQueue(config.requestQueueSize);
         this.exceptionHandler = new BasicServerExceptionHandler();
         this.workerPool = new WorkerPool(this);
         if (config.enableWebSockets) {

@@ -30,6 +30,11 @@ struct ServerConfig {
      */
     int connectionQueueSize;
 
+    /**
+     * The size of the internal queue used for distributing requests to workers.
+     */
+    size_t requestQueueSize;
+
     /** 
      * The number of worker threads for processing requests.
      */
@@ -73,6 +78,7 @@ struct ServerConfig {
         cfg.hostname = "127.0.0.1";
         cfg.port = 8080;
         cfg.receiveBufferSize = 8192;
+        cfg.requestQueueSize = 128;
         cfg.connectionQueueSize = 100;
         cfg.reuseAddress = true;
         cfg.workerPoolSize = 25;

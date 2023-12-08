@@ -55,10 +55,10 @@ void handle(ref HttpRequestContext ctx) {
 
 If a request is handled by a [PathHandler](ddoc-handy_httpd.handlers.path_handler.PathHandler), then its `pathParams` associative array will be populated with any path parameters that were parsed from the URL.
 
-The easiest way to understand this behavior is through an example. Suppose we define our top-level PathDelegatingHandler with the following mapping, so that a `userSettingsHandler` will handle requests to that endpoint:
+The easiest way to understand this behavior is through an example. Suppose we define our top-level PathHandler with the following mapping, so that a `userSettingsHandler` will handle requests to that endpoint:
 
 ```d
-auto handler = new PathDelegatingHandler();
+auto handler = new PathHandler();
 handler.addMapping("/users/:userId:ulong/settings/:setting", userSettingsHandler);
 ```
 
@@ -72,7 +72,7 @@ void handle(ref HttpRequestContext ctx) {
 }
 ```
 
-For more information about the PathDelegatingHandler, please see the [dedicated page on this topic](./handlers/path-handler.md).
+For more information about the PathHandler, please see the [dedicated page on this topic](./handlers/path-handler.md).
 
 #### Body Content
 
