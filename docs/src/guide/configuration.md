@@ -58,6 +58,14 @@ An associative array of headers that will be added to every response the server 
 
 These options can be used to configure the general server behavior.
 
+### `requestQueueSize`
+| Type | Default Value |
+|---   |---            |
+| `size_t` | `128` |
+The size of the queue used to distribute incoming requests to worker threads. Increasing this number can improve performance marginally, but shouldn't really matter unless you're near the limits of what's possible with Handy-Httpd.
+
+Note that internally, the queue is implemented with a fixed-size array.
+
 ### `workerPoolSize`
 | Type | Default Value |
 |---   |---            |
