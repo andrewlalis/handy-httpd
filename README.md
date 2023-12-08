@@ -14,7 +14,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 - [Prioritises testability](https://andrewlalis.github.io/handy-httpd/guide/testing.html)
 - Ships with some handy pre-made request handlers:
 	- Serve static files with the [FileResolvingHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/file-resolving-handler.html)
-	- Apply filters before and after handling requests with the `FilteredHandler`
+	- Apply filters before and after handling requests with the [FilteredHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/filtered-handler.html)
 	- Handle complex URL paths, including path parameters and wildcards, with the [PathHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/path-handler.html)
 
 ## Important Links
