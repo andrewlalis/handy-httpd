@@ -38,6 +38,12 @@ The number of connections that will be queued by the server socket as it process
 | [SocketConfigurationFunction[]](ddoc-handy_httpd.components.config.ServerConfig.SocketConfigureFunction) | `[]` |
 A list of `void delegate(Socket)` functions that are called on the server socket before it's bound to the configured address. These functions can be used to set any additional options which aren't exposed by this configuration struct.
 
+### `postShutdownCallbacks`
+| Type | Default Value |
+|---   |---            |
+| [ServerShutdownFunction[]](ddoc-handy_httpd.components.config.ServerConfig.ServerShutdownFunction) | `[]` |
+A list of `void delegate(HttpServer)` functions that are called after the server has been stopped. Note that it is possible for you to stop and start your server repeatedly, so these functions may be called more than once (in case you do that).
+
 ### `receiveBufferSize`
 | Type | Default Value |
 |---   |---            |

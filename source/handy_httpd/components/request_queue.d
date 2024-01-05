@@ -49,12 +49,23 @@ class ConcurrentBlockingRequestQueue : RequestQueue {
     /// A semaphore used to notify consumers of items in the queue.
     private Semaphore semaphore;
 
+    /**
+     * Constructs the queue with the given size.
+     * Params:
+     *   queueSize = The size of the queue.
+     */
     this(size_t queueSize = 128) {
         this.queue = new Socket[](queueSize);
         this.size = queueSize;
         this.semaphore = new Semaphore();
     }
 
+    /**
+     * Adds a socket to the queue, using synchronization on this queue instance
+     * for thread-safety.
+     * Params:
+     *   s = The socket to add to the queue.
+     */
     void enqueue(Socket s) {
         bool shouldNotify = false;
         synchronized(this) {
@@ -79,6 +90,12 @@ class ConcurrentBlockingRequestQueue : RequestQueue {
         if (shouldNotify) semaphore.notify();
     }
 
+    /**
+     * Attempts to remove the next available socket from the queue, waiting
+     * for a pre-determined time, before timing out. If no socket becomes
+     * available, `null` may be returned.
+     * Returns: The socket that was dequeued, or null.
+     */
     Socket dequeue() {
         import std.datetime : msecs;
         try {
@@ -99,6 +116,11 @@ class ConcurrentBlockingRequestQueue : RequestQueue {
         return null;
     }
 
+    /**
+     * Manually notifies this queue's internal semaphore, which might be used
+     * to free up any threads that are waiting for a socket, usually used on
+     * shutdown.
+     */
     void notify() {
         semaphore.notify();
     }

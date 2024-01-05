@@ -5,6 +5,7 @@ module handy_httpd.components.config;
 
 import std.socket : Socket;
 import slf4d;
+import handy_httpd.server : HttpServer;
 
 /** 
  * Configuration properties for the HttpServer.
@@ -55,6 +56,17 @@ struct ServerConfig {
      * A set of functions to run before the server's socket is bound.
      */
     SocketConfigureFunction[] preBindCallbacks;
+
+    /**
+     * An alias for a delegate function that is called after the server has
+     * stopped.
+     */
+    alias ServerShutdownFunction = void delegate(HttpServer server);
+
+    /**
+     * A set of functions to run after the server has been stopped.
+     */
+    ServerShutdownFunction[] postShutdownCallbacks;
 
     /** 
      * Whether to set the REUSEADDR flag for the socket.

@@ -116,29 +116,12 @@ class HttpServer {
      * Starts the server on the calling thread, so that it will begin accepting
      * HTTP requests. Once the server is able to accept requests, `isReady()`
      * will return true, and will remain true until the server is stopped by
-     * calling `stop()`.
+     * calling `stop()`. This can be thought of as the "main loop" of the
+     * server.
      */
     public void start() {
-        this.serverSocket = new TcpSocket();
-        trace("Initialized server socket.");
-        if (this.config.reuseAddress) {
-            this.serverSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-            debug_("Enabled REUSEADDR socket option.");
-        }
-        trace("Calling preBindCallbacks.");
-        foreach (socketConfigFunction; this.config.preBindCallbacks) {
-            socketConfigFunction(this.serverSocket);
-        }
-        this.serverSocket.bind(this.address);
-        infoF!"Bound to address %s"(this.address);
-        this.serverSocket.listen(this.config.connectionQueueSize);
-        debug_("Started listening for connections.");
+        this.prepareToStart();
         atomicStore(this.ready, true);
-        this.workerPool.start();
-        if (this.websocketManager !is null) {
-            this.websocketManager.start();
-        }
-
         info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
             try {
@@ -151,6 +134,40 @@ class HttpServer {
             }
         }
         atomicStore(this.ready, false);
+        this.cleanUpAfterStop();
+        info("Server shut down.");
+    }
+
+    /**
+     * Internal method that's called before starting the server, which prepares
+     * all of the resources necessary to start.
+     */
+    private void prepareToStart() {
+        this.serverSocket = new TcpSocket();
+        trace("Initialized server socket.");
+        if (this.config.reuseAddress) {
+            this.serverSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+            debug_("Enabled REUSEADDR socket option.");
+        }
+        trace("Calling pre-bind callbacks.");
+        foreach (socketConfigFunction; this.config.preBindCallbacks) {
+            socketConfigFunction(this.serverSocket);
+        }
+        this.serverSocket.bind(this.address);
+        infoF!"Bound to address %s"(this.address);
+        this.serverSocket.listen(this.config.connectionQueueSize);
+        debug_("Started listening for connections.");
+        this.workerPool.start();
+        if (this.websocketManager !is null) {
+            this.websocketManager.start();
+        }
+    }
+
+    /**
+     * Internal method that's called after the server has been stopped, to
+     * clean up any additonal resources or threads spawned by the server.
+     */
+    private void cleanUpAfterStop() {
         this.workerPool.stop();
         if (this.websocketManager !is null) {
             this.websocketManager.stop();
@@ -160,7 +177,10 @@ class HttpServer {
                 error("Failed to join websocketManager thread because an exception was thrown.", e);
             }
         }
-        info("Server shut down.");
+        trace("Calling post-shutdown callbacks.");
+        foreach (postShutdownCallback; this.config.postShutdownCallbacks) {
+            postShutdownCallback(this);
+        }
     }
 
     /**
