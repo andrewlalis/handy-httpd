@@ -206,6 +206,11 @@ class HttpRequestBuilder {
         return this;
     }
 
+    HttpRequestBuilder withParams(string paramsStr) {
+        this.params = parseFormUrlEncoded(paramsStr);
+        return this;
+    }
+
     HttpRequestBuilder withParams(string[string] params) {
         this.params = QueryParam.fromMap(params);
         return this;

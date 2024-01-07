@@ -41,9 +41,11 @@ struct HttpRequest {
 
     /** 
      * An associative array containing all request params, if any were given.
-     * **Deprecated** in favor of `HttpRequest.queryParams`.
+     * **Deprecated** in favor of `HttpRequest.queryParams`, because this old
+     * implementation doesn't follow the specification which allows for many
+     * values with the same name.
      */
-    public const string[string] params;
+    deprecated public const string[string] params;
 
     /**
      * A list of parsed query parameters from the request's URL.
