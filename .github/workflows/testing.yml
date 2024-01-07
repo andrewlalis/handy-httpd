@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        compiler: [dmd-2.099.1, dmd-latest, ldc-1.31.0, ldc-latest]
+        compiler: [dmd-2.101.2, dmd-2.103.1, dmd-2.104.2, dmd-105.3, dmd-latest, ldc-1.31.0, ldc-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        compiler: [dmd-2.099.1, dmd-latest, ldc-1.31.0, ldc-latest]
+        compiler: [dmd-2.101.2, dmd-2.103.1, dmd-2.104.2, dmd-105.3, dmd-latest, ldc-1.31.0, ldc-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -84,7 +84,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        compiler: [dmd-latest, ldc-1.31.0, ldc-latest]
+        compiler: [dmd-2.101.2, dmd-2.103.1, dmd-2.104.2, dmd-105.3, dmd-latest, ldc-1.31.0, ldc-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
