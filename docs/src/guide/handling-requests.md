@@ -42,7 +42,7 @@ Each request also contains a `remoteAddress`, which contains the remote socket a
 
 The request's headers are available via the `headers` associative array, where each header name is mapped to a single string value. There are no guarantees about which headers may be present, nor their type. It's generally up to the handler to figure out how to deal with them.
 
-Similarly, the request's `params` associative array contains the named list of parameters that were parsed from the URL. For example, in `http://example.com/?x=5`, Handy-Httpd would provide a request whose params are `[x = "5"]`. Like the headers, no guarantee is made about what params are present, or what type they are. However, you can use the [getParamAs](ddoc-handy_httpd.components.request.HttpRequest.getParamAs) function as a safe way to get a parameter as a specified type, or fallback to a default.
+Similarly, the request's `queryParams` is a list of [QueryParam](ddoc-handy_httpd.components.form_urlencoded.QueryParam)s that were parsed from the URL. For example, in `http://example.com/?x=5`, Handy-Httpd would provide a request whose params are `[QueryParam("x", "5")]`. Like the headers, no guarantee is made about what params are present, or what type they are. However, you can use the [getParamAs](ddoc-handy_httpd.components.request.HttpRequest.getParamAs) function as a safe way to get a parameter as a specified type, or fallback to a default.
 
 ```d
 void handle(ref HttpRequestContext ctx) {
@@ -50,6 +50,10 @@ void handle(ref HttpRequestContext ctx) {
     // Do other stuff below...
 }
 ```
+
+In the above snippet, if the user requests `https://your-site.com/search?page=24`, then `page` will be set to 24. However, if a user requests `https://your-site.com/search?page=blah`, or doesn't provide a page at all, `page` will be set to `1`.
+
+> ⚠️ Previously, query parameters were accessed through [HttpRequest.params](ddoc-handy_httpd.components.request.HttpRequest.params), but this is deprecated in favor of the query params. This is because the old params implementation didn't accurately follow the official specification; specifically, there can be multiple query parameters with the same name, but different values. An associative string array can't represent that type of data.
 
 #### Path Parameters
 
@@ -83,8 +87,11 @@ Some requests that your server receives may include a body, which is any content
 | [readBody](ddoc-handy_httpd.components.request.HttpRequest.readBody) | Reads the request body, and writes it to a given output stream. Unless you explicitly enable *infinite reading*, it will respect the request's `Content-Length` header, and if no such header is present, nothing will be read. |
 | [readBodyAsBytes](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsBytes) | Reads the entire request body to a byte array. |
 | [readBodyAsString](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsString) | Reads the entire request body to a string. |
+| [readBodyAsFormUrlEncoded](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsFormUrlEncoded) | Reads the entire request body as [form-urlencoded](https://url.spec.whatwg.org/#application/x-www-form-urlencoded) key-value pairs. |
 | [readBodyAsJson](ddoc-handy_httpd.components.request.HttpRequest.readBodyAsJson) | Reads the entire request body as a [JSONValue](https://dlang.org/phobos/std_json.html#.JSONValue). |
 | [readBodyToFile](ddoc-handy_httpd.components.request.HttpRequest.readBodyToFile) | Reads the entire request body and writes it to a given file. |
+
+Additionally, you can import the [multipart](ddoc-handy_httpd.components.multipart) module to expose the [readBodyAsMultipartFormData](ddoc-handy_httpd.components.multipart.readBodyAsMultipartFormData) function, which is commonly used for handling file uploads.
 
 > ⚠️ While Handy-Httpd doesn't force you to limit the amount of data you read, please be careful when reading an entire request body at once, like with `readBodyAsString`. This will load the entire request body into memory, and **will** crash your program if the body is too large.
 
