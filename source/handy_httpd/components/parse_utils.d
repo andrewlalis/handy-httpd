@@ -13,6 +13,7 @@ import std.range;
 import httparsed;
 
 import handy_httpd.components.request : HttpRequest, methodFromName;
+import handy_httpd.components.form_urlencoded;
 
 /**
  * The header struct to use when parsing data.
@@ -78,7 +79,7 @@ public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string
         headers[h.name] = cast(string) h.value;
     }
     string rawUrl = decode(cast(string) requestParser.uri);
-    auto urlAndParams = parseUrlAndParams(rawUrl);
+    auto urlAndParams = parseUrlAndParamsAsMap(rawUrl);
     string method = cast(string) requestParser.method;
     HttpRequest request = HttpRequest(
         methodFromName(method),
@@ -94,11 +95,13 @@ public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string
 
 /**
  * Parses a path and set of query parameters from a raw URL string.
+ * **Deprecated** because handy-httpd is transitioning away from AA-style
+ * query params. You should use `parseUrlAndParams` instead.
  * Params:
  *   rawUrl = The raw url containing both path and query params.
  * Returns: A tuple containing the path and parsed query params.
  */
-public Tuple!(string, string[string]) parseUrlAndParams(string rawUrl) {
+public Tuple!(string, string[string]) parseUrlAndParamsAsMap(string rawUrl) {
     Tuple!(string, string[string]) result;
     auto p = rawUrl.indexOf('?');
     if (p == -1) {
@@ -106,7 +109,7 @@ public Tuple!(string, string[string]) parseUrlAndParams(string rawUrl) {
         result[1] = null;
     } else {
         result[0] = rawUrl[0..p];
-        result[1] = parseQueryString(rawUrl[p..$]);
+        result[1] = QueryParam.toMap(parseFormUrlEncoded(rawUrl[p..$], false));
     }
     // Strip away a trailing slash if there is one. This makes path matching easier.
     if (result[0][$ - 1] == '/') {
@@ -116,28 +119,23 @@ public Tuple!(string, string[string]) parseUrlAndParams(string rawUrl) {
 }
 
 /**
- * Parses a set of query parameters from a query string.
+ * Parses a path and set of query parameters from a raw URL string.
  * Params:
- *   queryString = The raw query string to parse, including the preceding '?' character.
- * Returns: An associative array containing parsed params.
+ *   rawUrl = The raw url containing both path and query params.
+ * Returns: A tuple containing the path and parsed query params.
  */
-private string[string] parseQueryString(string queryString) {
-    string[string] params;
-    if (queryString.length > 1) {
-        string[] paramSections = queryString[1..$].split("&").filter!(s => s.length > 0).array;
-        foreach (paramSection; paramSections) {
-            string paramName;
-            string paramValue;
-            auto p = paramSection.indexOf('=');
-            if (p == -1 || p + 1 == paramSection.length) {
-                paramName = paramSection;
-                paramValue = "true";
-            } else {
-                paramName = paramSection[0..p];
-                paramValue = paramSection[p+1..$];
-            }
-            params[paramName] = paramValue;
-        }
+public Tuple!(string, QueryParam[]) parseUrlAndParams(string rawUrl) {
+    Tuple!(string, QueryParam[]) result;
+    auto p = rawUrl.indexOf('?');
+    if (p == -1) {
+        result[0] = rawUrl;
+    } else {
+        result[0] = rawUrl[0..p];
+        result[1] = parseFormUrlEncoded(rawUrl[p..$], false);
     }
-    return params;
+    // Strip away a trailing slash if there is one. This makes path matching easier.
+    if (result[0][$ - 1] == '/') {
+        result[0] = result[0][0 .. $ - 1];
+    }
+    return result;
 }

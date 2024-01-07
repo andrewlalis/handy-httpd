@@ -10,6 +10,7 @@ import handy_httpd.components.handler;
 import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
+import handy_httpd.components.form_urlencoded;
 import streams;
 import std.socket : Address;
 
@@ -158,7 +159,7 @@ class HttpRequestBuilder {
     private Method method = Method.GET;
     private string url = "/";
     private string[string] headers;
-    private string[string] params;
+    private QueryParam[] params;
     private string[string] pathParams;
     private string pathPattern = null;
     private InputStream!ubyte inputStream = null;
@@ -206,12 +207,17 @@ class HttpRequestBuilder {
     }
 
     HttpRequestBuilder withParams(string[string] params) {
+        this.params = QueryParam.fromMap(params);
+        return this;
+    }
+
+    HttpRequestBuilder withParams(QueryParam[] params) {
         this.params = params;
         return this;
     }
 
     HttpRequestBuilder withParam(string name, string value) {
-        this.params[name] = value;
+        this.params ~= QueryParam(name, value);
         return this;
     }
 
@@ -259,6 +265,7 @@ class HttpRequestBuilder {
             this.url,
             1,
             this.headers,
+            QueryParam.toMap(this.params),
             this.params,
             this.pathParams,
             this.pathPattern,

@@ -5,6 +5,7 @@ module handy_httpd.components.request;
 
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
+import handy_httpd.components.form_urlencoded : QueryParam, parseFormUrlEncoded;
 import std.typecons : Nullable, nullable;
 import std.socket : Address;
 import std.exception;
@@ -40,8 +41,14 @@ struct HttpRequest {
 
     /** 
      * An associative array containing all request params, if any were given.
+     * **Deprecated** in favor of `HttpRequest.queryParams`.
      */
     public const string[string] params;
+
+    /**
+     * A list of parsed query parameters from the request's URL.
+     */
+    public const QueryParam[] queryParams;
 
     /**
      * An associative array containing any path parameters obtained from the
@@ -129,25 +136,27 @@ struct HttpRequest {
      */
     public T getParamAs(T)(string name, T defaultValue = T.init) {
         import std.conv : to, ConvException;
-        if (name !in params) return defaultValue;
-        try {
-            return params[name].to!T;
-        } catch (ConvException e) {
-            return defaultValue;
+        foreach (QueryParam param; this.queryParams) {
+            if (param.name == name) {
+                try {
+                    return param.value.to!T;
+                } catch (ConvException e) {
+                    return defaultValue;
+                }
+            }
         }
+        return defaultValue;
     }
 
     unittest {
+        QueryParam[] p = [QueryParam("a", "123"), QueryParam("b", "c"), QueryParam("c", "true")];
         HttpRequest req = HttpRequest(
             Method.GET,
             "/api",
             1,
             string[string].init,
-            [
-                "a": "123",
-                "b": "c",
-                "c": "true"
-            ],
+            QueryParam.toMap(p),
+            p,
             string[string].init
         );
         assert(req.getParamAs!int("a") == 123);
@@ -340,6 +349,18 @@ struct HttpRequest {
     public string readBodyAsString(bool allowInfiniteRead = false) {
         ubyte[] bytes = readBodyAsBytes(allowInfiniteRead);
         return cast(string) bytes;
+    }
+
+    /**
+     * Convenience method for reading the entire request body as a series of
+     * form-urlencoded key-value pairs.
+     * Params:
+     *   allowInfiniteRead = Whether to read until no more data is available.
+     *   stripWhitespace = Whether to strip whitespace from parsed keys and values.
+     * Returns: The list of values that were parsed.
+     */
+    public QueryParam[] readBodyAsFormUrlEncoded(bool allowInfiniteRead = false, bool stripWhitespace = true) {
+        return parseFormUrlEncoded(readBodyAsString(allowInfiniteRead), stripWhitespace);
     }
 
     /** 
