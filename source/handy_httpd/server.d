@@ -122,6 +122,10 @@ class HttpServer {
     public void start() {
         this.prepareToStart();
         atomicStore(this.ready, true);
+        trace("Set ready flag to true.");
+        // The worker pool must be started after setting ready to true, since
+        // the workers will stop once ready is false.
+        this.workerPool.start();
         info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
             try {
@@ -134,6 +138,7 @@ class HttpServer {
             }
         }
         atomicStore(this.ready, false);
+        trace("Set ready flag to false.");
         this.cleanUpAfterStop();
         info("Server shut down.");
     }
@@ -157,7 +162,6 @@ class HttpServer {
         infoF!"Bound to address %s"(this.address);
         this.serverSocket.listen(this.config.connectionQueueSize);
         debug_("Started listening for connections.");
-        this.workerPool.start();
         if (this.websocketManager !is null) {
             this.websocketManager.start();
         }

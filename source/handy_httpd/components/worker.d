@@ -83,6 +83,7 @@ class ServerWorkerThread : Thread {
      * 3. Handle the request using the server's handler.
      */
     private void run() {
+        debug_("Worker started.");
         while (server.isReady) {
             try {
                 // First try and get a socket to the client.
@@ -146,6 +147,7 @@ class ServerWorkerThread : Thread {
                 logger.error("An unhandled exception occurred in this worker's `run` method.", e);
             }
         }
+        debug_("Worker stopped normally after server was stopped.");
     }
 
     /**

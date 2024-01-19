@@ -47,6 +47,7 @@ class WorkerPool {
         }
         this.managerThread = new PoolManager(this);
         this.managerThread.start();
+        debug_("Started the manager thread.");
     }
 
     /**
@@ -139,6 +140,7 @@ package class PoolManager : Thread {
             for (size_t idx = 0; idx < this.pool.workers.length; idx++) {
                 ServerWorkerThread worker = this.pool.workers[idx];
                 if (!worker.isRunning()) {
+                    // The worker died, so remove it and spawn a new one to replace it.
                     deadCount++;
                     this.pool.workerThreadGroup.remove(worker);
                     ServerWorkerThread newWorker = new ServerWorkerThread(this.pool.server, this.pool.nextWorkerId++);
@@ -150,6 +152,22 @@ package class PoolManager : Thread {
                             worker.id,
                             newWorker.id
                         );
+
+                    // Try to join the thread and report any exception that occurred.
+                    try {
+                        worker.join(true);
+                    } catch (Throwable e) {
+                        import std.format : format;
+                        if (Exception exc = cast(Exception) e) {
+                            logger.error(
+                                format!"Worker %d threw an exception."(worker.id),
+                                exc
+                            );
+                        } else {
+                            logger.errorF!"Worker %d threw a fatal error: %s"(worker.id, e.msg);
+                            throw e;
+                        }
+                    }
                 } else {
                     if (worker.isBusy()) {
                         busyCount++;
