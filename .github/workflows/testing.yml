@@ -66,9 +66,9 @@ jobs:
           distribution: "temurin"
           java-version: "17"
       
-      # - name: Speed Test
-      #   working-directory: integration-tests/speed-test
-      #   run: dub -q run
+      - name: Speed Test
+        working-directory: integration-tests/speed-test
+        run: dub -q run
       
       - name: File Test
         working-directory: integration-tests/file-test
