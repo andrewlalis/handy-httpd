@@ -23,26 +23,43 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     private Entry[] entries;
 
     /**
-     * Attempts to get the entry for a given key. Complexity is O(log(keyCount)).
+     * Finds the index of the entry with a given key in the internal array.
      * Params:
-     *   k = The key to look for.
-     * Returns: An optional that may contain the entry that was found.
+     *   k = The key to search for.
+     * Returns: The index if it was found, or -1 if it doesn't exist.
      */
-    private Optional!Entry getEntry(KeyType k) {
-        if (entries.length == 0) return Optional!Entry.empty();
-        // Simple binary search.
+    private long indexOf(KeyType k) {
+        if (entries.length == 0) return -1;
+        if (entries.length == 1) {
+            return entries[0].key == k ? 0 : -1;
+        }
+        if (entries.length == 2) {
+            return entries[0].key == k ? 0 : 1;
+        }
         size_t startIdx = 0;
         size_t endIdx = entries.length - 1;
         while (startIdx <= endIdx) {
             size_t mid = startIdx + (endIdx - startIdx) / 2;
-            if (entries[mid].key == k) return Optional!Entry.of(entries[mid]);
+            if (entries[mid].key == k) return mid;
             if (KeySort(entries[mid].key, k)) {
                 startIdx = mid + 1;
             } else {
                 endIdx = mid - 1;
             }
         }
-        return Optional!Entry.empty();
+        return -1;
+    }
+
+    /**
+     * Attempts to get the entry for a given key. Complexity is O(log(keyCount)).
+     * Params:
+     *   k = The key to look for.
+     * Returns: An optional that may contain the entry that was found.
+     */
+    private Optional!Entry getEntry(KeyType k) {
+        long idx = indexOf(k);
+        if (idx == -1) return Optional!Entry.empty();
+        return Optional!Entry.of(entries[idx]);
     }
 
     /**
@@ -109,6 +126,31 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     }
 
     /**
+     * Clears this map of all values.
+     */
+    void clear() {
+        entries.length = 0;
+    }
+
+    /**
+     * Removes a key from the map.
+     * Params:
+     *   k = The key to remove.
+     */
+    void remove(KeyType k) {
+        long idx = indexOf(k);
+        if (idx == -1) return;
+        if (entries.length == 1) {
+            clear();
+            return;
+        }
+        if (idx + 1 < entries.length) {
+            entries[idx .. $ - 1] = entries[idx + 1 .. $];
+        }
+        entries.length = entries.length - 1;
+    }
+
+    /**
      * Gets this multivalue map as an associative array, where each key is
      * mapped to a list of values.
      * Returns: The associative array.
@@ -119,6 +161,36 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             aa[entry.key] = entry.values.dup;
         }
         return aa;
+    }
+
+    /**
+     * Constructs a multivalued map from an associative array.
+     * Params:
+     *   aa = The associative array to use.
+     * Returns: The multivalued map.
+     */
+    static MultiValueMap!(KeyType, ValueType, KeySort) fromAssociativeArray(ValueType[][KeyType] aa) {
+        MultiValueMap!(KeyType, ValueType, KeySort) m;
+        foreach (KeyType k, ValueType[] values; aa) {
+            foreach (ValueType v; values) {
+                m.add(k, v);
+            }
+        }
+        return m;
+    }
+
+    /**
+     * Constructs a multivalued map from an associative array of single values.
+     * Params:
+     *   aa = The associative array to use.
+     * Returns: The multivalued map.
+     */
+    static MultiValueMap!(KeyType, ValueType, KeySort) fromAssociativeArray(ValueType[KeyType] aa) {
+        MultiValueMap!(KeyType, ValueType, KeySort) m;
+        foreach (KeyType k, ValueType v; aa) {
+            m.add(k, v);
+        }
+        return m;
     }
 
     // OPERATOR OVERLOADS below here
@@ -147,4 +219,11 @@ unittest {
     m.add("b", "bye");
     assert(m.getFirst("b").orElseThrow == "bye");
     assert(m.asAssociativeArray == ["a": ["hello"], "b": ["bye"]]);
+    assert(m["b"] == "bye");
+    m.remove("a");
+    assert(!m.contains("a"));
+
+    auto m2 = StringMultiValueMap.fromAssociativeArray(["a": "123", "b": "abc"]);
+    assert(m2["a"] == "123");
+    assert(m2["b"] == "abc");
 }
