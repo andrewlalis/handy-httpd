@@ -11,7 +11,7 @@ module handy_httpd.components.form_urlencoded;
  */
 struct QueryParam {
     /// The name and value of this parameter.
-    const string name, value;
+    string name, value;
 
     /**
      * Converts a list of query params to an associative string array. This is
@@ -124,4 +124,9 @@ unittest {
     doTest([QueryParam("a", "1"), QueryParam("b", "2")], "  a =   1  &  b  =  2  ");
     doTest([QueryParam("a", "1"), QueryParam("b", "2")], "  a =   1  &  b  =  2  ");
     doTest([QueryParam("a", "  1")], "a=%20%201", false);
+    doTest([QueryParam("a", ""), QueryParam("b", ""), QueryParam("c", "hello")], "a&b&c=hello");
+    doTest(
+        [QueryParam("a", ""), QueryParam("a", "hello"), QueryParam("a", "test"), QueryParam("b", "")],
+        "a&a=hello&a=test&b"
+    );
 }

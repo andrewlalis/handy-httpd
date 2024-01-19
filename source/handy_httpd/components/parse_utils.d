@@ -79,15 +79,15 @@ public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string
         headers[h.name] = cast(string) h.value;
     }
     string rawUrl = decode(cast(string) requestParser.uri);
-    auto urlAndParams = parseUrlAndParamsAsMap(rawUrl);
+    Tuple!(string, QueryParam[]) urlAndParams = parseUrlAndParams(rawUrl);
     string method = cast(string) requestParser.method;
     HttpRequest request = HttpRequest(
         methodFromName(method),
         urlAndParams[0],
         requestParser.minorVer,
         headers,
+        QueryParam.toMap(urlAndParams[1]),
         urlAndParams[1],
-        null,
         null
     );
     return tuple(request, result);
