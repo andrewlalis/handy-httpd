@@ -33,9 +33,6 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
         if (entries.length == 1) {
             return entries[0].key == k ? 0 : -1;
         }
-        if (entries.length == 2) {
-            return entries[0].key == k ? 0 : 1;
-        }
         size_t startIdx = 0;
         size_t endIdx = entries.length - 1;
         while (startIdx <= endIdx) {
@@ -193,6 +190,56 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
         return m;
     }
 
+    /**
+     * An efficient builder that can be used to construct a multivalued map
+     * with successive `add` calls, which is more efficient than doing so
+     * directly due to the builder's deferred sorting.
+     */
+    static struct Builder {
+        import std.array;
+
+        alias MapType = MultiValueMap!(KeyType, ValueType, KeySort);
+
+        private MapType m;
+        private RefAppender!(Entry[]) entryAppender;
+
+        /**
+         * Adds a key -> value pair to the builder's map.
+         * Params:
+         *   k = The key.
+         *   v = The value associated with the key.
+         * Returns: A reference to the builder, for method chaining.
+         */
+        ref Builder add(KeyType k, ValueType v) {
+            if (entryAppender.data is null) entryAppender = appender(&m.entries);
+            auto optionalEntry = getEntry(k);
+            if (optionalEntry.isNull) {
+                entryAppender ~= Entry(k, [v]);
+            } else {
+                optionalEntry.value.values ~= v;
+            }
+            return this;
+        }
+
+        /**
+         * Builds the multivalued map.
+         * Returns: The map that was created.
+         */
+        MapType build() {
+            if (m.entries.length == 0) return m;
+            import std.algorithm.sorting : sort;
+            sort!((a, b) => KeySort(a.key, b.key))(m.entries);
+            return m;
+        }
+
+        private Optional!(MapType.Entry) getEntry(KeyType k) {
+            foreach (MapType.Entry entry; m.entries) {
+                if (entry.key == k) return Optional!(MapType.Entry).of(entry);
+            }
+            return Optional!(MapType.Entry).empty();
+        }
+    }
+
     // OPERATOR OVERLOADS below here
 
     /**
@@ -209,7 +256,10 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     }
 }
 
-/// The string => string mapping is a common usecase, so an alias is defined.
+/**
+ * A multivalued map of strings, where each string key refers to zero or more
+ * string values. All keys are case-sensitive.
+ */
 alias StringMultiValueMap = MultiValueMap!(string, string);
 
 unittest {
@@ -226,4 +276,12 @@ unittest {
     auto m2 = StringMultiValueMap.fromAssociativeArray(["a": "123", "b": "abc"]);
     assert(m2["a"] == "123");
     assert(m2["b"] == "abc");
+
+    auto m3 = StringMultiValueMap.fromAssociativeArray(["a": [""], "b": [""], "c": ["hello"]]);
+    assert(m3.contains("a"));
+    assert(m3["a"] == "");
+    assert(m3.contains("b"));
+    assert(m3["b"] == "");
+    assert(m3.contains("c"));
+    assert(m3["c"] == "hello");
 }

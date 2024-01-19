@@ -5,7 +5,9 @@ module handy_httpd.components.request;
 
 import handy_httpd.server: HttpServer;
 import handy_httpd.components.response : HttpResponse;
-import handy_httpd.components.form_urlencoded : QueryParam, parseFormUrlEncoded;
+import handy_httpd.components.form_urlencoded : parseFormUrlEncoded;
+import handy_httpd.components.multivalue_map;
+import handy_httpd.components.optional;
 import std.typecons : Nullable, nullable;
 import std.socket : Address;
 import std.exception;
@@ -35,33 +37,25 @@ struct HttpRequest {
     public const int ver = 1;
 
     /** 
-     * An associative array containing all request headers.
+     * A list of all request headers.
      */
-    public const string[string] headers;
-
-    /** 
-     * An associative array containing all request params, if any were given.
-     * **Deprecated** in favor of `HttpRequest.queryParams`, because this old
-     * implementation doesn't follow the specification which allows for many
-     * values with the same name.
-     */
-    deprecated public const string[string] params;
+    public StringMultiValueMap headers;
 
     /**
      * A list of parsed query parameters from the request's URL.
      */
-    public QueryParam[] queryParams;
+    public StringMultiValueMap queryParams;
 
     /**
      * An associative array containing any path parameters obtained from the
      * request url. These are only populated in cases where it is possible to
-     * parse path parameters, such as with a PathDelegatingHandler.
+     * parse path parameters, such as with a PathHandler.
      */
     public string[string] pathParams;
 
     /**
-     * If this request was processed by a `PathDelegatingHandler`, then this
-     * will be set to the path pattern that was matched when it chose a handler
+     * If this request was processed by a `PathHandler`, then this will be
+     * set to the path pattern that was matched when it chose a handler
      * to handle this request.
      */
     public string pathPattern;
@@ -91,8 +85,8 @@ struct HttpRequest {
      * Returns: True if this request has a header with the given name, or false
      * otherwise.
      */
-    public bool hasHeader(string name) const {
-        return (name in headers) !is null;
+    public bool hasHeader(string name) {
+        return headers.contains(name);
     }
 
     /** 
@@ -102,9 +96,8 @@ struct HttpRequest {
      *   name = The name of the header, case-sensitive.
      * Returns: The header's string representation, or null if not found.
      */
-    public string getHeader(string name) const {
-        if (hasHeader(name)) return headers[name];
-        return null;
+    public string getHeader(string name) {
+        return headers.getFirst(name).orElse(null);
     }
 
     /** 
@@ -136,29 +129,26 @@ struct HttpRequest {
      *                  doesn't exist.
      * Returns: The value of the URL parameter.
      */
-    public T getParamAs(T)(string name, T defaultValue = T.init) const {
+    public T getParamAs(T)(string name, T defaultValue = T.init) {
         import std.conv : to, ConvException;
-        foreach (QueryParam param; this.queryParams) {
-            if (param.name == name) {
+        return this.queryParams.getFirst(name)
+            .map!((s) {
                 try {
-                    return param.value.to!T;
+                    return s.to!T;
                 } catch (ConvException e) {
                     return defaultValue;
                 }
-            }
-        }
-        return defaultValue;
+            })
+            .orElse(defaultValue);
     }
 
     unittest {
-        QueryParam[] p = [QueryParam("a", "123"), QueryParam("b", "c"), QueryParam("c", "true")];
         HttpRequest req = HttpRequest(
             Method.GET,
             "/api",
             1,
-            string[string].init,
-            QueryParam.toMap(p),
-            p,
+            StringMultiValueMap.init,
+            StringMultiValueMap.fromAssociativeArray(["a": "123", "b": "c", "c": "true"]),
             string[string].init
         );
         assert(req.getParamAs!int("a") == 123);
@@ -214,27 +204,20 @@ struct HttpRequest {
      * Returns: The number of bytes that were read.
      */
     public ulong readBody(S)(ref S outputStream, bool allowInfiniteRead = false) if (isByteOutputStream!S) {
-        const string* contentLengthStrPtr = "Content-Length" in headers;
-        // If we're not allowed to read infinitely, and no content-length is given, don't attempt to read.
-        if (!allowInfiniteRead && contentLengthStrPtr is null) {
-            warn("Refusing to read request body because allowInfiniteRead is " ~
-            "false and no \"Content-Length\" header exists.");
-            return 0;
-        }
-        Nullable!ulong contentLength;
-        if (contentLengthStrPtr !is null) {
-            import std.conv : to, ConvException;
-            try {
-                contentLength = nullable((*contentLengthStrPtr).to!ulong);
-            } catch (ConvException e) {
-                warnF!"Caught ConvException: %s; while parsing Content-Length header: %s"(e.msg, *contentLengthStrPtr);
-                // Invalid formatting for content-length header.
-                // If we don't allow infinite reading, quit 0.
-                if (!allowInfiniteRead) {
-                    warn("Refusing to read request body because allowInfiniteRead is false.");
-                    return 0;
+        const long contentLength = headers.getFirst("Content-Length")
+            .map!((s) {
+                import std.conv : to, ConvException;
+                try {
+                    return s.to!long;
+                } catch (ConvException e) {
+                    warnF!"Caught ConvException: %s; while parsing Content-Length header: %s"(e.msg, s);
+                    return -1;
                 }
-            }
+            })
+            .orElse(-1);
+        if (contentLength < 0 && !allowInfiniteRead) {
+            warn("Refusing to read request body because allowInfiniteRead is false and no valid Content-Length header was found.");
+            return 0;
         }
         return this.readBody!(S)(outputStream, contentLength);
     }
@@ -278,7 +261,7 @@ struct HttpRequest {
      */
     private ulong readBody(S)(
         ref S outputStream,
-        Nullable!ulong expectedLength
+        long expectedLength
     ) if (isByteOutputStream!S) {
         import std.algorithm : min;
         import std.string : toLower;
@@ -296,10 +279,10 @@ struct HttpRequest {
 
         ulong bytesRead = 0;
         
-        while (expectedLength.isNull || bytesRead < expectedLength.get()) {
-            const uint bytesToRead = expectedLength.isNull
+        while (expectedLength == -1 || bytesRead < expectedLength) {
+            const uint bytesToRead = expectedLength == -1
                 ? cast(uint) this.receiveBuffer.length
-                : min(expectedLength.get() - bytesRead, cast(uint)this.receiveBuffer.length);
+                : min(expectedLength - bytesRead, cast(uint)this.receiveBuffer.length);
             traceF!"Reading up to %d bytes from stream."(bytesToRead);
             StreamResult readResult = sIn.readFromStream(this.receiveBuffer[0 .. bytesToRead]);
             if (readResult.hasError) {
@@ -361,7 +344,7 @@ struct HttpRequest {
      *   stripWhitespace = Whether to strip whitespace from parsed keys and values.
      * Returns: The list of values that were parsed.
      */
-    public QueryParam[] readBodyAsFormUrlEncoded(bool allowInfiniteRead = false, bool stripWhitespace = true) {
+    public StringMultiValueMap readBodyAsFormUrlEncoded(bool allowInfiniteRead = false, bool stripWhitespace = true) {
         return parseFormUrlEncoded(readBodyAsString(allowInfiniteRead), stripWhitespace);
     }
 

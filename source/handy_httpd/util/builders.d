@@ -11,6 +11,7 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.parse_utils;
 import handy_httpd.components.form_urlencoded;
+import handy_httpd.components.multivalue_map;
 import streams;
 import std.socket : Address;
 
@@ -158,8 +159,8 @@ class HttpRequestBuilder {
 
     private Method method = Method.GET;
     private string url = "/";
-    private string[string] headers;
-    private QueryParam[] params;
+    private StringMultiValueMap headers;
+    private StringMultiValueMap params;
     private string[string] pathParams;
     private string pathPattern = null;
     private InputStream!ubyte inputStream = null;
@@ -191,13 +192,13 @@ class HttpRequestBuilder {
     }
 
     HttpRequestBuilder withHeader(string name, string value) {
-        this.headers[name] = value;
+        this.headers.add(name, value);
         return this;
     }
 
     HttpRequestBuilder withHeader(V)(string name, V value) {
         import std.conv : to;
-        this.headers[name] = value.to!string;
+        this.headers.add(name, value.to!string);
         return this;
     }
 
@@ -212,17 +213,17 @@ class HttpRequestBuilder {
     }
 
     HttpRequestBuilder withParams(string[string] params) {
-        this.params = QueryParam.fromMap(params);
+        this.params = StringMultiValueMap.fromAssociativeArray(params);
         return this;
     }
 
-    HttpRequestBuilder withParams(QueryParam[] params) {
+    HttpRequestBuilder withParams(StringMultiValueMap params) {
         this.params = params;
         return this;
     }
 
     HttpRequestBuilder withParam(string name, string value) {
-        this.params ~= QueryParam(name, value);
+        this.params.add(name, value);
         return this;
     }
 
@@ -270,7 +271,6 @@ class HttpRequestBuilder {
             this.url,
             1,
             this.headers,
-            QueryParam.toMap(this.params),
             this.params,
             this.pathParams,
             this.pathPattern,
