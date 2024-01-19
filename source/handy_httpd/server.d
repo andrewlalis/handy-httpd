@@ -15,13 +15,11 @@ import handy_httpd.components.request;
 import handy_httpd.components.response;
 import handy_httpd.components.handler;
 import handy_httpd.components.config;
-import handy_httpd.components.parse_utils : parseRequest, Msg;
 import handy_httpd.components.worker;
 import handy_httpd.components.request_queue;
 import handy_httpd.components.worker_pool;
 import handy_httpd.components.websocket;
 
-import httparsed : MsgParser, initParser;
 import slf4d;
 
 /** 

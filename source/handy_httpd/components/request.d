@@ -50,7 +50,7 @@ struct HttpRequest {
     /**
      * A list of parsed query parameters from the request's URL.
      */
-    public const QueryParam[] queryParams;
+    public QueryParam[] queryParams;
 
     /**
      * An associative array containing any path parameters obtained from the
@@ -91,7 +91,7 @@ struct HttpRequest {
      * Returns: True if this request has a header with the given name, or false
      * otherwise.
      */
-    public bool hasHeader(string name) {
+    public bool hasHeader(string name) const {
         return (name in headers) !is null;
     }
 
@@ -102,7 +102,7 @@ struct HttpRequest {
      *   name = The name of the header, case-sensitive.
      * Returns: The header's string representation, or null if not found.
      */
-    public string getHeader(string name) {
+    public string getHeader(string name) const {
         if (hasHeader(name)) return headers[name];
         return null;
     }
@@ -116,7 +116,7 @@ struct HttpRequest {
      *   defaultValue = The default value to return if the header doesn't exist.
      * Returns: The value of the header as the specified type.
      */
-    public T getHeaderAs(T)(string name, T defaultValue = T.init) {
+    public T getHeaderAs(T)(string name, T defaultValue = T.init) const {
         import std.conv : to, ConvException;
         if (!hasHeader(name)) return defaultValue;
         try {
@@ -136,7 +136,7 @@ struct HttpRequest {
      *                  doesn't exist.
      * Returns: The value of the URL parameter.
      */
-    public T getParamAs(T)(string name, T defaultValue = T.init) {
+    public T getParamAs(T)(string name, T defaultValue = T.init) const {
         import std.conv : to, ConvException;
         foreach (QueryParam param; this.queryParams) {
             if (param.name == name) {
