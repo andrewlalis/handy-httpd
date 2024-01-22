@@ -14,6 +14,9 @@ import std.exception;
 import slf4d;
 import streams;
 
+/// For convenience, provide access to multipart functionality.
+public import handy_httpd.components.multipart : readBodyAsMultipartFormData, MultipartFormData, MultipartElement;
+
 /** 
  * The data which the server provides to HttpRequestHandlers so that they can
  * formulate a response.
@@ -44,7 +47,7 @@ struct HttpRequest {
     /**
      * A list of parsed query parameters from the request's URL.
      */
-    public StringMultiValueMap queryParams;
+    public const(StringMultiValueMap) queryParams;
 
     /**
      * An associative array containing any path parameters obtained from the
@@ -85,7 +88,7 @@ struct HttpRequest {
      * Returns: True if this request has a header with the given name, or false
      * otherwise.
      */
-    public bool hasHeader(string name) {
+    public bool hasHeader(string name) const {
         return headers.contains(name);
     }
 
@@ -96,7 +99,7 @@ struct HttpRequest {
      *   name = The name of the header, case-sensitive.
      * Returns: The header's string representation, or null if not found.
      */
-    public string getHeader(string name) {
+    public string getHeader(string name) const {
         return headers.getFirst(name).orElse(null);
     }
 
@@ -129,7 +132,7 @@ struct HttpRequest {
      *                  doesn't exist.
      * Returns: The value of the URL parameter.
      */
-    public T getParamAs(T)(string name, T defaultValue = T.init) {
+    public T getParamAs(T)(string name, T defaultValue = T.init) const {
         import std.conv : to, ConvException;
         return this.queryParams.getFirst(name)
             .map!((s) {

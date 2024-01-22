@@ -217,7 +217,7 @@ private ulong parseElementHeaders(ref MultipartElement element, string content) 
 private void parseContentDisposition(ref MultipartElement element) {
     import std.algorithm : startsWith, endsWith;
     import std.string : split, strip;
-    import std.uri : decode;
+    import std.uri : decodeComponent;
     if ("Content-Disposition" !in element.headers) {
         throw new MultipartFormatException("Missing required Content-Disposition header for multipart element.");
     }
@@ -226,11 +226,11 @@ private void parseContentDisposition(ref MultipartElement element) {
     foreach (string part; cdParts) {
         string stripped = strip(part);
         if (startsWith(stripped, "name=\"") && endsWith(stripped, "\"")) {
-            element.name = decode(stripped[6 .. $ - 1]);
+            element.name = decodeComponent(stripped[6 .. $ - 1]);
             traceF!"Element name: %s"(element.name);
         } else if (startsWith(stripped, "filename=\"") && endsWith(stripped, "\"")) {
             import std.typecons : nullable;
-            element.filename = nullable(decode(stripped[10 .. $ - 1]));
+            element.filename = nullable(decodeComponent(stripped[10 .. $ - 1]));
             traceF!"Element filename: %s"(element.filename);
         }
     }
