@@ -82,7 +82,7 @@ QueryParam[] parseFormUrlEncoded(string queryString, bool stripWhitespace = true
  */
 private QueryParam parseSingleQueryParam(string s, bool stripWhitespace) {
     import std.string : strip, indexOf, replace;
-    import std.uri : decode;
+    import std.uri : decodeComponent;
 
     string name, value;
     ptrdiff_t idx = s.indexOf('=');
@@ -101,8 +101,8 @@ private QueryParam parseSingleQueryParam(string s, bool stripWhitespace) {
     }
 
     // Replace 0x2B ('+') with 0x20 (' ').
-    name = name.replace("+", " ").decode();
-    value = value.replace("+", " ").decode();
+    name = name.replace("+", " ").decodeComponent();
+    value = value.replace("+", " ").decodeComponent();
     if (stripWhitespace) {
         name = name.strip();
         value = value.strip();
