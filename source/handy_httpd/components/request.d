@@ -238,6 +238,7 @@ struct HttpRequest {
         string body2 = "Goodbye, world.";
         HttpRequest r2 = new HttpRequestBuilder().withBody(body2).withoutHeader("Content-Length").build();
         auto sOut2 = byteArrayOutputStream();
+        info("Please disregard the following warning message. It is intentional.");
         ulong bytesRead2 = r2.readBody(sOut2);
         assert(bytesRead2 == 0);
         assert(sOut2.toArrayRaw().length == 0);
