@@ -7,6 +7,7 @@ module handy_httpd.components.form_urlencoded;
 
 import handy_httpd.components.multivalue_map;
 
+/// An internal utility struct used when parsing.
 private struct QueryParam {
     string name;
     string value;
