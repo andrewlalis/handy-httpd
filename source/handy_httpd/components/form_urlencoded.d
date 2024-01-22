@@ -100,5 +100,5 @@ unittest {
     doTest(["a": ["", "hello", "test"], "b": [""]], "a&a=hello&a=test&b");
 
     // test for replacement of reserved characters
-    doTest(["time": "12:34:56"], "time=12%3A34%3A56");
+    doTest(["time": ["12:34:56"]], "time=12%3A34%3A56");
 }
