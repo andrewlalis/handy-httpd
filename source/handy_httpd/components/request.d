@@ -39,7 +39,7 @@ struct HttpRequest {
     /** 
      * A list of all request headers.
      */
-    public StringMultiValueMap headers;
+    public const(StringMultiValueMap) headers;
 
     /**
      * A list of parsed query parameters from the request's URL.
