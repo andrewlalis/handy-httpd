@@ -136,7 +136,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     }
 
     /**
-     * Removes a key from the map.
+     * Removes a key from the map, thus removing all values associated with
+     * that key.
      * Params:
      *   k = The key to remove.
      */
