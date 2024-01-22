@@ -53,7 +53,7 @@ StringMultiValueMap parseFormUrlEncoded(string queryString, bool stripWhitespace
  */
 private QueryParam parseSingleQueryParam(string s, bool stripWhitespace) {
     import std.string : strip, indexOf, replace;
-    import std.uri : decode;
+    import std.uri : decodeComponent;
 
     string name, value;
     ptrdiff_t idx = s.indexOf('=');
@@ -72,8 +72,8 @@ private QueryParam parseSingleQueryParam(string s, bool stripWhitespace) {
     }
 
     // Replace 0x2B ('+') with 0x20 (' ').
-    name = name.replace("+", " ").decode();
-    value = value.replace("+", " ").decode();
+    name = name.replace("+", " ").decodeComponent();
+    value = value.replace("+", " ").decodeComponent();
     if (stripWhitespace) {
         name = name.strip();
         value = value.strip();
@@ -98,4 +98,7 @@ unittest {
     doTest(["a": ["  1"]], "a=%20%201", false);
     doTest(["a": [""], "b": [""], "c": ["hello"]], "a&b&c=hello");
     doTest(["a": ["", "hello", "test"], "b": [""]], "a&a=hello&a=test&b");
+
+    // test for replacement of reserved characters
+    doTest(["time": "12:34:56"], "time=12%3A34%3A56");
 }
