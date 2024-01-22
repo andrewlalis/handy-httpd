@@ -129,4 +129,7 @@ unittest {
         [QueryParam("a", ""), QueryParam("a", "hello"), QueryParam("a", "test"), QueryParam("b", "")],
         "a&a=hello&a=test&b"
     );
+
+    // test for replacement of reserved characters
+    doTest([QueryParam("time", "12:34:56")], "time=12%3A34%3A56");
 }
