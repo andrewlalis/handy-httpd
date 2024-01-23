@@ -24,10 +24,16 @@ struct HttpRequestContext {
      */
     public HttpRequest request;
 
+    /// An alias for the context's HTTP request.
+    alias req = request;
+
     /**
      * The response that
      */
     public HttpResponse response;
+
+    /// An alias for the context's HTTP response.
+    alias resp = response;
 
     /**
      * The server from which this context was created.

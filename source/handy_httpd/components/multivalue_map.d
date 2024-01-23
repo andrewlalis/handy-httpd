@@ -83,6 +83,18 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     }
 
     /**
+     * Gets a list of all keys in this map.
+     * Returns: The list of keys in this map.
+     */
+    KeyType[] keys() const {
+        KeyType[] keysArray = new KeyType[this.length()];
+        foreach (size_t i, const Entry e; entries) {
+            keysArray[i] = e.key;
+        }
+        return keysArray;
+    }
+
+    /**
      * Gets all values associated with a given key.
      * Params:
      *   k = The key to get the values of.
@@ -245,6 +257,36 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
         }
     }
 
+    // RANGE INTERFACE METHODS below here
+
+    bool empty() const {
+        return length == 0;
+    }
+
+    Entry front() {
+        return entries[0];
+    }
+
+    void popFront() {
+        if (length == 1) {
+            clear();
+        } else {
+            entries = entries[1 .. $];
+        }
+    }
+
+    Entry back() {
+        return entries[length - 1];
+    }
+
+    void popBack() {
+        if (length == 1) {
+            clear();
+        } else {
+            entries = entries[0..$-1];
+        }
+    }
+
     // OPERATOR OVERLOADS below here
 
     /**
@@ -258,6 +300,24 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     ValueType opIndex(KeyType key) const {
         import std.conv : to;
         return getFirst(key).orElseThrow("No values exist for key " ~ key.to!string ~ ".");
+    }
+
+    /**
+     * `opApply` implementation to allow iterating over this map by all pairs
+     * of keys and values.
+     * Params:
+     *   dg = The foreach body that uses each key -> value pair.
+     * Returns: The result of the delegate call.
+     */
+    int opApply(int delegate(const ref KeyType, const ref ValueType) dg) const {
+        int result = 0;
+        foreach (const Entry entry; entries) {
+            foreach (ValueType value; entry.values) {
+                result = dg(entry.key, value);
+                if (result) break;
+            }
+        }
+        return result;
     }
 }
 
@@ -289,4 +349,11 @@ unittest {
     assert(m3["b"] == "");
     assert(m3.contains("c"));
     assert(m3["c"] == "hello");
+
+    // Test that opApply works:
+    int n = 0;
+    foreach (string key, string value; m3) {
+        n++;
+    }
+    assert(n == 3);
 }

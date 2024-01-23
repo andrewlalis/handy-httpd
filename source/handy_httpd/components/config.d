@@ -95,7 +95,7 @@ struct ServerConfig {
         cfg.reuseAddress = true;
         cfg.workerPoolSize = 25;
         cfg.workerPoolManagerIntervalMs = 60_000;
-        cfg.enableWebSockets = true;
+        cfg.enableWebSockets = false;
         return cfg;
     }
 }

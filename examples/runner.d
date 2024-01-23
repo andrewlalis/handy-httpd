@@ -1,81 +1,194 @@
 #!/usr/bin/env rdmd
 import std.stdio;
 import std.process;
+import std.conv;
 import std.path;
 import std.file;
+import std.string;
 import std.algorithm;
 import std.typecons;
 import std.array;
 import core.thread;
 
-int main(string[] args) {
-    string[] exampleDirs = [];
-    foreach (entry; dirEntries(".", SpanMode.shallow, false)) {
-        if (entry.isDir) exampleDirs ~= entry.name;
+interface Example {
+    string name() const;
+    Pid run(string[] args) const;
+    string[] requiredFiles() const;
+}
+
+class DubSingleFileExample : Example {
+    private string workingDir;
+    private string filename;
+
+    this(string workingDir, string filename) {
+        this.workingDir = workingDir;
+        this.filename = filename;
     }
 
-    Thread[] processThreads = [];
-    foreach (dir; exampleDirs) {
-        auto nullablePid = runExample(dir);
-        if (!nullablePid.isNull) {
-            Thread processThread = new Thread(() {
-                Pid pid = nullablePid.get();
-                int result = pid.wait();
-                writefln!"Example %s exited with code %d."(dir, result);
-            });
-            processThread.start();
-            processThreads ~= processThread;
+    this(string filename) {
+        this(".", filename);
+    }
+
+    string name() const {
+        if (workingDir != ".") return workingDir;
+        return filename[0..$-2];
+    }
+
+    Pid run(string[] args) const {
+        string[] cmd = ["dub", "run", "--single", filename];
+        if (args.length > 0) {
+            cmd ~= "--";
+            cmd ~= args;
+        }
+        return spawnProcess(
+            cmd,
+            std.stdio.stdin,
+            std.stdio.stdout,
+            std.stdio.stderr,
+            null,
+            Config.none,
+            workingDir
+        );
+    }
+
+    string[] requiredFiles() const {
+        if (workingDir == ".") {
+            return [filename];
+        } else {
+            return [workingDir];
         }
     }
+}
 
-    foreach (thread; processThreads) {
-        thread.join();
+class DubSingleFileUnitTestExample : Example {
+    private string filename;
+
+    this(string filename) {
+        this.filename = filename;
     }
+
+    string name() const {
+        return filename[0..$-2];
+    }
+
+    Pid run(string[] args) const {
+        return spawnProcess(
+            ["dub", "test", "--single", filename] ~ args
+        );
+    }
+
+    string[] requiredFiles() const {
+        return [filename];
+    }
+}
+
+const Example[] EXAMPLES = [
+    new DubSingleFileExample("hello-world.d"),
+    new DubSingleFileExample("file-upload.d"),
+    new DubSingleFileExample("using-headers.d"),
+    new DubSingleFileExample("static-content-server", "content_server.d"),
+    new DubSingleFileExample("websocket", "server.d"),
+    new DubSingleFileUnitTestExample("handler-testing.d")
+];
+
+int main(string[] args) {
+    if (args.length > 1 && toLower(args[1]) == "clean") {
+        return cleanExamples();
+    } else if (args.length > 1 && toLower(args[1]) == "list") {
+        writefln!"The following %d examples are available:"(EXAMPLES.length);
+        foreach (example; EXAMPLES) {
+            writefln!" - %s"(example.name);
+        }
+        return 0;
+    } else if (args.length > 1 && toLower(args[1]) == "run") {
+        return runExamples(args[2..$]);
+    }
+    writeln("Nothing to run.");
     return 0;
 }
 
-Nullable!Pid runExample(string dir) {
-    writefln!"Running example: %s"(dir);
-    // Prepare new standard streams for the example program.
-    File newStdout = File(buildPath(dir, "stdout.log"), "w");
-    File newStderr = File(buildPath(dir, "stderr.log"), "w");
-    File newStdin = File.tmpfile();
-    if (exists(buildPath(dir, "dub.json"))) {
-        // Run normal dub project.
-        Nullable!Pid result;
-        result = spawnProcess(
-            ["dub", "run"],
-            newStdin,
-            newStdout,
-            newStderr,
-            null,
-            Config.none,
-            dir
-        );
-        return result;
-    } else {
-        // Run single-file project.
-        string executableFile = null;
-        foreach (entry; dirEntries(dir, SpanMode.shallow, false)) {
-            if (entry.name.endsWith(".d")) {
-                executableFile = entry.name;
-                break;
+int cleanExamples() {
+    string currentPath = getcwd();
+    string currentDir = baseName(currentPath);
+    if (currentDir != "examples") {
+        stderr.writeln("Not in the examples directory.");
+        return 1;
+    }
+
+    foreach (DirEntry entry; dirEntries(currentPath, SpanMode.shallow, false)) {
+        string filename = baseName(entry.name);
+        if (shouldRemove(filename)) {
+            std.file.remove(entry.name);
+        }
+    }
+
+    return 0;
+}
+
+bool shouldRemove(string filename) {
+    bool required = false;
+    foreach (example; EXAMPLES) {
+        if (canFind(example.requiredFiles, filename)) {
+            required = true;
+            break;
+        }
+    }
+    if (!required) {
+        return filename != ".gitignore" &&
+            filename != "runner" &&
+            filename != "runner.exe" &&
+            !endsWith(filename, ".d") &&
+            !endsWith(filename, ".md");
+    }
+    return false;
+}
+
+int runExamples(string[] args) {
+    if (args.length > 0) {
+        string exampleName = strip(toLower(args[0]));
+        if (exampleName == "all") {
+            ushort port = 8080;
+            Pid[] pids = [];
+            foreach (example; EXAMPLES) {
+                if (cast(DubSingleFileUnitTestExample) example) {
+                    pids ~= example.run([]);
+                } else {
+                    pids ~= example.run([port.to!string]);
+                    port++;
+                }
+            }
+            foreach (pid; pids) {
+                pid.wait();
+            }
+            return 0;
+        }
+        foreach (example; EXAMPLES) {
+            if (example.name == exampleName) {
+                writefln!"Running example: %s"(example.name);
+                return example.run(args[1..$]).wait();
             }
         }
-        if (executableFile !is null) {
-            Nullable!Pid result;
-            result = spawnProcess(
-                ["dub", "run", "--single", baseName(executableFile)],
-                newStdin,
-                newStdout,
-                newStderr,
-                null,
-                Config.none,
-                dir
-            );
-            return result;
-        } else {
-            return Nullable!Pid.init;
+        stderr.writefln!
+            "\"%s\" does not refer to any known example. Use the \"list\" command to see available examples."
+            (exampleName);
+        return 1;
+    } else {
+        writeln("Select one of the examples below to run:");
+        foreach (i, example; EXAMPLES) {
+            writefln!"[%d]\t%s"(i + 1, example.name);
+        }
+        string input = readln().strip();
+        try {
+            uint idx = input.to!uint;
+            if (idx < 1 || idx > EXAMPLES.length) {
+                stderr.writefln!"%d is an invalid example number."(idx);
+                return 1;
+            }
+            writefln!"Running example: %s"(EXAMPLES[idx - 1].name);
+            return EXAMPLES[idx - 1].run([]).wait();
+        } catch (ConvException e) {
+            stderr.writefln!"\"%s\" is not a number."(input);
+            return 1;
         }
     }
 }

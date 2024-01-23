@@ -227,14 +227,14 @@ class WebSocketHandler : HttpRequestHandler {
      * be written in that case.
      */
     private bool verifyRequest(ref HttpRequestContext ctx) {
-        string origin = ctx.request.getHeader("origin");
+        string origin = ctx.request.headers.getFirst("origin").orElse(null);
         // TODO: Verify correct origin.
         if (ctx.request.method != Method.GET) {
             ctx.response.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
             ctx.response.writeBodyString("Only GET requests are allowed.");
             return false;
         }
-        string key = ctx.request.getHeader("Sec-WebSocket-Key");
+        string key = ctx.request.headers.getFirst("Sec-WebSocket-Key").orElse(null);
         if (key is null) {
             ctx.response.setStatus(HttpStatus.BAD_REQUEST);
             ctx.response.writeBodyString("Missing Sec-WebSocket-Key header.");
@@ -256,7 +256,7 @@ class WebSocketHandler : HttpRequestHandler {
      *   ctx = The request context to send the response to.
      */
     private void sendSwitchingProtocolsResponse(ref HttpRequestContext ctx) {
-        string key = ctx.request.getHeader("Sec-WebSocket-Key");
+        string key = ctx.request.headers.getFirst("Sec-WebSocket-Key").orElseThrow();
         ctx.response.setStatus(HttpStatus.SWITCHING_PROTOCOLS);
         ctx.response.addHeader("Upgrade", "websocket");
         ctx.response.addHeader("Connection", "Upgrade");

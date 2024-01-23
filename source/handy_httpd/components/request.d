@@ -82,28 +82,6 @@ struct HttpRequest {
     public Address remoteAddress;
 
     /** 
-     * Tests if this request has a header with the given name.
-     * Params:
-     *   name = The name to check for, case-sensitive.
-     * Returns: True if this request has a header with the given name, or false
-     * otherwise.
-     */
-    public bool hasHeader(string name) const {
-        return headers.contains(name);
-    }
-
-    /** 
-     * Gets the string representation of a given header value, or null if the
-     * header isn't present.
-     * Params:
-     *   name = The name of the header, case-sensitive.
-     * Returns: The header's string representation, or null if not found.
-     */
-    public string getHeader(string name) const {
-        return headers.getFirst(name).orElse(null);
-    }
-
-    /** 
      * Gets a header as the specified type, or returns the default value
      * if the header with the given name doesn't exist or is of an invalid
      * format.
@@ -279,7 +257,7 @@ struct HttpRequest {
 
         // Set up any necessary stream wrappers depending on the transfer encoding and compression.
         InputStream!ubyte sIn;
-        if (hasHeader("Transfer-Encoding") && toLower(getHeader("Transfer-Encoding")) == "chunked") {
+        if (headers.contains("Transfer-Encoding") && toLower(headers["Transfer-Encoding"]) == "chunked") {
             debug_("Request has Transfer-Encoding=chunked, using chunked input stream.");
             sIn = inputStreamObjectFor(chunkedEncodingInputStreamFor(this.inputStream));
         } else {

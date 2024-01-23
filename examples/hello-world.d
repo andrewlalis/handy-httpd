@@ -1,20 +1,23 @@
 #!/usr/bin/env dub
 /+ dub.sdl:
-    dependency "handy-httpd" path="../../"
+    dependency "handy-httpd" path="../"
 +/
+
+/**
+ * A basic example that shows you how to start your server and deal with
+ * incoming requests.
+ */
+module examples.hello_world;
+
 import handy_httpd;
 import slf4d;
 
-void main() {
-    // First we set up our server's configuration, using mostly default values,
-    // but we'll tweak a few settings, and to be extra clear, we explicitly set
-    // the port to 8080 (even though that's the default).
-    ServerConfig cfg = ServerConfig.defaultValues();
-    cfg.workerPoolSize = 5;
-    cfg.port = 8080;
-
-    // Now we construct a new instance of the HttpServer class, and provide it
-    // a lambda function to use when handling requests.
+void main(string[] args) {
+    ServerConfig cfg = ServerConfig.defaultValues;
+    if (args.length > 1) {
+        import std.conv;
+        cfg.port = args[1].to!ushort;
+    }
     new HttpServer((ref ctx) {
         // We can inspect the request's URL directly like so:
         if (ctx.request.url == "/stop") {
@@ -26,5 +29,5 @@ void main() {
         } else {
             ctx.response.setStatus(HttpStatus.NOT_FOUND);
         }
-    }, cfg).start(); // Calling start actually start's the server's main loop.
+    }, cfg).start(); // Calling start actually starts the server's main loop.
 }

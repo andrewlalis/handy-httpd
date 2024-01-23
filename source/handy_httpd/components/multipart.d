@@ -91,7 +91,7 @@ const MAX_ELEMENTS = 1024;
  */
 MultipartFormData readBodyAsMultipartFormData(ref HttpRequest request, bool allowInfiniteRead = false) {
     import std.algorithm : startsWith;
-    string contentType = request.getHeader("Content-Type");
+    string contentType = request.headers.getFirst("Content-Type").orElse(null);
     if (contentType is null || !startsWith(contentType, "multipart/form-data")) {
         throw new MultipartFormatException("Content-Type is not multipart/form-data.");
     }

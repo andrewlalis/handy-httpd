@@ -5,6 +5,11 @@
 import handy_httpd;
 import handy_httpd.handlers.file_resolving_handler;
 
-void main() {
-    new HttpServer(new FileResolvingHandler("content")).start();
+void main(string[] args) {
+    ServerConfig cfg = ServerConfig.defaultValues;
+    if (args.length > 1) {
+        import std.conv;
+        cfg.port = args[1].to!ushort;
+    }
+    new HttpServer(new FileResolvingHandler("content"), cfg).start();
 }
