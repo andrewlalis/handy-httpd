@@ -10,6 +10,12 @@
  *
  * In this example, we'll build a simple API that stores a list of names, and
  * use it to showcase the features of the PathHandler.
+ *
+ * To get the list of names: `curl http://localhost:8080/names`
+ *
+ * To add a name to the list: `curl -X POST http://localhost:8080/names?name=john`
+ *
+ * To get a name by its index: `curl http://localhost:8080/names/0`
  */
 module examples.path_handler;
 

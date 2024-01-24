@@ -140,7 +140,11 @@ int cleanExamples() {
     foreach (DirEntry entry; dirEntries(currentPath, SpanMode.shallow, false)) {
         string filename = baseName(entry.name);
         if (shouldRemove(filename)) {
-            std.file.remove(entry.name);
+            if (entry.isFile) {
+                std.file.remove(entry.name);
+            } else {
+                std.file.rmdirRecurse(entry.name);
+            }
         }
     }
 
