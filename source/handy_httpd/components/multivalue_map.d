@@ -352,7 +352,7 @@ unittest {
 
     // Test that opApply works:
     int n = 0;
-    foreach (string key, string value; m3) {
+    foreach (key, value; m3) {
         n++;
     }
     assert(n == 3);

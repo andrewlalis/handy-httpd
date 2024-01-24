@@ -5,7 +5,7 @@ Single-file scripts annotated with a shebang can be run in a unix command-line w
 
 ## Runner Script
 
-A **runner** script is provided for your convenience. Compile it with `dmd runner.d`, or run directly with `./runner.d`. You can:
+A runner script is provided for your convenience. Compile it with `dmd runner.d`, or run directly with `./runner.d`. You can:
 - List all examples: `./runner list`
 - Clean the examples directory and remove compiled binaries: `./runner clean`
 - Select an example to run from a list: `./runner run`
