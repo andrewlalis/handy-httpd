@@ -4,27 +4,16 @@
  */
 module handy_httpd.components.worker;
 
-import std.socket;
-import std.typecons : Nullable, nullable;
-import std.conv : to;
-import core.thread;
-import core.atomic : atomicStore, atomicLoad;
-import httparsed : MsgParser, initParser;
+import std.socket : Socket, SocketShutdown;
+
+import handy_httpd.server : HttpServer;
+import handy_httpd.components.parse_utils : Msg, receiveRequest;
+import handy_httpd.components.handler : HttpRequestContext;
+import handy_httpd.components.response : HttpStatus;
+
+import streams : SocketInputStream, SocketOutputStream;
+import httparsed : MsgParser;
 import slf4d;
-import streams.primitives;
-import streams.interfaces;
-import streams.types.socket;
-import streams.types.concat;
-import streams.types.array;
-import streams.types.buffered;
-
-import handy_httpd.server;
-import handy_httpd.components.handler;
-import handy_httpd.components.request;
-import handy_httpd.components.response;
-import handy_httpd.components.parse_utils;
-
-
 
 /**
  * The main logical function that's called when a new client socket is accepted
@@ -45,9 +34,18 @@ public void handleClient(
     Logger logger = getLogger()
 ) {
     logger.debugF!"Got client socket: %s"(socket.remoteAddress());
+    // Create the input and output streams for the request here, since their
+    // lifetime continues until the request is handled.
     SocketInputStream inputStream = SocketInputStream(socket);
     SocketOutputStream outputStream = SocketOutputStream(socket);
-    auto optionalCtx = receiveRequest(server, socket, &inputStream, &outputStream, receiveBuffer, requestParser, logger);
+    // Try to parse and build a request context by reading from the socket.
+    auto optionalCtx = receiveRequest(
+        server, socket,
+        &inputStream, &outputStream,
+        receiveBuffer,
+        requestParser,
+        logger
+    );
     if (optionalCtx.isNull) {
         logger.debug_("Skipping this request because we couldn't get a context.");
         socket.shutdown(SocketShutdown.BOTH);
@@ -55,6 +53,7 @@ public void handleClient(
         return;
     }
 
+    // We successfully got a request, so use the server's handler to handle it.
     HttpRequestContext ctx = optionalCtx.value;
     logger.infoF!"Request: Method=%s, URL=\"%s\""(ctx.request.method, ctx.request.url);
     try {

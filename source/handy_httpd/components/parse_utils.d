@@ -129,6 +129,8 @@ public Tuple!(string, StringMultiValueMap) parseUrlAndParams(string rawUrl) {
  * Params:
  *   server = The server that accepted the client socket.
  *   clientSocket = The underlying socket to the client.
+ *   inputStream = The input stream to use.
+ *   outputStream = The output stream to use.
  *   receiveBuffer = The raw buffer that is used to store data that was read.
  *   requestParser = The HTTP request parser.
  *   logger = A logger to use to write log messages.
@@ -145,7 +147,7 @@ public Optional!HttpRequestContext receiveRequest(InputStream, OutputStream)(
     ref MsgParser!Msg requestParser,
     Logger logger = getLogger()
 ) if (isByteInputStream!InputStream && isByteOutputStream!OutputStream) {
-    // First try and read as much as we can from  the input stream into the buffer.
+    // First try and read as much as we can from the input stream into the buffer.
     logger.trace("Reading the initial request into the receive buffer.");
     StreamResult initialReadResult = inputStream.readFromStream(receiveBuffer);
     if (initialReadResult.hasError) {
@@ -159,9 +161,14 @@ public Optional!HttpRequestContext receiveRequest(InputStream, OutputStream)(
     logger.debugF!"Received %d bytes from the client."(initialReadResult.count);
     if (initialReadResult.count == 0) return Optional!HttpRequestContext.empty(); // Skip if we didn't receive valid data.
 
+    // We store an immutable copy of the data initially received, so we can
+    // slice it and work with it even as we keep reading and overwriting the
+    // receive buffer.
+    immutable ubyte[] initialData = receiveBuffer[0 .. initialReadResult.count].idup;
+
     // Prepare the request context by parsing the HttpRequest, and preparing the context.
     try {
-        auto requestAndSize = parseRequest(requestParser, cast(string) receiveBuffer[0 .. initialReadResult.count]);
+        auto requestAndSize = parseRequest(requestParser, cast(string) initialData);
         logger.debugF!"Parsed first %d bytes as the HTTP request."(requestAndSize[1]);
         
         // We got a valid request, so prepare the context.

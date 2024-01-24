@@ -35,12 +35,9 @@ void main(string[] args) {
         import std.conv;
         cfg.port = args[1].to!ushort;
     }
-    import slf4d.default_provider;
-    auto prov = new shared DefaultProvider(true, Levels.TRACE);
-    configureLoggingProvider(prov);
     new HttpServer(new PathHandler()
-        .addMapping(Method.GET, "/**", &serveIndex)
-        .addMapping(Method.POST, "/upload", &handleUpload),
+        .addMapping(Method.GET, "/**", &serveIndex) // Show the index content to any request.
+        .addMapping(Method.POST, "/upload", &handleUpload), // And handle uploads only on POST requests to /upload.
         cfg
     ).start();
 }

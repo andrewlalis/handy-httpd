@@ -129,7 +129,11 @@ MultipartFormData parseMultipartFormData(string content, string boundary) {
     while (elementCount < MAX_ELEMENTS) {
         // Check that we have enough data to read a boundary marker.
         if (content.length < nextIdx + boundary.length + 4) {
-            throw new MultipartFormatException("Invalid boundary: " ~ content[nextIdx .. $]);
+            throw new MultipartFormatException(
+                "Unable to read next boundary marker: " ~
+                content[nextIdx .. $] ~
+                ". Expected " ~ boundary
+            );
         }
         string nextBoundary = content[nextIdx .. nextIdx + boundary.length + 4];
         if (nextBoundary == boundaryEnd) {
@@ -138,7 +142,6 @@ MultipartFormData parseMultipartFormData(string content, string boundary) {
             // Find the end index of this element.
             const ulong elementStartIdx = nextIdx + boundary.length + 4;
             const ulong elementEndIdx = indexOf(content, "--" ~ boundary, elementStartIdx);
-            // const ulong elementEndIdx = elementStartIdx + countUntil(content[elementStartIdx .. $], "--" ~ boundary);
             traceF!"Reading element from body at [%d, %d)"(elementStartIdx, elementEndIdx);
             partAppender ~= readElement(content[elementStartIdx .. elementEndIdx]);
             nextIdx = elementEndIdx;

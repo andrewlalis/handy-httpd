@@ -18,7 +18,7 @@ import handy_httpd.components.config;
 import handy_httpd.components.worker;
 import handy_httpd.components.request_queue;
 import handy_httpd.components.worker_pool;
-import handy_httpd.components.worker_pool2;
+import handy_httpd.components.legacy_worker_pool;
 import handy_httpd.components.websocket;
 
 import slf4d;
@@ -29,41 +29,35 @@ import slf4d;
  * client.
  */
 class HttpServer {
-    /** 
+    /**
      * The server's configuration values.
      */
     public const ServerConfig config;
 
-    /** 
+    /**
      * The address to which this server is bound.
      */
     private Address address;
 
-    /** 
+    /**
      * The handler that all requests will be delegated to.
      */
     private HttpRequestHandler handler;
 
-    /** 
+    /**
      * An exception handler to use when an exception occurs.
      */
     private ServerExceptionHandler exceptionHandler;
 
-    /** 
+    /**
      * Internal flag that indicates when we're ready to accept connections.
      */
     private shared bool ready = false;
 
-    /** 
+    /**
      * The server socket that accepts connections.
      */
     private Socket serverSocket = null;
-
-    /**
-     * The queue to which incoming client sockets are sent, and that workers
-     * pull from.
-     */
-    private RequestQueue requestQueue;
 
     /**
      * The worker pool to which accepted client sockets are submitted for
@@ -76,7 +70,30 @@ class HttpServer {
      */
     private WebSocketManager websocketManager;
 
-    /** 
+    /**
+     * Constructs a new server using the supplied handler to handle all
+     * incoming requests, as well as a supplied request worker pool.
+     * Params:
+     *   handler = The handler to use.
+     *   requestWorkerPool = The worker pool to use.
+     *   config = The server configuration.
+     */
+    this(
+        HttpRequestHandler handler,
+        RequestWorkerPool requestWorkerPool,
+        ServerConfig config
+    ) {
+        this.config = config;
+        this.address = parseAddress(config.hostname, config.port);
+        this.handler = handler;
+        this.exceptionHandler = new BasicServerExceptionHandler();
+        this.requestWorkerPool = requestWorkerPool;
+        if (config.enableWebSockets) {
+            this.websocketManager = new WebSocketManager();
+        }
+    }
+
+    /**
      * Constructs a new server using the supplied handler to handle all
      * incoming requests.
      * Params:
@@ -90,10 +107,8 @@ class HttpServer {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
-        this.requestQueue = new ConcurrentBlockingRequestQueue(config.requestQueueSize);
         this.exceptionHandler = new BasicServerExceptionHandler();
-        this.requestWorkerPool = new TaskPoolWorkerPool(this, config.workerPoolSize);
-        // this.requestWorkerPool = new LegacyWorkerPool(this);
+        this.requestWorkerPool = new LegacyWorkerPool(this);
         if (config.enableWebSockets) {
             this.websocketManager = new WebSocketManager();
         }
