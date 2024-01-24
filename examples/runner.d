@@ -1,4 +1,6 @@
 #!/usr/bin/env rdmd
+module examples.runner;
+
 import std.stdio;
 import std.process;
 import std.conv;
@@ -13,6 +15,7 @@ import core.thread;
 interface Example {
     string name() const;
     Pid run(string[] args) const;
+    Pid test() const;
     string[] requiredFiles() const;
 }
 
@@ -51,6 +54,18 @@ class DubSingleFileExample : Example {
         );
     }
 
+    Pid test() const {
+        return spawnProcess(
+            ["dub", "build", "--single", filename],
+            std.stdio.stdin,
+            std.stdio.stdout,
+            std.stdio.stderr,
+            null,
+            Config.none,
+            workingDir
+        );
+    }
+
     string[] requiredFiles() const {
         if (workingDir == ".") {
             return [filename];
@@ -77,6 +92,10 @@ class DubSingleFileUnitTestExample : Example {
         );
     }
 
+    Pid test() const {
+        return run([]);
+    }
+
     string[] requiredFiles() const {
         return [filename];
     }
@@ -86,6 +105,7 @@ const Example[] EXAMPLES = [
     new DubSingleFileExample("hello-world.d"),
     new DubSingleFileExample("file-upload.d"),
     new DubSingleFileExample("using-headers.d"),
+    new DubSingleFileExample("path-handler.d"),
     new DubSingleFileExample("static-content-server", "content_server.d"),
     new DubSingleFileExample("websocket", "server.d"),
     new DubSingleFileUnitTestExample("handler-testing.d")
@@ -102,6 +122,8 @@ int main(string[] args) {
         return 0;
     } else if (args.length > 1 && toLower(args[1]) == "run") {
         return runExamples(args[2..$]);
+    } else if (args.length > 1 && toLower(args[1]) == "test") {
+        return testExamples();
     }
     writeln("Nothing to run.");
     return 0;
@@ -191,4 +213,15 @@ int runExamples(string[] args) {
             return 1;
         }
     }
+}
+
+int testExamples() {
+    foreach (example; EXAMPLES) {
+        int exitCode = example.test().wait();
+        if (exitCode != 0) {
+            writefln!"Example %s failed with exit code %d."(example.name, exitCode);
+            return exitCode;
+        }
+    }
+    return 0;
 }

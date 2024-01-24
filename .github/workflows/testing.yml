@@ -95,27 +95,11 @@ jobs:
         uses: dlang-community/setup-dlang@v1
         with:
           compiler: ${{ matrix.compiler }}
+
+      - name: Test Examples
+        working-directory: examples
+        run: rdmd runner.d test
       
-      - name: "Example: hello-world"
+      - name: Clean Examples
         working-directory: examples
-        run: dub -q build --single hello-world.d
-
-      - name: "Example: using-headers"
-        working-directory: examples
-        run: dub -q build --single using-headers.d
-
-      - name: "Example: file-upload"
-        working-directory: examples
-        run: dub -q build --single file-upload.d
-
-      - name: "Example: handler-testing"
-        working-directory: examples
-        run: dub test --single handler-testing.d
-
-      - name: "Example: static-content-server"
-        working-directory: examples/static-content-server
-        run: dub -q build --single content_server.d
-
-      - name: "Example: websocket"
-        working-directory: examples/websocket
-        run: dub -q build --single server.d
+        run: rdmd runner.d clean
