@@ -35,6 +35,9 @@ void main(string[] args) {
         import std.conv;
         cfg.port = args[1].to!ushort;
     }
+    import slf4d.default_provider;
+    auto prov = new shared DefaultProvider(true, Levels.TRACE);
+    configureLoggingProvider(prov);
     new HttpServer(new PathHandler()
         .addMapping(Method.GET, "/**", &serveIndex)
         .addMapping(Method.POST, "/upload", &handleUpload),

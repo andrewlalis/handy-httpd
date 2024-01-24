@@ -15,7 +15,7 @@ import slf4d;
 
 /**
  * A simple container for the components that are available in the context of
- * handling an HttpRequest. This includes the request, response, server, worker,
+ * handling an HttpRequest. This includes the request, response, server,
  * and other associated objects.
  */
 struct HttpRequestContext {
@@ -39,11 +39,6 @@ struct HttpRequestContext {
      * The server from which this context was created.
      */
     public HttpServer server;
-
-    /**
-     * The worker thread that's handling this request.
-     */
-    public ServerWorkerThread worker;
 
     /**
      * The underlying socket to this request's client. In the vast majority of

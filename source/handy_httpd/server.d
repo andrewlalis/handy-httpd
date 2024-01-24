@@ -18,6 +18,7 @@ import handy_httpd.components.config;
 import handy_httpd.components.worker;
 import handy_httpd.components.request_queue;
 import handy_httpd.components.worker_pool;
+import handy_httpd.components.worker_pool2;
 import handy_httpd.components.websocket;
 
 import slf4d;
@@ -64,10 +65,11 @@ class HttpServer {
      */
     private RequestQueue requestQueue;
 
-    /** 
-     * The managed thread pool containing workers to handle requests.
+    /**
+     * The worker pool to which accepted client sockets are submitted for
+     * processing.
      */
-    private WorkerPool workerPool;
+    private RequestWorkerPool requestWorkerPool;
 
     /**
      * A manager thread for handling all websocket connections.
@@ -90,7 +92,8 @@ class HttpServer {
         this.handler = handler;
         this.requestQueue = new ConcurrentBlockingRequestQueue(config.requestQueueSize);
         this.exceptionHandler = new BasicServerExceptionHandler();
-        this.workerPool = new WorkerPool(this);
+        this.requestWorkerPool = new TaskPoolWorkerPool(this, config.workerPoolSize);
+        // this.requestWorkerPool = new LegacyWorkerPool(this);
         if (config.enableWebSockets) {
             this.websocketManager = new WebSocketManager();
         }
@@ -121,14 +124,12 @@ class HttpServer {
         this.prepareToStart();
         atomicStore(this.ready, true);
         trace("Set ready flag to true.");
-        // The worker pool must be started after setting ready to true, since
-        // the workers will stop once ready is false.
-        this.workerPool.start();
+        this.requestWorkerPool.start();
         info("Now accepting connections.");
         while (this.serverSocket.isAlive()) {
             try {
                 Socket clientSocket = this.serverSocket.accept();
-                this.requestQueue.enqueue(clientSocket);
+                this.requestWorkerPool.submit(clientSocket);
             } catch (SocketAcceptException acceptException) {
                 if (this.serverSocket.isAlive()) {
                     warnF!"Socket accept failed: %s"(acceptException.msg);
@@ -170,7 +171,7 @@ class HttpServer {
      * clean up any additonal resources or threads spawned by the server.
      */
     private void cleanUpAfterStop() {
-        this.workerPool.stop();
+        this.requestWorkerPool.stop();
         if (this.websocketManager !is null) {
             this.websocketManager.stop();
             try {
@@ -214,36 +215,6 @@ class HttpServer {
      */
     public bool isReady() {
         return atomicLoad(this.ready);
-    }
-
-    /** 
-     * Blocks the calling thread until we're notified by a semaphore, and tries
-     * to obtain the next socket to a client for which we should process a
-     * request.
-     * 
-     * This method is intended to be called by worker threads.
-     *
-     * Returns: A nullable socket, which, if not null, contains a socket that's
-     * ready for request processing.
-     */
-    public Nullable!Socket waitForNextClient() {
-        Nullable!Socket result;
-        Socket s = this.requestQueue.dequeue();
-        if (s !is null) result = s;
-        return result;
-    }
-
-    /** 
-     * Notifies all worker threads waiting on incoming requests. This is called
-     * by the worker pool when it shuts down, to cause all workers to quit waiting.
-     */
-    public void notifyWorkerThreads() {
-        ConcurrentBlockingRequestQueue q = cast(ConcurrentBlockingRequestQueue) this.requestQueue;
-        for (int i = 0; i < this.config.workerPoolSize; i++) {
-            q.notify();
-            q.notify();
-        }
-        debug_("Notified all worker threads.");
     }
 
     /** 

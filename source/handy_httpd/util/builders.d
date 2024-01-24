@@ -65,7 +65,6 @@ class HttpRequestContextBuilder {
     private HttpRequestBuilder requestBuilder;
     private HttpResponseBuilder responseBuilder;
     private HttpServer server;
-    private ServerWorkerThread worker;
 
     this() {
         this.requestBuilder = new HttpRequestBuilder(this);
@@ -126,17 +125,6 @@ class HttpRequestContextBuilder {
     }
 
     /**
-     * Configures the worker thread for this context.
-     * Params:
-     *   worker = The worker thread to use.
-     * Returns: The context builder, for method chaining.
-     */
-    public HttpRequestContextBuilder withWorker(ServerWorkerThread worker) {
-        this.worker = worker;
-        return this;
-    }
-
-    /**
      * Builds the request context.
      * Returns: The HttpRequestContext.
      */
@@ -144,8 +132,7 @@ class HttpRequestContextBuilder {
         return HttpRequestContext(
             this.requestBuilder.build(),
             this.responseBuilder.build(),
-            this.server,
-            this.worker
+            this.server
         );
     }
 }
