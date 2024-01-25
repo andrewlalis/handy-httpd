@@ -1,5 +1,5 @@
 /**
- * Modules that defines an `Optional` type, which is a simplified version of
+ * Module that defines an `Optional` type, which is a simplified version of
  * Phobos' Nullable, that also supports mapping the underlying data.
  */
 module handy_httpd.components.optional;
@@ -86,7 +86,7 @@ struct Optional(T) {
      *
      * Returns: true if non-null, false if null
      */
-    bool opCast(B : bool)() {
+    bool opCast(B : bool)() const {
         return !this.isNull;
     }
 }

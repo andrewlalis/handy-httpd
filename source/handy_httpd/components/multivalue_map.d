@@ -318,6 +318,33 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     }
 
     /**
+     * Implements opBinaryRight for the "in" operator, such that `k in m` will
+     * resolve to the list of values for key `k` in the multivalue map `m` if
+     * that key exists, or `null` if not.
+     *
+     * Usage:
+     * ---
+     * StringMultiValueMap m;
+     * m.add("a", "hello");
+     * assert("a" in m);
+     * assert(("a" in m) == ["hello"]);
+     * assert("b" !in m);
+     * assert(("b" in m) is null);
+     * ---
+     * Params:
+     *   lhs = The key to use.
+     * Returns: A list of values for the given key, or null if no such key exists.
+     */
+    ValueType[] opBinaryRight(string op : "in")(string lhs) {
+        Optional!Entry optionalEntry = this.getEntry(lhs);
+        if (optionalEntry) {
+            Entry entry = optionalEntry.value;
+            return entry.values;
+        }
+        return null;
+    }
+
+    /**
      * Converts this map into a human-readable string which lists each key and
      * all of the values for that key.
      * Returns: A string representation of this map.
@@ -381,4 +408,14 @@ unittest {
         n++;
     }
     assert(n == 3);
+
+    // Test opBinaryRight with "in" operator.
+    StringMultiValueMap m4;
+    m4.add("a", "1");
+    assert("a" in m4);
+    assert("b" !in m4);
+    auto valuesA = "a" in m4;
+    assert(valuesA == ["1"]);
+    auto valuesB = "b" in m4;
+    assert(valuesB is null);
 }
