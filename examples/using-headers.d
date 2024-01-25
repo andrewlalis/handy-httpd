@@ -32,5 +32,7 @@ void respondWithHeaders(ref HttpRequestContext ctx) {
         string userAgent = ctx.request.headers["User-Agent"];
         response ~= "\nYour user agent is: " ~ userAgent;
     }
+    // You could also get the headers via `ctx.request.headers.toString()`,
+    // but we used iteration to show other possiblities.
     ctx.response.writeBodyString(response);
 }

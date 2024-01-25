@@ -17,6 +17,22 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
         KeyType key;
         /// The list of values associated with this entry's key.
         ValueType[] values;
+
+        /**
+         * Gets a human-readable string representation of this entry.
+         * Returns: A string representation of this entry.
+         */
+        string toString() const {
+            import std.conv : to;
+            import std.algorithm : map, joiner;
+            import std.array : array;
+
+            string keyStr = key.to!string;
+            string valuesStr = values
+                .map!(v => "\""~v.to!string~"\"")
+                .joiner(", ").array.to!string;
+            return "\"" ~ keyStr ~ "\": " ~ valuesStr;
+        }
     }
 
     /// The internal, sorted array of entries.
@@ -254,37 +270,16 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
         }
     }
 
-    // RANGE INTERFACE METHODS below here
-
-    bool empty() const {
-        return length == 0;
-    }
-
-    Entry front() {
-        return entries[0];
-    }
-
-    void popFront() {
-        if (length == 1) {
-            clear();
-        } else {
-            entries = entries[1 .. $];
-        }
-    }
-
-    Entry back() {
-        return entries[length - 1];
-    }
-
-    void popBack() {
-        if (length == 1) {
-            clear();
-        } else {
-            entries = entries[0..$-1];
-        }
-    }
-
     // OPERATOR OVERLOADS below here
+
+    /**
+     * Implements the empty index operator, which just returns the entire list
+     * of entries in this map.
+     * Returns: The list of entries in this map.
+     */
+    Entry[] opIndex() {
+        return entries;
+    }
 
     /**
      * Convenience overload to get the first value for a given key. Note: this
@@ -350,26 +345,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Returns: A string representation of this map.
      */
     string toString() const {
-        import std.array : Appender, array;
-        import std.conv : to, ConvException;
-        import std.algorithm : map, joiner;
-        Appender!string app;
-        foreach (i, entry; entries) {
-            try {
-                string keyStr = entry.key.to!string;
-                string valuesStr = entry.values
-                    .map!(v => "\"" ~ v.to!string ~ "\"")
-                    .joiner(", ").array.to!string;
-                app ~= "\"" ~ keyStr ~ "\": " ~ valuesStr;
-                if (i + 1 < entries.length) {
-                    app ~= ",\n";
-                }
-            } catch (ConvException e) {
-                import slf4d : warn;
-                warn("Unable to convert entry key or value to string.", e);
-            }
-        }
-        return app[];
+        import std.format : format;
+        return format!"%(%s\n%)"(entries);
     }
 }
 
@@ -418,4 +395,10 @@ unittest {
     assert(valuesA == ["1"]);
     auto valuesB = "b" in m4;
     assert(valuesB is null);
+
+    // Test opIndex with an empty index.
+    StringMultiValueMap m5;
+    assert(m5[] == []);
+    m5.add("a", "123");
+    assert(m5[] == [StringMultiValueMap.Entry("a", ["123"])]);
 }
