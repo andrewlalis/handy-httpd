@@ -89,5 +89,5 @@ This interval shouldn't need to be very small, unless a high percentage of your 
 ### `enableWebSockets`
 | Type | Default Value |
 |---   |---            |
-| `bool` | `true` |
+| `bool` | `false` |
 Whether to enable websocket functionality for the server. If set to true, starting the server will also start an additional thread that handles websocket traffic in a nonblocking fashion.

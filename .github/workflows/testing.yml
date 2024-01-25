@@ -96,22 +96,10 @@ jobs:
         with:
           compiler: ${{ matrix.compiler }}
 
-      - name: "Example: file-upload"
-        working-directory: examples/file-upload
-        run: dub -q build --single server.d
-
-      - name: "Example: handler-testing"
-        working-directory: examples/handler-testing
-        run: dub test --single handler.d
-
-      - name: "Example: multiple-handlers"
-        working-directory: examples/multiple-handlers
-        run: dub -q build
-
-      - name: "Example: single-file-server"
-        working-directory: examples/single-file-server
-        run: dub -q build --single hello.d
-
-      - name: "Example: static-content-server"
-        working-directory: examples/static-content-server
-        run: dub -q build --single content_server.d
+      - name: Test Examples
+        working-directory: examples
+        run: rdmd runner.d test
+      
+      - name: Clean Examples
+        working-directory: examples
+        run: rdmd runner.d clean

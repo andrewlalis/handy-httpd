@@ -5,45 +5,12 @@
  */
 module handy_httpd.components.form_urlencoded;
 
-/**
- * Struct containing a single key-value pair that's obtained from parsing a
- * URL's query or form-urlencoded data.
- */
-struct QueryParam {
-    /// The name and value of this parameter.
-    string name, value;
+import handy_httpd.components.multivalue_map;
 
-    /**
-     * Converts a list of query params to an associative string array. This is
-     * mainly meant as a holdover due to older code handling query params as
-     * such an associative array. Note that the params are traversed in order,
-     * so a parameter with the same name as a previous parameter will overwrite
-     * its value.
-     * Params:
-     *   params = The ordered list of query params to convert.
-     * Returns: The associative array.
-     */
-    static string[string] toMap(in QueryParam[] params) {
-        string[string] m;
-        foreach (QueryParam param; params) {
-            m[param.name] = param.value;
-        }
-        return m;
-    }
-
-    /**
-     * Converts an associative string array into a list of query params.
-     * Params:
-     *   m = The associative array of strings to convert.
-     * Returns: The list of query params.
-     */
-    static QueryParam[] fromMap(in string[string] m) {
-        QueryParam[] params;
-        foreach (name, value; m) {
-            params ~= QueryParam(name, value);
-        }
-        return params;
-    }
+/// An internal utility struct used when parsing.
+private struct QueryParam {
+    string name;
+    string value;
 }
 
 /**
@@ -58,7 +25,7 @@ struct QueryParam {
  *                     but added as a convenience.
  * Returns: A list of parsed key-value pairs.
  */
-QueryParam[] parseFormUrlEncoded(string queryString, bool stripWhitespace = true) {
+StringMultiValueMap parseFormUrlEncoded(string queryString, bool stripWhitespace = true) {
     import std.array : array;
     import std.string : split;
     import std.algorithm : filter, map;
@@ -67,9 +34,13 @@ QueryParam[] parseFormUrlEncoded(string queryString, bool stripWhitespace = true
         queryString = queryString[1..$];
     }
 
-    return queryString.split("&").filter!(s => s.length > 0)
-        .map!(s => parseSingleQueryParam(s, stripWhitespace))
-        .array;
+    auto params = queryString.split("&").filter!(s => s.length > 0)
+        .map!(s => parseSingleQueryParam(s, stripWhitespace));
+    StringMultiValueMap.Builder mapBuilder;
+    foreach (QueryParam param; params) {
+        mapBuilder.add(param.name, param.value);
+    }
+    return mapBuilder.build();
 }
 
 /**
@@ -111,25 +82,23 @@ private QueryParam parseSingleQueryParam(string s, bool stripWhitespace) {
 }
 
 unittest {
-    void doTest(QueryParam[] expectedResult, string queryString, bool stripWhitespace = true) {
+    void doTest(string[][string] expectedResult, string queryString, bool stripWhitespace = true) {
         import std.format;
         auto actual = parseFormUrlEncoded(queryString, stripWhitespace);
+        auto expected = StringMultiValueMap.fromAssociativeArray(expectedResult);
         assert(
-            actual == expectedResult,
-            format!"Parsed query string resulted in %s instead of %s."(actual, expectedResult)
+            actual == expected,
+            format!"Parsed query string %s resulted in %s instead of %s."(queryString, actual, expected)
         );
     }
-    doTest([QueryParam("a", "1"), QueryParam("b", "2")], "a=1&b=2");
-    doTest([QueryParam("a", "1"), QueryParam("b", "2")], "?a=1&b=2");
-    doTest([QueryParam("a", "1"), QueryParam("b", "2")], "  a =   1  &  b  =  2  ");
-    doTest([QueryParam("a", "1"), QueryParam("b", "2")], "  a =   1  &  b  =  2  ");
-    doTest([QueryParam("a", "  1")], "a=%20%201", false);
-    doTest([QueryParam("a", ""), QueryParam("b", ""), QueryParam("c", "hello")], "a&b&c=hello");
-    doTest(
-        [QueryParam("a", ""), QueryParam("a", "hello"), QueryParam("a", "test"), QueryParam("b", "")],
-        "a&a=hello&a=test&b"
-    );
+    doTest(["a": ["1"], "b": ["2"]], "a=1&b=2");
+    doTest(["a": ["1"], "b": ["2"]], "?a=1&b=2");
+    doTest(["a": ["1"], "b": ["2"]], "  a =   1  &  b  =  2  ");
+    doTest(["a": ["1"], "b": ["2"]], "  a =   1  &  b  =  2  ");
+    doTest(["a": ["  1"]], "a=%20%201", false);
+    doTest(["a": [""], "b": [""], "c": ["hello"]], "a&b&c=hello");
+    doTest(["a": ["", "hello", "test"], "b": [""]], "a&a=hello&a=test&b");
 
     // test for replacement of reserved characters
-    doTest([QueryParam("time", "12:34:56")], "time=12%3A34%3A56");
+    doTest(["time": ["12:34:56"]], "time=12%3A34%3A56");
 }

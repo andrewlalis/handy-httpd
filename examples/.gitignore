@@ -1,3 +1,8 @@
-single-file-server/hello
-static-content-server/content_server
-*.log
+# Ignore all artifacts that might be generated.
+*
+
+# Except D source files and other stuff that's not auto-generated.
+!*.d
+!*.md
+!*.sh
+!*.json

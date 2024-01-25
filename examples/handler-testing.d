@@ -1,7 +1,12 @@
 /+ dub.sdl:
-    dependency "handy-httpd" path="../../"
+    dependency "handy-httpd" path="../"
 +/
-module handler;
+
+/**
+ * An example that shows how you can unit-test a request handler. You can run
+ * this example by calling "dub test --single handler-testing.d".
+ */
+module examples.handler_testing;
 
 import handy_httpd;
 import std.conv : to, ConvException;

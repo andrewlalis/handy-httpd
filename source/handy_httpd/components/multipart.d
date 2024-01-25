@@ -91,7 +91,7 @@ const MAX_ELEMENTS = 1024;
  */
 MultipartFormData readBodyAsMultipartFormData(ref HttpRequest request, bool allowInfiniteRead = false) {
     import std.algorithm : startsWith;
-    string contentType = request.getHeader("Content-Type");
+    string contentType = request.headers.getFirst("Content-Type").orElse(null);
     if (contentType is null || !startsWith(contentType, "multipart/form-data")) {
         throw new MultipartFormatException("Content-Type is not multipart/form-data.");
     }
@@ -129,7 +129,11 @@ MultipartFormData parseMultipartFormData(string content, string boundary) {
     while (elementCount < MAX_ELEMENTS) {
         // Check that we have enough data to read a boundary marker.
         if (content.length < nextIdx + boundary.length + 4) {
-            throw new MultipartFormatException("Invalid boundary: " ~ content[nextIdx .. $]);
+            throw new MultipartFormatException(
+                "Unable to read next boundary marker: " ~
+                content[nextIdx .. $] ~
+                ". Expected " ~ boundary
+            );
         }
         string nextBoundary = content[nextIdx .. nextIdx + boundary.length + 4];
         if (nextBoundary == boundaryEnd) {
@@ -138,7 +142,6 @@ MultipartFormData parseMultipartFormData(string content, string boundary) {
             // Find the end index of this element.
             const ulong elementStartIdx = nextIdx + boundary.length + 4;
             const ulong elementEndIdx = indexOf(content, "--" ~ boundary, elementStartIdx);
-            // const ulong elementEndIdx = elementStartIdx + countUntil(content[elementStartIdx .. $], "--" ~ boundary);
             traceF!"Reading element from body at [%d, %d)"(elementStartIdx, elementEndIdx);
             partAppender ~= readElement(content[elementStartIdx .. elementEndIdx]);
             nextIdx = elementEndIdx;
@@ -217,7 +220,7 @@ private ulong parseElementHeaders(ref MultipartElement element, string content) 
 private void parseContentDisposition(ref MultipartElement element) {
     import std.algorithm : startsWith, endsWith;
     import std.string : split, strip;
-    import std.uri : decode;
+    import std.uri : decodeComponent;
     if ("Content-Disposition" !in element.headers) {
         throw new MultipartFormatException("Missing required Content-Disposition header for multipart element.");
     }
@@ -226,11 +229,11 @@ private void parseContentDisposition(ref MultipartElement element) {
     foreach (string part; cdParts) {
         string stripped = strip(part);
         if (startsWith(stripped, "name=\"") && endsWith(stripped, "\"")) {
-            element.name = decode(stripped[6 .. $ - 1]);
+            element.name = decodeComponent(stripped[6 .. $ - 1]);
             traceF!"Element name: %s"(element.name);
         } else if (startsWith(stripped, "filename=\"") && endsWith(stripped, "\"")) {
             import std.typecons : nullable;
-            element.filename = nullable(decode(stripped[10 .. $ - 1]));
+            element.filename = nullable(decodeComponent(stripped[10 .. $ - 1]));
             traceF!"Element filename: %s"(element.filename);
         }
     }

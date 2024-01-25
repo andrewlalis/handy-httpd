@@ -25,10 +25,14 @@ class MyWebSocketHandler : WebSocketMessageHandler {
     }
 }
 
-void main() {
-    ServerConfig cfg = ServerConfig.defaultValues();
+void main(string[] args) {
+    ServerConfig cfg = ServerConfig.defaultValues;
+    if (args.length > 1) {
+        import std.conv;
+        cfg.port = args[1].to!ushort;
+    }
     cfg.workerPoolSize = 3;
-    cfg.workerPoolManagerIntervalMs = 5000;
+    cfg.enableWebSockets = true; // Important! Websockets won't work unless `enableWebSockets` is set to true!
     WebSocketHandler handler = new WebSocketHandler(new MyWebSocketHandler());
     PathHandler pathHandler = new PathHandler()
         .addMapping(Method.GET, "/ws", handler)

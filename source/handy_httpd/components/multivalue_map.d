@@ -11,6 +11,9 @@ import handy_httpd.components.optional;
  * values.
  */
 struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
+    /// A convenience alias to refer to this struct's type more easily.
+    private alias MapType = MultiValueMap!(KeyType, ValueType, KeySort);
+
     /// The internal structure used to store each key and set of values.
     static struct Entry {
         /// The key for this entry.
@@ -28,13 +31,10 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      *   k = The key to search for.
      * Returns: The index if it was found, or -1 if it doesn't exist.
      */
-    private long indexOf(KeyType k) {
+    private long indexOf(KeyType k) const {
         if (entries.length == 0) return -1;
         if (entries.length == 1) {
             return entries[0].key == k ? 0 : -1;
-        }
-        if (entries.length == 2) {
-            return entries[0].key == k ? 0 : 1;
         }
         size_t startIdx = 0;
         size_t endIdx = entries.length - 1;
@@ -66,7 +66,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Gets the number of unique keys in this map.
      * Returns: The number of unique keys in this map.
      */
-    size_t length() {
+    size_t length() const {
         return entries.length;
     }
 
@@ -76,9 +76,22 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      *   k = The key to search for.
      * Returns: True if at least one value exists for the given key.
      */
-    bool contains(KeyType k) {
-        Optional!Entry optionalEntry = getEntry(k);
+    bool contains(KeyType k) const {
+        MapType unconstMap = cast(MapType) this;
+        Optional!Entry optionalEntry = unconstMap.getEntry(k);
         return !optionalEntry.isNull && optionalEntry.value.values.length > 0;
+    }
+
+    /**
+     * Gets a list of all keys in this map.
+     * Returns: The list of keys in this map.
+     */
+    KeyType[] keys() const {
+        KeyType[] keysArray = new KeyType[this.length()];
+        foreach (size_t i, const Entry e; entries) {
+            keysArray[i] = e.key;
+        }
+        return keysArray;
     }
 
     /**
@@ -88,8 +101,9 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Returns: The values associated with the given key, or an empty array if
      * no values exist for the key.
      */
-    ValueType[] getAll(KeyType k) {
-        return getEntry(k).map!(e => e.values).orElse([]);
+    ValueType[] getAll(KeyType k) const {
+        MapType unconstMap = cast(MapType) this;
+        return unconstMap.getEntry(k).map!(e => e.values.dup).orElse([]);
     }
 
     /**
@@ -100,8 +114,9 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Returns: An optional contains the value, if there is at least one value
      * for the given key.
      */
-    Optional!ValueType getFirst(KeyType k) {
-        Optional!Entry optionalEntry = getEntry(k);
+    Optional!ValueType getFirst(KeyType k) const {
+        MapType unconstMap = cast(MapType) this;
+        Optional!Entry optionalEntry = unconstMap.getEntry(k);
         if (optionalEntry.isNull || optionalEntry.value.values.length == 0) {
             return Optional!ValueType.empty();
         }
@@ -133,7 +148,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     }
 
     /**
-     * Removes a key from the map.
+     * Removes a key from the map, thus removing all values associated with
+     * that key.
      * Params:
      *   k = The key to remove.
      */
@@ -155,9 +171,9 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * mapped to a list of values.
      * Returns: The associative array.
      */
-    ValueType[][KeyType] asAssociativeArray() {
+    ValueType[][KeyType] asAssociativeArray() const {
         ValueType[][KeyType] aa;
-        foreach (Entry entry; entries) {
+        foreach (const Entry entry; entries) {
             aa[entry.key] = entry.values.dup;
         }
         return aa;
@@ -193,6 +209,84 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
         return m;
     }
 
+    /**
+     * An efficient builder that can be used to construct a multivalued map
+     * with successive `add` calls, which is more efficient than doing so
+     * directly due to the builder's deferred sorting.
+     */
+    static struct Builder {
+        import std.array;
+
+        private MapType m;
+        private RefAppender!(Entry[]) entryAppender;
+
+        /**
+         * Adds a key -> value pair to the builder's map.
+         * Params:
+         *   k = The key.
+         *   v = The value associated with the key.
+         * Returns: A reference to the builder, for method chaining.
+         */
+        ref Builder add(KeyType k, ValueType v) {
+            if (entryAppender.data is null) entryAppender = appender(&m.entries);
+            auto optionalEntry = getEntry(k);
+            if (optionalEntry.isNull) {
+                entryAppender ~= Entry(k, [v]);
+            } else {
+                optionalEntry.value.values ~= v;
+            }
+            return this;
+        }
+
+        /**
+         * Builds the multivalued map.
+         * Returns: The map that was created.
+         */
+        MapType build() {
+            if (m.entries.length == 0) return m;
+            import std.algorithm.sorting : sort;
+            sort!((a, b) => KeySort(a.key, b.key))(m.entries);
+            return m;
+        }
+
+        private Optional!(MapType.Entry) getEntry(KeyType k) {
+            foreach (MapType.Entry entry; m.entries) {
+                if (entry.key == k) return Optional!(MapType.Entry).of(entry);
+            }
+            return Optional!(MapType.Entry).empty();
+        }
+    }
+
+    // RANGE INTERFACE METHODS below here
+
+    bool empty() const {
+        return length == 0;
+    }
+
+    Entry front() {
+        return entries[0];
+    }
+
+    void popFront() {
+        if (length == 1) {
+            clear();
+        } else {
+            entries = entries[1 .. $];
+        }
+    }
+
+    Entry back() {
+        return entries[length - 1];
+    }
+
+    void popBack() {
+        if (length == 1) {
+            clear();
+        } else {
+            entries = entries[0..$-1];
+        }
+    }
+
     // OPERATOR OVERLOADS below here
 
     /**
@@ -203,13 +297,34 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      *   key = The key to get the value of.
      * Returns: The first value for the given key.
      */
-    ValueType opIndex(KeyType key) {
+    ValueType opIndex(KeyType key) const {
         import std.conv : to;
         return getFirst(key).orElseThrow("No values exist for key " ~ key.to!string ~ ".");
     }
+
+    /**
+     * `opApply` implementation to allow iterating over this map by all pairs
+     * of keys and values.
+     * Params:
+     *   dg = The foreach body that uses each key -> value pair.
+     * Returns: The result of the delegate call.
+     */
+    int opApply(int delegate(const ref KeyType, const ref ValueType) dg) const {
+        int result = 0;
+        foreach (const Entry entry; entries) {
+            foreach (ValueType value; entry.values) {
+                result = dg(entry.key, value);
+                if (result) break;
+            }
+        }
+        return result;
+    }
 }
 
-/// The string => string mapping is a common usecase, so an alias is defined.
+/**
+ * A multivalued map of strings, where each string key refers to zero or more
+ * string values. All keys are case-sensitive.
+ */
 alias StringMultiValueMap = MultiValueMap!(string, string);
 
 unittest {
@@ -226,4 +341,19 @@ unittest {
     auto m2 = StringMultiValueMap.fromAssociativeArray(["a": "123", "b": "abc"]);
     assert(m2["a"] == "123");
     assert(m2["b"] == "abc");
+
+    auto m3 = StringMultiValueMap.fromAssociativeArray(["a": [""], "b": [""], "c": ["hello"]]);
+    assert(m3.contains("a"));
+    assert(m3["a"] == "");
+    assert(m3.contains("b"));
+    assert(m3["b"] == "");
+    assert(m3.contains("c"));
+    assert(m3["c"] == "hello");
+
+    // Test that opApply works:
+    int n = 0;
+    foreach (key, value; m3) {
+        n++;
+    }
+    assert(n == 3);
 }

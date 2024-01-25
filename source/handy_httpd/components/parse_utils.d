@@ -10,10 +10,20 @@ import std.string;
 import std.algorithm;
 import std.uri;
 import std.range;
+import std.socket : Socket, Address, lastSocketError;
+import slf4d : Logger, getLogger;
+import streams : isByteInputStream, isByteOutputStream,
+    inputStreamObjectFor, outputStreamObjectFor, arrayInputStreamFor, concatInputStreamFor,
+    bufferedInputStreamFor, StreamResult, SocketInputStream, SocketOutputStream;
 import httparsed;
 
 import handy_httpd.components.request : HttpRequest, methodFromName;
 import handy_httpd.components.form_urlencoded;
+import handy_httpd.components.multivalue_map;
+import handy_httpd.components.optional;
+import handy_httpd.components.handler : HttpRequestContext;
+import handy_httpd.components.response : HttpResponse;
+import handy_httpd.server : HttpServer;
 
 /**
  * The header struct to use when parsing data.
@@ -68,25 +78,24 @@ public struct Msg {
  *   s = The raw HTTP request string.
  * Returns: A tuple containing the http request and the size of data read.
  */
-public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string s) {
+public Tuple!(HttpRequest, int) parseRequest(ref MsgParser!Msg requestParser, string s) {
     int result = requestParser.parseRequest(s);
     if (result < 1) {
         throw new Exception("Couldn't parse header.");
     }
     
-    string[string] headers;
+    StringMultiValueMap.Builder headersBuilder;
     foreach (h; requestParser.headers) {
-        headers[h.name] = cast(string) h.value;
+        headersBuilder.add(cast(string) h.name, cast(string) h.value);
     }
     string rawUrl = decode(cast(string) requestParser.uri);
-    Tuple!(string, QueryParam[]) urlAndParams = parseUrlAndParams(rawUrl);
+    Tuple!(string, StringMultiValueMap) urlAndParams = parseUrlAndParams(rawUrl);
     string method = cast(string) requestParser.method;
     HttpRequest request = HttpRequest(
         methodFromName(method),
         urlAndParams[0],
         requestParser.minorVer,
-        headers,
-        QueryParam.toMap(urlAndParams[1]),
+        headersBuilder.build(),
         urlAndParams[1],
         null
     );
@@ -95,37 +104,12 @@ public Tuple!(HttpRequest, int) parseRequest(MsgParser!Msg requestParser, string
 
 /**
  * Parses a path and set of query parameters from a raw URL string.
- * **Deprecated** because handy-httpd is transitioning away from AA-style
- * query params. You should use `parseUrlAndParams` instead.
  * Params:
  *   rawUrl = The raw url containing both path and query params.
  * Returns: A tuple containing the path and parsed query params.
  */
-public Tuple!(string, string[string]) parseUrlAndParamsAsMap(string rawUrl) {
-    Tuple!(string, string[string]) result;
-    auto p = rawUrl.indexOf('?');
-    if (p == -1) {
-        result[0] = rawUrl;
-        result[1] = null;
-    } else {
-        result[0] = rawUrl[0..p];
-        result[1] = QueryParam.toMap(parseFormUrlEncoded(rawUrl[p..$], false));
-    }
-    // Strip away a trailing slash if there is one. This makes path matching easier.
-    if (result[0][$ - 1] == '/') {
-        result[0] = result[0][0 .. $ - 1];
-    }
-    return result;
-}
-
-/**
- * Parses a path and set of query parameters from a raw URL string.
- * Params:
- *   rawUrl = The raw url containing both path and query params.
- * Returns: A tuple containing the path and parsed query params.
- */
-public Tuple!(string, QueryParam[]) parseUrlAndParams(string rawUrl) {
-    Tuple!(string, QueryParam[]) result;
+public Tuple!(string, StringMultiValueMap) parseUrlAndParams(string rawUrl) {
+    Tuple!(string, StringMultiValueMap) result;
     auto p = rawUrl.indexOf('?');
     if (p == -1) {
         result[0] = rawUrl;
@@ -138,4 +122,86 @@ public Tuple!(string, QueryParam[]) parseUrlAndParams(string rawUrl) {
         result[0] = result[0][0 .. $ - 1];
     }
     return result;
+}
+
+/**
+ * Attempts to receive an HTTP request from the given socket.
+ * Params:
+ *   server = The server that accepted the client socket.
+ *   clientSocket = The underlying socket to the client.
+ *   inputStream = The input stream to use.
+ *   outputStream = The output stream to use.
+ *   receiveBuffer = The raw buffer that is used to store data that was read.
+ *   requestParser = The HTTP request parser.
+ *   logger = A logger to use to write log messages.
+ * Returns: An optional request context. If null, then the client socket can
+ * be closed and no further action is required. Otherwise, it is a valid
+ * request context that can be handled using the server's configured handler.
+ */
+public Optional!HttpRequestContext receiveRequest(InputStream, OutputStream)(
+    HttpServer server,
+    Socket clientSocket,
+    InputStream inputStream,
+    OutputStream outputStream,
+    ref ubyte[] receiveBuffer,
+    ref MsgParser!Msg requestParser,
+    Logger logger = getLogger()
+) if (isByteInputStream!InputStream && isByteOutputStream!OutputStream) {
+    // First try and read as much as we can from the input stream into the buffer.
+    logger.trace("Reading the initial request into the receive buffer.");
+    StreamResult initialReadResult = inputStream.readFromStream(receiveBuffer);
+    if (initialReadResult.hasError) {
+        logger.errorF!"Encountered socket receive failure: %s, lastSocketError = %s"(
+            initialReadResult.error.message,
+            lastSocketError()
+        );
+        return Optional!HttpRequestContext.empty();
+    }
+
+    logger.debugF!"Received %d bytes from the client."(initialReadResult.count);
+    if (initialReadResult.count == 0) return Optional!HttpRequestContext.empty(); // Skip if we didn't receive valid data.
+
+    // We store an immutable copy of the data initially received, so we can
+    // slice it and work with it even as we keep reading and overwriting the
+    // receive buffer.
+    immutable ubyte[] initialData = receiveBuffer[0 .. initialReadResult.count].idup;
+
+    // Prepare the request context by parsing the HttpRequest, and preparing the context.
+    try {
+        auto requestAndSize = parseRequest(requestParser, cast(string) initialData);
+        logger.debugF!"Parsed first %d bytes as the HTTP request."(requestAndSize[1]);
+        
+        // We got a valid request, so prepare the context.
+        HttpRequestContext ctx = HttpRequestContext(requestAndSize[0], HttpResponse());
+        ctx.clientSocket = clientSocket;
+        ctx.server = server;
+
+        ctx.request.receiveBuffer = receiveBuffer;
+        const int bytesReceived = initialReadResult.count;
+        const int bytesRead = requestAndSize[1];
+        if (bytesReceived > bytesRead) {
+            ctx.request.inputStream = inputStreamObjectFor(concatInputStreamFor(
+                arrayInputStreamFor(receiveBuffer[bytesRead .. bytesReceived]),
+                bufferedInputStreamFor(inputStream)
+            ));
+        } else {
+            ctx.request.inputStream = inputStreamObjectFor(bufferedInputStreamFor(inputStream));
+        }
+        ctx.request.remoteAddress = clientSocket.remoteAddress;
+        
+        ctx.response.outputStream = outputStreamObjectFor(outputStream);
+        ctx.response.headers["Connection"] = "close";
+        foreach (header, value; server.config.defaultHeaders) {
+            ctx.response.addHeader(header, value);
+        }
+
+        logger.traceF!"Preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
+            ctx.request.inputStream,
+            ctx.response.outputStream
+        );
+        return Optional!HttpRequestContext.of(ctx);
+    } catch (Exception e) {
+        logger.warnF!"Failed to parse HTTP request: %s"(e.msg);
+        return Optional!HttpRequestContext.empty();
+    }
 }
