@@ -34,6 +34,10 @@ public void handleClient(
     Logger logger = getLogger()
 ) {
     if (socket is null) return; // If for whatever reason a null socket is provided, quit.
+    if (!socket.isAlive) {
+        socket.close();
+        return;
+    }
     logger.debugF!"Got client socket: %s"(socket.remoteAddress());
     // Create the input and output streams for the request here, since their
     // lifetime continues until the request is handled.
