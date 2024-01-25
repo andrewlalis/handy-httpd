@@ -80,6 +80,15 @@ struct Optional(T) {
         if (this.isNull) throw new Exception(msg);
         return this.value;
     }
+
+    /**
+     * Provides a mechanism to allow usage in boolean expressions.
+     *
+     * Returns: true if non-null, false if null
+     */
+    bool opCast(B : bool)() {
+        return !this.isNull;
+    }
 }
 
 /**
@@ -99,6 +108,7 @@ unittest {
     Optional!string s = Optional!string.of("hello");
     assert(!s.isNull);
     assert(s.value == "hello");
+    assert(s); // test boolean conversion
     Optional!int mapped = s.map!(str => 1);
     assert(!mapped.isNull);
     assert(mapped.value == 1);
