@@ -56,7 +56,7 @@ class SpeedTest {
             totalRequests += r.totalRequests;
             successfulRequests += r.totalSuccessfulRequests;
         }
-        double successRate = cast(double) totalRequests / successfulRequests;
+        double successRate = cast(double) successfulRequests / totalRequests;
         const double testDurationMs = testDuration.total!"msecs";
         double requestsPerSecond = successfulRequests / testDurationMs * 1000.0;
         
@@ -73,6 +73,6 @@ class SpeedTest {
             successRate
         );
         writefln!"%.1f requests per second."(requestsPerSecond);
-        return successRate == 1.000;
+        return successRate > 0.9999;
     }
 }

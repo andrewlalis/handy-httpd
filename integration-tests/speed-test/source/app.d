@@ -19,17 +19,17 @@ int main() {
 		LimitType.Time,
 		10_000
 	);
-	if (!singleThreadTest.run()) return 1;
+	bool singleThreadTestSuccess = singleThreadTest.run();
 
 	SpeedTest balancedThreadTest = new SpeedTest(
-		getTestingServer(threadsPerCPU / 2),
+		getTestingServer(threadsPerCPU),
 		threadsPerCPU / 2,
 		LimitType.Time,
 		10_000
 	);
-	if (!balancedThreadTest.run()) return 1;
+	bool balancedThreadTestSuccess = balancedThreadTest.run();
 
-	return 0;
+	return singleThreadTestSuccess && balancedThreadTestSuccess ? 0 : 1;
 }
 
 HttpServer getTestingServer(uint workerPoolSize) {

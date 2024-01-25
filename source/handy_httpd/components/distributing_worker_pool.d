@@ -48,10 +48,8 @@ class DistributingWorkerPool : RequestWorkerPool {
         uint attempts = 0;
         while (true) {
             if (lastWorkerIdx >= workers.length) lastWorkerIdx = 0;
-            if (attempts >= 100) {
-                errorF!"Failed to submit socket to a worker in %d attempts. Cancelling."(attempts);
-                socket.close();
-                return;
+            if (attempts % 100 == 0) {
+                warnF!"Failed to submit socket to a worker in %d attempts."(attempts);
             }
             Worker worker = workers[lastWorkerIdx++];
             if (!worker.isRunning()) {
@@ -129,7 +127,7 @@ private class Worker : Thread {
         this.id = id;
         this.receiveBuffer = new ubyte[receiveBufferSize];
         this.semaphore = new Semaphore();
-        this.logger = getLogger("dist-worker-" ~ id.to!string);
+        this.logger = getLogger("handy_httpd_dist-worker-" ~ id.to!string);
     }
 
     private void run() {
