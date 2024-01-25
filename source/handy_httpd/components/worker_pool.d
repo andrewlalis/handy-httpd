@@ -1,3 +1,7 @@
+/**
+ * This module defines the request worker pool interface, as well as some
+ * basic implementations of it.
+ */
 module handy_httpd.components.worker_pool;
 
 import std.socket : Socket;
@@ -41,6 +45,12 @@ class TaskPoolWorkerPool : RequestWorkerPool {
     private HttpServer server;
     private size_t workerCount;
 
+    /**
+     * Constructs this worker pool for the given server.
+     * Params:
+     *   server = The server to construct this worker pool for.
+     *   workerCount = The number of workers to use.
+     */
     this(HttpServer server, size_t workerCount) {
         this.server = server;
         this.workerCount = workerCount;
@@ -64,5 +74,39 @@ class TaskPoolWorkerPool : RequestWorkerPool {
 
     void stop() {
         this.taskPool.finish(true);
+    }
+}
+
+/**
+ * A worker pool implementation that isn't even a pool, but simply executes
+ * all request processing as soon as a socket is submitted, on the calling
+ * thread. It uses a single buffer and parser for all requests.
+ */
+class BlockingWorkerPool : RequestWorkerPool {
+    import handy_httpd.server : HttpServer;
+    import handy_httpd.components.worker;
+    import handy_httpd.components.parse_utils : Msg;
+    import httparsed : MsgParser;
+    import core.thread;
+    
+    private HttpServer server;
+    private ubyte[] receiveBuffer;
+    private MsgParser!Msg requestParser;
+
+    this(HttpServer server) {
+        this.server = server;
+        this.receiveBuffer = new ubyte[server.config.receiveBufferSize];
+    }
+
+    void start() {
+        // Nothing to start.
+    }
+
+    void submit(Socket socket) {
+        handleClient(this.server, socket, this.receiveBuffer, this.requestParser);
+    }
+
+    void stop() {
+        // Nothing to stop.
     }
 }
