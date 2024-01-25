@@ -24,7 +24,6 @@ void main(string[] args) {
 }
 
 void respondWithHeaders(ref HttpRequestContext ctx) {
-    import handy_httpd.components.multivalue_map;
     string response = "Headers:\n\n";
     foreach (name, value; ctx.request.headers) {
         response ~= name ~ ": " ~ value ~ "\n";

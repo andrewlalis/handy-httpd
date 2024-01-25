@@ -11,9 +11,6 @@ import handy_httpd.components.optional;
  * values.
  */
 struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
-    /// A convenience alias to refer to this struct's type more easily.
-    private alias MapType = MultiValueMap!(KeyType, ValueType, KeySort);
-
     /// The internal structure used to store each key and set of values.
     static struct Entry {
         /// The key for this entry.
@@ -77,7 +74,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Returns: True if at least one value exists for the given key.
      */
     bool contains(KeyType k) const {
-        MapType unconstMap = cast(MapType) this;
+        MultiValueMap unconstMap = cast(MultiValueMap) this;
         Optional!Entry optionalEntry = unconstMap.getEntry(k);
         return !optionalEntry.isNull && optionalEntry.value.values.length > 0;
     }
@@ -102,7 +99,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * no values exist for the key.
      */
     ValueType[] getAll(KeyType k) const {
-        MapType unconstMap = cast(MapType) this;
+        MultiValueMap unconstMap = cast(MultiValueMap) this;
         return unconstMap.getEntry(k).map!(e => e.values.dup).orElse([]);
     }
 
@@ -115,7 +112,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * for the given key.
      */
     Optional!ValueType getFirst(KeyType k) const {
-        MapType unconstMap = cast(MapType) this;
+        MultiValueMap unconstMap = cast(MultiValueMap) this;
         Optional!Entry optionalEntry = unconstMap.getEntry(k);
         if (optionalEntry.isNull || optionalEntry.value.values.length == 0) {
             return Optional!ValueType.empty();
@@ -217,7 +214,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     static struct Builder {
         import std.array;
 
-        private MapType m;
+        private MultiValueMap m;
         private RefAppender!(Entry[]) entryAppender;
 
         /**
@@ -242,18 +239,18 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
          * Builds the multivalued map.
          * Returns: The map that was created.
          */
-        MapType build() {
+        MultiValueMap build() {
             if (m.entries.length == 0) return m;
             import std.algorithm.sorting : sort;
             sort!((a, b) => KeySort(a.key, b.key))(m.entries);
             return m;
         }
 
-        private Optional!(MapType.Entry) getEntry(KeyType k) {
-            foreach (MapType.Entry entry; m.entries) {
-                if (entry.key == k) return Optional!(MapType.Entry).of(entry);
+        private Optional!(MultiValueMap.Entry) getEntry(KeyType k) {
+            foreach (MultiValueMap.Entry entry; m.entries) {
+                if (entry.key == k) return Optional!(MultiValueMap.Entry).of(entry);
             }
-            return Optional!(MapType.Entry).empty();
+            return Optional!(MultiValueMap.Entry).empty();
         }
     }
 
@@ -318,6 +315,34 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             }
         }
         return result;
+    }
+
+    /**
+     * Converts this map into a human-readable string which lists each key and
+     * all of the values for that key.
+     * Returns: A string representation of this map.
+     */
+    string toString() const {
+        import std.array : Appender, array;
+        import std.conv : to, ConvException;
+        import std.algorithm : map, joiner;
+        Appender!string app;
+        foreach (i, entry; entries) {
+            try {
+                string keyStr = entry.key.to!string;
+                string valuesStr = entry.values
+                    .map!(v => "\"" ~ v.to!string ~ "\"")
+                    .joiner(", ").array.to!string;
+                app ~= "\"" ~ keyStr ~ "\": " ~ valuesStr;
+                if (i + 1 < entries.length) {
+                    app ~= ",\n";
+                }
+            } catch (ConvException e) {
+                import slf4d : warn;
+                warn("Unable to convert entry key or value to string.", e);
+            }
+        }
+        return app[];
     }
 }
 
