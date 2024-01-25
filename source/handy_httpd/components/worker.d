@@ -33,6 +33,7 @@ public void handleClient(
     ref MsgParser!Msg requestParser,
     Logger logger = getLogger()
 ) {
+    if (socket is null) return; // If for whatever reason a null socket is provided, quit.
     logger.debugF!"Got client socket: %s"(socket.remoteAddress());
     // Create the input and output streams for the request here, since their
     // lifetime continues until the request is handled.
