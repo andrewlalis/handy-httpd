@@ -1,5 +1,10 @@
 # handy-httpd
 
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/andrewlalis/handy-httpd/testing.yml?branch=main&style=flat-square&logo=github&label=tests)
+![GitHub issues](https://img.shields.io/github/issues/andrewlalis/handy-httpd?style=flat-square)
+![DUB Downloads](https://img.shields.io/dub/dt/handy-httpd?style=flat-square&logo=d&logoColor=%23B03931)
+![GitHub Tag](https://img.shields.io/github/v/tag/andrewlalis/handy-httpd?style=flat-square&label=version&color=%23B03931)
+
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
 ## Features
