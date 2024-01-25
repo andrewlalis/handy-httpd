@@ -197,7 +197,10 @@ struct HttpRequest {
             })
             .orElse(-1);
         if (contentLength < 0 && !allowInfiniteRead) {
-            warn("Refusing to read request body because allowInfiniteRead is false and no valid Content-Length header was found.");
+            warn(
+                "Refusing to read request body because allowInfiniteRead is " ~
+                "false and no valid Content-Length header was found."
+            );
             return 0;
         }
         return this.readBody!(S)(outputStream, contentLength);
