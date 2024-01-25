@@ -5,9 +5,8 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 ## Features
 - HTTP/1.1
 - [Web Sockets](https://andrewlalis.github.io/handy-httpd/guide/handlers/websocket-handler.html)
-- Worker pool for request handling
 - [Simple configuration](https://andrewlalis.github.io/handy-httpd/guide/configuration.html)
-- High performance
+- High performance with interchangeable request processors
 - Beginner friendly
 - Extensible with custom handlers, exception handlers, and filters
 - [Well-documented](https://andrewlalis.github.io/handy-httpd/)
@@ -17,7 +16,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 	- Apply filters before and after handling requests with the [FilteredHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/filtered-handler.html)
 	- Handle complex URL paths, including path parameters and wildcards, with the [PathHandler](https://andrewlalis.github.io/handy-httpd/guide/handlers/path-handler.html)
 
-## Important Links
+## Links
 - [Documentation](https://andrewlalis.github.io/handy-httpd/)
 - [Examples](https://github.com/andrewlalis/handy-httpd/tree/main/examples)
 - [Dub Package Page](https://code.dlang.org/packages/handy-httpd)
@@ -30,11 +29,7 @@ import handy_httpd;
 
 void main() {
 	new HttpServer((ref ctx) {
-		if (ctx.request.url == "/hello") {
-			ctx.response.writeBodyString("Hello world!");
-		} else {
-			ctx.response.setStatus(HttpStatus.NOT_FOUND);
-		}
+		ctx.response.writeBodyString("Hello world!");
 	}).start();
 }
 ```
