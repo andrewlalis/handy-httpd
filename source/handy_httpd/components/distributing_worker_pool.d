@@ -48,7 +48,7 @@ class DistributingWorkerPool : RequestWorkerPool {
         uint attempts = 0;
         while (true) {
             if (lastWorkerIdx >= workers.length) lastWorkerIdx = 0;
-            if (attempts % 100 == 0) {
+            if (attempts > 0 && attempts % 1000 == 0) {
                 warnF!"Failed to submit socket to a worker in %d attempts."(attempts);
             }
             Worker worker = workers[lastWorkerIdx++];

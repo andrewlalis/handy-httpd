@@ -13,3 +13,4 @@ speed-test-test-*
 *.o
 *.obj
 *.lst
+logs/

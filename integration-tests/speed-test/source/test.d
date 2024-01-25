@@ -15,11 +15,13 @@ import requester;
  * spawn some threads that each send requests to the server.
  */
 class SpeedTest {
+    private string name;
     private RequesterThread[] requesters;
     private HttpServer server;
     private Thread serverThread;
 
-    this(HttpServer server, uint requesterCount, LimitType limitType, ulong limit) {
+    this(string name, HttpServer server, uint requesterCount, LimitType limitType, ulong limit) {
+        this.name = name;
         this.server = server;
         for (uint i = 0; i < requesterCount; i++) {
             requesters ~= new RequesterThread(i, limitType, limit);
@@ -60,8 +62,8 @@ class SpeedTest {
         const double testDurationMs = testDuration.total!"msecs";
         double requestsPerSecond = successfulRequests / testDurationMs * 1000.0;
         
-        writeln("Test Results");
-        writeln("------------");
+        writeln("Test Results: " ~ name);
+        writeln("----------------------------------------------------------------");
         writefln!"%d requester threads.\n%d server worker threads.\n%d CPU threads.\n"(
             requesters.length,
             server.config.workerPoolSize,
@@ -73,6 +75,7 @@ class SpeedTest {
             successRate
         );
         writefln!"%.1f requests per second."(requestsPerSecond);
+        writeln();
         return successRate > 0.9999;
     }
 }
