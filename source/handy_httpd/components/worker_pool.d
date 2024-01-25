@@ -5,6 +5,7 @@
 module handy_httpd.components.worker_pool;
 
 import std.socket : Socket;
+import handy_httpd.server : HttpServer;
 
 /**
  * A pool to which connecting client sockets can be submitted so that their
@@ -19,9 +20,10 @@ interface RequestWorkerPool {
     /**
      * Submits a client socket to this pool for processing.
      * Params:
+     *   server = The server that received the client socket.
      *   socket = The client socket.
      */
-    void submit(Socket socket);
+    void submit(HttpServer server, Socket socket);
 
     /**
      * Stops the pool, so that no more requests may be processed.
@@ -37,22 +39,18 @@ interface RequestWorkerPool {
 class TaskPoolWorkerPool : RequestWorkerPool {
     import std.parallelism;
     import handy_httpd.components.worker;
-    import handy_httpd.server : HttpServer;
     import handy_httpd.components.parse_utils : Msg;
     import httparsed : initParser, MsgParser;
     
     private TaskPool taskPool;
-    private HttpServer server;
     private size_t workerCount;
 
     /**
      * Constructs this worker pool for the given server.
      * Params:
-     *   server = The server to construct this worker pool for.
      *   workerCount = The number of workers to use.
      */
-    this(HttpServer server, size_t workerCount) {
-        this.server = server;
+    this(size_t workerCount) {
         this.workerCount = workerCount;
     }
 
@@ -60,7 +58,7 @@ class TaskPoolWorkerPool : RequestWorkerPool {
         this.taskPool = new TaskPool(this.workerCount);
     }
 
-    void submit(Socket socket) {
+    void submit(HttpServer server, Socket socket) {
         ubyte[] receiveBuffer = new ubyte[server.config.receiveBufferSize];
         MsgParser!Msg requestParser = initParser!Msg();
         auto t = task!handleClient(
@@ -83,27 +81,24 @@ class TaskPoolWorkerPool : RequestWorkerPool {
  * thread. It uses a single buffer and parser for all requests.
  */
 class BlockingWorkerPool : RequestWorkerPool {
-    import handy_httpd.server : HttpServer;
     import handy_httpd.components.worker;
     import handy_httpd.components.parse_utils : Msg;
     import httparsed : MsgParser;
     import core.thread;
     
-    private HttpServer server;
     private ubyte[] receiveBuffer;
     private MsgParser!Msg requestParser;
 
-    this(HttpServer server) {
-        this.server = server;
-        this.receiveBuffer = new ubyte[server.config.receiveBufferSize];
+    this(size_t receiveBufferSize) {
+        this.receiveBuffer = new ubyte[receiveBufferSize];
     }
 
     void start() {
         // Nothing to start.
     }
 
-    void submit(Socket socket) {
-        handleClient(this.server, socket, this.receiveBuffer, this.requestParser);
+    void submit(HttpServer server, Socket socket) {
+        handleClient(server, socket, this.receiveBuffer, this.requestParser);
     }
 
     void stop() {

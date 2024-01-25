@@ -101,7 +101,8 @@ class LegacyWorkerPool : RequestWorkerPool {
         debug_("Notified all worker threads.");
     }
 
-    void submit(Socket socket) {
+    void submit(HttpServer server, Socket socket) {
+        // Note: server is unused due to legacy design.
         this.requestQueue.enqueue(socket);
     }
 

@@ -19,9 +19,11 @@ import handy_httpd.components.worker;
 import handy_httpd.components.request_queue;
 import handy_httpd.components.worker_pool;
 import handy_httpd.components.legacy_worker_pool;
+import handy_httpd.components.distributing_worker_pool;
 import handy_httpd.components.websocket;
 
 import slf4d;
+import handy_httpd.components.distributing_worker_pool;
 
 /** 
  * A simple HTTP server that accepts requests on a given port and address, and
@@ -108,7 +110,7 @@ class HttpServer {
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
         this.exceptionHandler = new BasicServerExceptionHandler();
-        this.requestWorkerPool = new LegacyWorkerPool(this);
+        this.requestWorkerPool = new DistributingWorkerPool(config.receiveBufferSize, config.workerPoolSize);
         if (config.enableWebSockets) {
             this.websocketManager = new WebSocketManager();
         }
@@ -144,7 +146,7 @@ class HttpServer {
         while (this.serverSocket.isAlive()) {
             try {
                 Socket clientSocket = this.serverSocket.accept();
-                this.requestWorkerPool.submit(clientSocket);
+                this.requestWorkerPool.submit(this, clientSocket);
             } catch (SocketAcceptException acceptException) {
                 if (this.serverSocket.isAlive()) {
                     warnF!"Socket accept failed: %s"(acceptException.msg);
