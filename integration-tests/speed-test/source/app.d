@@ -10,9 +10,9 @@ import requester;
 import test;
 
 int main() {
-	auto prov = new shared FilesOnlyLoggingProvider();
-	prov.loggerFactory.setModuleLevelPrefix("handy_httpd", Levels.WARN);
-	prov.loggerFactory.setModuleLevelPrefix("requester-", Levels.INFO);
+	auto prov = new shared DefaultProvider(true, Levels.INFO);
+	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd", Levels.WARN);
+	prov.getLoggerFactory().setModuleLevelPrefix("requester-", Levels.INFO);
 	configureLoggingProvider(prov);
 
 	const cpuThreads = threadsPerCPU();
