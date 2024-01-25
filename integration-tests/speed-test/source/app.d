@@ -18,7 +18,7 @@ int main() {
 	const cpuThreads = threadsPerCPU();
 
 	return runTests(
-		// () => new SpeedTest("Single-Thread BlockingWorkerPool", getBlockingServer(), 4, LimitType.RequestCount, 10_000),
+		() => new SpeedTest("Single-Thread BlockingWorkerPool", getBlockingServer(), 4, LimitType.RequestCount, 10_000),
 		() => new SpeedTest("Single-Thread DistributingWorkerPool", getTestingServer(1), 1, LimitType.Time, 10_000),
 		() => new SpeedTest("Multi-Thread DistributingWorkerPool", getTestingServer(cpuThreads), cpuThreads / 2, LimitType.Time, 10_000)
 	);
