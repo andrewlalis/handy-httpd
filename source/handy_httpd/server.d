@@ -110,7 +110,7 @@ class HttpServer {
         this.address = parseAddress(config.hostname, config.port);
         this.handler = handler;
         this.exceptionHandler = new BasicServerExceptionHandler();
-        this.requestWorkerPool = new DistributingWorkerPool(config.receiveBufferSize, config.workerPoolSize);
+        this.requestWorkerPool = new LegacyWorkerPool(this);
         if (config.enableWebSockets) {
             this.websocketManager = new WebSocketManager();
         }
