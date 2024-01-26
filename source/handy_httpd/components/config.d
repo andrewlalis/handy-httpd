@@ -14,38 +14,38 @@ struct ServerConfig {
     /** 
      * The hostname that the server will bind to.
      */
-    string hostname;
+    string hostname = "127.0.0.1";
 
     /** 
      * The port that the server will bind to.
      */
-    ushort port;
+    ushort port = 8080;
 
     /** 
      * The size of the buffer for receiving requests.
      */
-    size_t receiveBufferSize;
+    size_t receiveBufferSize = 8192;
 
     /** 
      * The number of connections to accept into the queue.
      */
-    int connectionQueueSize;
+    int connectionQueueSize = 100;
 
     /**
      * The size of the internal queue used for distributing requests to workers.
      */
-    size_t requestQueueSize;
+    size_t requestQueueSize = 128;
 
     /** 
      * The number of worker threads for processing requests.
      */
-    size_t workerPoolSize;
+    size_t workerPoolSize = 25;
 
     /**
      * The number of milliseconds that the worker pool manager should wait
      * between each health check it performs.
      */
-    uint workerPoolManagerIntervalMs;
+    uint workerPoolManagerIntervalMs = 60_000;
 
     /** 
      * An alias for a delegate function that can be used to modify a socket.
@@ -71,7 +71,7 @@ struct ServerConfig {
     /** 
      * Whether to set the REUSEADDR flag for the socket.
      */
-    bool reuseAddress;
+    bool reuseAddress = true;
 
     /** 
      * A set of default headers that are added to all HTTP responses.
@@ -83,19 +83,9 @@ struct ServerConfig {
      * is spawned to manage websocket connections, separate from the main
      * worker pool.
      */
-    bool enableWebSockets;
+    bool enableWebSockets = false;
 
     static ServerConfig defaultValues() {
-        ServerConfig cfg;
-        cfg.hostname = "127.0.0.1";
-        cfg.port = 8080;
-        cfg.receiveBufferSize = 8192;
-        cfg.requestQueueSize = 128;
-        cfg.connectionQueueSize = 100;
-        cfg.reuseAddress = true;
-        cfg.workerPoolSize = 25;
-        cfg.workerPoolManagerIntervalMs = 60_000;
-        cfg.enableWebSockets = false;
-        return cfg;
+        return ServerConfig.init;
     }
 }
