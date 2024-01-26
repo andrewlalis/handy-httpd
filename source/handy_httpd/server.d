@@ -101,7 +101,7 @@ class HttpServer {
      */
     this(
         HttpRequestHandler handler = noOpHandler(),
-        ServerConfig config = ServerConfig.defaultValues
+        ServerConfig config = ServerConfig.init
     ) {
         this.config = config;
         this.address = parseAddress(config.hostname, config.port);
@@ -122,7 +122,7 @@ class HttpServer {
      */
     this(
         HttpRequestHandlerFunction handlerFunc,
-        ServerConfig config = ServerConfig.defaultValues
+        ServerConfig config = ServerConfig.init
     ) {
         this(toHandler(handlerFunc), config);
     }

@@ -85,6 +85,7 @@ struct ServerConfig {
      */
     bool enableWebSockets = false;
 
+    deprecated("Use ServerConfig.init")
     static ServerConfig defaultValues() {
         return ServerConfig.init;
     }
