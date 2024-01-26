@@ -7,12 +7,10 @@ import std.socket;
 import std.conv : to, ConvException;
 import std.typecons : Nullable;
 import core.sync.exception;
-import core.atomic;
+import core.atomic : atomicStore, atomicLoad;
 import core.thread : Thread;
 import core.thread.threadgroup : ThreadGroup;
 
-import handy_httpd.components.request;
-import handy_httpd.components.response;
 import handy_httpd.components.handler;
 import handy_httpd.components.config;
 import handy_httpd.components.worker;
@@ -23,7 +21,6 @@ import handy_httpd.components.distributing_worker_pool;
 import handy_httpd.components.websocket;
 
 import slf4d;
-import handy_httpd.components.distributing_worker_pool;
 
 /** 
  * A simple HTTP server that accepts requests on a given port and address, and
