@@ -143,13 +143,13 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      *   v = The value associated with the key.
      */
     void add(KeyType k, ValueType v) {
-        auto optionalEntry = getEntry(k);
-        if (optionalEntry.isNull) {
+        long idx = indexOf(k);
+        if (idx == -1) {
             entries ~= Entry(k, [v]);
             import std.algorithm.sorting : sort;
             sort!((a, b) => KeySort(a.key, b.key))(entries);
         } else {
-            optionalEntry.value.values ~= v;
+            entries[idx].values ~= v;
         }
     }
 
@@ -242,11 +242,11 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
          */
         ref Builder add(KeyType k, ValueType v) {
             if (entryAppender.data is null) entryAppender = appender(&m.entries);
-            auto optionalEntry = getEntry(k);
-            if (optionalEntry.isNull) {
+            long idx = this.indexOf(k);
+            if (idx == -1) {
                 entryAppender ~= Entry(k, [v]);
             } else {
-                optionalEntry.value.values ~= v;
+                m.entries[idx].values ~= v;
             }
             return this;
         }
@@ -262,11 +262,11 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             return m;
         }
 
-        private Optional!(MultiValueMap.Entry) getEntry(KeyType k) {
-            foreach (MultiValueMap.Entry entry; m.entries) {
-                if (entry.key == k) return Optional!(MultiValueMap.Entry).of(entry);
+        private long indexOf(KeyType k) {
+            foreach (i, entry; m.entries) {
+                if (entry.key == k) return i;
             }
-            return Optional!(MultiValueMap.Entry).empty();
+            return -1;
         }
     }
 
@@ -366,6 +366,12 @@ unittest {
     assert(m["b"] == "bye");
     m.remove("a");
     assert(!m.contains("a"));
+    m.add("b", "hello");
+    assert(m.getAll("b") == ["bye", "hello"]);
+    m.clear();
+    assert(m.length == 0);
+    assert(!m.contains("a"));
+    assert(!m.contains("b"));
 
     auto m2 = StringMultiValueMap.fromAssociativeArray(["a": "123", "b": "abc"]);
     assert(m2["a"] == "123");
@@ -405,4 +411,10 @@ unittest {
     // test on a const instance
     const(StringMultiValueMap) m6 = m5;
     assert(m6[] == [StringMultiValueMap.Entry("a", ["123"])]);
+
+    // test the builder with multi-values
+    StringMultiValueMap.Builder builder;
+    builder.add("a", "123");
+    builder.add("a", "456");
+    assert(builder.build()[] == [StringMultiValueMap.Entry("a", ["123", "456"])], builder.build().toString);
 }
