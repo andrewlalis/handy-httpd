@@ -67,12 +67,13 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Attempts to get the entry for a given key. Complexity is O(log(keyCount)).
      * Params:
      *   k = The key to look for.
-     * Returns: An optional that may contain the entry that was found.
+     * Returns: A pointer to the Entry. This needs to be a reference, as some
+     *          users of this function mutate the entry.
      */
-    private Optional!Entry getEntry(KeyType k) {
+    private Entry* getEntry(KeyType k) {
         long idx = indexOf(k);
-        if (idx == -1) return Optional!Entry.empty();
-        return Optional!Entry.of(entries[idx]);
+        if (idx == -1) return null;
+        return &entries[idx];
     }
 
     /**
@@ -91,8 +92,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      */
     bool contains(KeyType k) const {
         MultiValueMap unconstMap = cast(MultiValueMap) this;
-        Optional!Entry optionalEntry = unconstMap.getEntry(k);
-        return !optionalEntry.isNull && optionalEntry.value.values.length > 0;
+        Entry * optionalEntry = unconstMap.getEntry(k);
+        return optionalEntry && optionalEntry.values.length > 0;
     }
 
     /**
@@ -116,7 +117,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      */
     ValueType[] getAll(KeyType k) const {
         MultiValueMap unconstMap = cast(MultiValueMap) this;
-        return unconstMap.getEntry(k).map!(e => e.values.dup).orElse([]);
+        auto entryPtr = unconstMap.getEntry(k);
+        return entryPtr ? entryPtr.values.dup : [];
     }
 
     /**
@@ -129,11 +131,11 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      */
     Optional!ValueType getFirst(KeyType k) const {
         MultiValueMap unconstMap = cast(MultiValueMap) this;
-        Optional!Entry optionalEntry = unconstMap.getEntry(k);
-        if (optionalEntry.isNull || optionalEntry.value.values.length == 0) {
+        Entry* optionalEntry = unconstMap.getEntry(k);
+        if (!optionalEntry || optionalEntry.values.length == 0) {
             return Optional!ValueType.empty();
         }
-        return Optional!ValueType.of(optionalEntry.value.values[0]);
+        return Optional!ValueType.of(optionalEntry.values[0]);
     }
 
     /**
@@ -143,13 +145,12 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      *   v = The value associated with the key.
      */
     void add(KeyType k, ValueType v) {
-        auto optionalEntry = getEntry(k);
-        if (optionalEntry.isNull) {
+        if(auto optionalEntry = getEntry(k)) {
+            optionalEntry.values ~= v;
+        } else {
             entries ~= Entry(k, [v]);
             import std.algorithm.sorting : sort;
             sort!((a, b) => KeySort(a.key, b.key))(entries);
-        } else {
-            optionalEntry.value.values ~= v;
         }
     }
 
@@ -242,11 +243,10 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
          */
         ref Builder add(KeyType k, ValueType v) {
             if (entryAppender.data is null) entryAppender = appender(&m.entries);
-            auto optionalEntry = getEntry(k);
-            if (optionalEntry.isNull) {
-                entryAppender ~= Entry(k, [v]);
+            if (auto optionalEntry = getEntry(k)) {
+                optionalEntry.values ~= v;
             } else {
-                optionalEntry.value.values ~= v;
+                entryAppender ~= Entry(k, [v]);
             }
             return this;
         }
@@ -262,11 +262,11 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             return m;
         }
 
-        private Optional!(MultiValueMap.Entry) getEntry(KeyType k) {
-            foreach (MultiValueMap.Entry entry; m.entries) {
-                if (entry.key == k) return Optional!(MultiValueMap.Entry).of(entry);
+        private Entry* getEntry(KeyType k) {
+            foreach (ref Entry entry; m.entries) {
+                if (entry.key == k) return &entry;
             }
-            return Optional!(MultiValueMap.Entry).empty();
+            return null;
         }
     }
 
@@ -331,10 +331,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Returns: A list of values for the given key, or null if no such key exists.
      */
     ValueType[] opBinaryRight(string op : "in")(string lhs) {
-        Optional!Entry optionalEntry = this.getEntry(lhs);
-        if (optionalEntry) {
-            Entry entry = optionalEntry.value;
-            return entry.values;
+        if (Entry* optionalEntry = this.getEntry(lhs)) {
+            return optionalEntry.values;
         }
         return null;
     }
@@ -401,4 +399,10 @@ unittest {
     assert(m5[] == []);
     m5.add("a", "123");
     assert(m5[] == [StringMultiValueMap.Entry("a", ["123"])]);
+
+    // test the builder with multi-values
+    StringMultiValueMap.Builder builder;
+    builder.add("a", "123");
+    builder.add("a", "456");
+    assert(builder.build()[] == [StringMultiValueMap.Entry("a", ["123", "456"])]);
 }
