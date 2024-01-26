@@ -277,7 +277,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * of entries in this map.
      * Returns: The list of entries in this map.
      */
-    Entry[] opIndex() {
+    inout(Entry)[] opIndex() inout {
         return entries;
     }
 
@@ -401,4 +401,8 @@ unittest {
     assert(m5[] == []);
     m5.add("a", "123");
     assert(m5[] == [StringMultiValueMap.Entry("a", ["123"])]);
+
+    // test on a const instance
+    const(StringMultiValueMap) m6 = m5;
+    assert(m6[] == [StringMultiValueMap.Entry("a", ["123"])]);
 }
