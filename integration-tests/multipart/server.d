@@ -20,7 +20,7 @@ import std.digest.md : md5Of;
 import core.thread;
 
 void main() {
-    auto provider = new shared DefaultProvider(true, Levels.DEBUG);
+    auto provider = new DefaultProvider(true, Levels.DEBUG);
     configureLoggingProvider(provider);
 
     HttpServer server = getServer();
@@ -87,7 +87,7 @@ void main() {
 }
 
 HttpServer getServer() {
-    ServerConfig config = ServerConfig.defaultValues();
+    ServerConfig config;
     config.workerPoolSize = 3;
     config.port = 8080;
     return new HttpServer((ref HttpRequestContext ctx) {
