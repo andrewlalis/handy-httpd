@@ -1,6 +1,5 @@
 /+ dub.sdl:
     dependency "handy-httpd" path="../../"
-    dependency "streams" version="~>3.5.0"
 +/
 module file_test_server;
 

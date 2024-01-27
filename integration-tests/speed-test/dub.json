@@ -7,7 +7,7 @@
 		"handy-httpd": {
 			"path": "../../"
 		},
-		"requests": "~>2.0.9"
+		"requests": "~>2"
 	},
 	"description": "A minimal D application.",
 	"license": "MIT",

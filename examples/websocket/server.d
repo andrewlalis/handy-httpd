@@ -26,7 +26,7 @@ class MyWebSocketHandler : WebSocketMessageHandler {
 }
 
 void main(string[] args) {
-    ServerConfig cfg = ServerConfig.defaultValues;
+    ServerConfig cfg;
     if (args.length > 1) {
         import std.conv;
         cfg.port = args[1].to!ushort;

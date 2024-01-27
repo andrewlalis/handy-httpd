@@ -6,7 +6,7 @@ import handy_httpd;
 import handy_httpd.handlers.file_resolving_handler;
 
 void main(string[] args) {
-    ServerConfig cfg = ServerConfig.defaultValues;
+    ServerConfig cfg;
     if (args.length > 1) {
         import std.conv;
         cfg.port = args[1].to!ushort;

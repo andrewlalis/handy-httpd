@@ -1,7 +1,7 @@
 #!/usr/bin/env dub
 /+ dub.sdl:
     dependency "handy-httpd" path="../../"
-    dependency "requests" version="~>2.1.1"
+    dependency "requests" version="~>2.1.3"
 +/
 module multipart_integration_test;
 
