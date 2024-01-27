@@ -221,16 +221,15 @@ struct HttpRequest {
 
         // Test case 2: Missing Content-Length header, so we don't read anything.
         // In this case, we also test that a warning message is emitted.
-        synchronized(loggingTestingMutex) {
-            shared TestingLoggingProvider loggingProvider = getTestingProvider();
+        withTestingProvider((provider) {
             string body2 = "Goodbye, world.";
             HttpRequest r2 = new HttpRequestBuilder().withBody(body2).withoutHeader("Content-Length").build();
             auto sOut2 = byteArrayOutputStream();
             ulong bytesRead2 = r2.readBody(sOut2);
             assert(bytesRead2 == 0);
             assert(sOut2.toArrayRaw().length == 0);
-            loggingProvider.assertHasMessage(Levels.WARN);
-        }
+            provider.assertHasMessage(Levels.WARN);
+        });
 
         // Test case 3: Missing Content-Length header but we allow infinite reading.
         string body3 = "Hello moon!";

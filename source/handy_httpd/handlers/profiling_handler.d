@@ -158,20 +158,18 @@ unittest {
     import handy_httpd.util.builders;
     import handy_httpd.components.response;
     import slf4d;
-    import slf4d.testing_provider;
-
-    shared TestingLoggingProvider provider = new shared TestingLoggingProvider();
-    configureLoggingProvider(provider);
-    
-    LoggingProfilingDataHandler dataHandler = new LoggingProfilingDataHandler();
-    ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
-        ctx.response.status = HttpStatus.OK;
-    }), dataHandler);
-    for (int i = 0; i < 10_000; i++) {
-        auto ctx = buildCtxForRequest(Method.GET, "/data");
-        handler.handle(ctx);
-    }
-    assert(provider.messageCount == 10_000 + (10_000 / 100));
+    import slf4d.test;
+    withTestingProvider((provider) {
+        LoggingProfilingDataHandler dataHandler = new LoggingProfilingDataHandler();
+        ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
+            ctx.response.status = HttpStatus.OK;
+        }), dataHandler);
+        for (int i = 0; i < 10_000; i++) {
+            auto ctx = buildCtxForRequest(Method.GET, "/data");
+            handler.handle(ctx);
+        }
+        assert(provider.messageCount == 10_000 + (10_000 / 100));
+    });
 }
 
 /** 
