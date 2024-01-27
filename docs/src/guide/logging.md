@@ -7,7 +7,7 @@ To quickly enable colored, verbose logging in case your application isn't behavi
 ```d
 import slf4d;
 import slf4d.default_provider;
-auto provider = new shared DefaultProvider(true, Levels.TRACE);
+auto provider = new DefaultProvider(true, Levels.TRACE);
 configureLoggingProvider(provider);
 ```
 
