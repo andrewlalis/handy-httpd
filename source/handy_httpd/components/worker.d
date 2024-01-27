@@ -38,7 +38,7 @@ public void handleClient(
         socket.close();
         return;
     }
-    logger.debugF!"Got client socket: %s"(socket.remoteAddress());
+    logger.debug_("Got client socket.");
     // Create the input and output streams for the request here, since their
     // lifetime continues until the request is handled.
     SocketInputStream inputStream = SocketInputStream(socket);
