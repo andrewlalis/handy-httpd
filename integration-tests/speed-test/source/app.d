@@ -10,7 +10,7 @@ import requester;
 import test;
 
 int main() {
-	auto prov = new shared DefaultProvider(true, Levels.INFO);
+	auto prov = new DefaultProvider(true, Levels.INFO);
 	prov.getLoggerFactory().setModuleLevelPrefix("handy_httpd", Levels.WARN);
 	prov.getLoggerFactory().setModuleLevelPrefix("requester-", Levels.INFO);
 	configureLoggingProvider(prov);
@@ -37,12 +37,11 @@ int runTests(SpeedTest delegate()[] tests...) {
 
 HttpServer getBlockingServer() {
 	import handy_httpd.components.worker_pool;
-	ServerConfig config = ServerConfig.defaultValues();
-	return new HttpServer(toHandler(&handlerFunction), new BlockingWorkerPool(1024), config);
+	return new HttpServer(toHandler(&handlerFunction), new BlockingWorkerPool(1024), ServerConfig.init);
 }
 
 HttpServer getTestingServer(uint workerPoolSize) {
-	ServerConfig config = ServerConfig.defaultValues();
+	ServerConfig config;
 	config.workerPoolSize = workerPoolSize;
 	return new HttpServer(&handlerFunction, config);
 }
@@ -52,17 +51,17 @@ void handlerFunction(ref HttpRequestContext ctx) {
 }
 
 class FilesOnlyLoggingProvider : LoggingProvider {
-	private shared DefaultLoggerFactory loggerFactory;
+	private DefaultLoggerFactory loggerFactory;
 
-	public shared this() {
-		auto handler = new shared SerializingLogHandler(
+	public this() {
+		auto handler = new SerializingLogHandler(
 			new DefaultStringLogSerializer(false),
 			new RotatingFileLogWriter("logs")
 		);
-		this.loggerFactory = new shared DefaultLoggerFactory(handler, Levels.INFO);
+		this.loggerFactory = new DefaultLoggerFactory(handler, Levels.INFO);
 	}
 
-	public shared shared(DefaultLoggerFactory) getLoggerFactory() {
+	public DefaultLoggerFactory getLoggerFactory() {
 		return this.loggerFactory;
 	}
 }
