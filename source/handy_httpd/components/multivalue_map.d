@@ -1,6 +1,6 @@
 /**
- * An implementation of a multi-valued mapping, where one key may map to zero,
- * one, or many values.
+ * An implementation of a multi-valued mapping, where one key may map to one
+ * or more values.
  */
 module handy_httpd.components.multivalue_map;
 
@@ -16,7 +16,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     static struct Entry {
         /// The key for this entry.
         KeyType key;
-        
+
         /**
          * The list of values associated with this entry's key. This always
          * contains at least one value.
@@ -95,13 +95,11 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * Returns: True if at least one value exists for the given key.
      */
     bool contains(KeyType k) const {
-        MultiValueMap unconstMap = cast(MultiValueMap) this;
-        Optional!Entry optionalEntry = unconstMap.getEntry(k);
-        return !optionalEntry.isNull && optionalEntry.value.values.length > 0;
+        return indexOf(k) != -1;
     }
 
     /**
-     * Gets a list of all keys in this map.
+     * Gets a list of all keys in this map, allocated in a new array.
      * Returns: The list of keys in this map.
      */
     KeyType[] keys() const {
@@ -113,15 +111,16 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     }
 
     /**
-     * Gets all values associated with a given key.
+     * Gets all values associated with a given key, allocated in a new array.
      * Params:
      *   k = The key to get the values of.
      * Returns: The values associated with the given key, or an empty array if
      * no values exist for the key.
      */
     ValueType[] getAll(KeyType k) const {
-        MultiValueMap unconstMap = cast(MultiValueMap) this;
-        return unconstMap.getEntry(k).mapIfPresent!(e => e.values.dup).orElse([]);
+        long idx = indexOf(k);
+        if (idx == -1) return [];
+        return entries[idx].values.dup;
     }
 
     /**
@@ -133,16 +132,14 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * for the given key.
      */
     Optional!ValueType getFirst(KeyType k) const {
-        MultiValueMap unconstMap = cast(MultiValueMap) this;
-        Optional!Entry optionalEntry = unconstMap.getEntry(k);
-        if (optionalEntry.isNull || optionalEntry.value.values.length == 0) {
-            return Optional!ValueType.empty();
-        }
-        return Optional!ValueType.of(optionalEntry.value.values[0]);
+        long idx = indexOf(k);
+        if (idx == -1) return Optional!ValueType.empty();
+        return Optional!ValueType.of(entries[idx].values[0]);
     }
 
     /**
-     * Adds a single key -> value pair to the map.
+     * Adds a single key -> value pair to the map, with time complexity of
+     * O(n*log(n)) due to sorting the new entry by its key.
      * Params:
      *   k = The key.
      *   v = The value associated with the key.
@@ -322,7 +319,9 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * resolve to the list of values for key `k` in the multivalue map `m` if
      * that key exists, or `null` if not.
      *
-     * Usage:
+     * Params:
+     *   lhs = The key to use.
+     * Returns: A list of values for the given key, or null if no such key exists.
      * ---
      * StringMultiValueMap m;
      * m.add("a", "hello");
@@ -331,9 +330,6 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      * assert("b" !in m);
      * assert(("b" in m) is null);
      * ---
-     * Params:
-     *   lhs = The key to use.
-     * Returns: A list of values for the given key, or null if no such key exists.
      */
     ValueType[] opBinaryRight(string op : "in")(string lhs) {
         Optional!Entry optionalEntry = this.getEntry(lhs);

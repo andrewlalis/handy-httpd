@@ -83,8 +83,13 @@ struct Optional(T) {
 
     /**
      * Provides a mechanism to allow usage in boolean expressions.
-     *
      * Returns: true if non-null, false if null
+     * ---
+     * auto optInt = Optional!int.empty();
+     * assert(!optInt);
+     * auto optStr = Optional!string.of("Hello");
+     * assert(optStr);
+     * ---
      */
     bool opCast(B : bool)() const {
         return !this.isNull;
