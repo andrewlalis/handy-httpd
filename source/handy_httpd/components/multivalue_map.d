@@ -7,15 +7,20 @@ module handy_httpd.components.multivalue_map;
 import handy_httpd.components.optional;
 
 /**
- * A multi-valued mapping, where a key value may map to zero, one, or many
- * values.
+ * A multi-valued mapping, where a key is mapped to one or more values. The map
+ * is sorted by keys for O(log(n)) lookup and retrieval, and O(n*log(n))
+ * insertion.
  */
 struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     /// The internal structure used to store each key and set of values.
     static struct Entry {
         /// The key for this entry.
         KeyType key;
-        /// The list of values associated with this entry's key.
+        
+        /**
+         * The list of values associated with this entry's key. This always
+         * contains at least one value.
+         */
         ValueType[] values;
 
         /**
@@ -116,7 +121,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
      */
     ValueType[] getAll(KeyType k) const {
         MultiValueMap unconstMap = cast(MultiValueMap) this;
-        return unconstMap.getEntry(k).map!(e => e.values.dup).orElse([]);
+        return unconstMap.getEntry(k).mapIfPresent!(e => e.values.dup).orElse([]);
     }
 
     /**

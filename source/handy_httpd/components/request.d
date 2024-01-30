@@ -92,7 +92,7 @@ struct HttpRequest {
      */
     public T getHeaderAs(T)(string name, T defaultValue = T.init) const {
         import std.conv : to, ConvException;
-        if (!hasHeader(name)) return defaultValue;
+        if (!headers.contains(name)) return defaultValue;
         try {
             return headers[name].to!T;
         } catch (ConvException e) {
@@ -113,7 +113,7 @@ struct HttpRequest {
     public T getParamAs(T)(string name, T defaultValue = T.init) const {
         import std.conv : to, ConvException;
         return this.queryParams.getFirst(name)
-            .map!((s) {
+            .mapIfPresent!((s) {
                 try {
                     return s.to!T;
                 } catch (ConvException e) {
@@ -186,7 +186,7 @@ struct HttpRequest {
      */
     public ulong readBody(S)(ref S outputStream, bool allowInfiniteRead = false) if (isByteOutputStream!S) {
         const long contentLength = headers.getFirst("Content-Length")
-            .map!((s) {
+            .mapIfPresent!((s) {
                 import std.conv : to, ConvException;
                 try {
                     return s.to!long;

@@ -25,6 +25,9 @@ import httparsed;
 /**
  * A managed pool of worker threads for handling requests to a server. Uses a
  * separate manager thread to periodically check and adjust the pool.
+ *
+ * Note: This worker pool is considered to be deprecated, and won't receive any
+ * further updates beyond fixing critical errors.
  */
 class LegacyWorkerPool : RequestWorkerPool {
     package HttpServer server;

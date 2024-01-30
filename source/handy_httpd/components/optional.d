@@ -98,7 +98,7 @@ struct Optional(T) {
  * Returns: An optional whose type is the return-type of the given `fn`
  * template argument function.
  */
-auto map(alias fn, T)(Optional!T opt) {
+auto mapIfPresent(alias fn, T)(Optional!T opt) {
     alias U = typeof(fn(T.init));
     if (opt.isNull) return Optional!U.empty();
     return Optional!U.of(fn(opt.value));
@@ -109,7 +109,7 @@ unittest {
     assert(!s.isNull);
     assert(s.value == "hello");
     assert(s); // test boolean conversion
-    Optional!int mapped = s.map!(str => 1);
+    Optional!int mapped = s.mapIfPresent!(str => 1);
     assert(!mapped.isNull);
     assert(mapped.value == 1);
 }
