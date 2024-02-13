@@ -77,7 +77,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     private Optional!Entry getEntry(KeyType k) {
         long idx = indexOf(k);
         if (idx == -1) return Optional!Entry.empty();
-        return Optional!Entry.of(entries[idx]);
+        return Optional!Entry.of(entries[cast(size_t) idx]);
     }
 
     /**
@@ -120,7 +120,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     ValueType[] getAll(KeyType k) const {
         long idx = indexOf(k);
         if (idx == -1) return [];
-        return entries[idx].values.dup;
+        return entries[cast(size_t) idx].values.dup;
     }
 
     /**
@@ -134,7 +134,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
     Optional!ValueType getFirst(KeyType k) const {
         long idx = indexOf(k);
         if (idx == -1) return Optional!ValueType.empty();
-        return Optional!ValueType.of(entries[idx].values[0]);
+        return Optional!ValueType.of(entries[cast(size_t) idx].values[0]);
     }
 
     /**
@@ -151,7 +151,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             import std.algorithm.sorting : sort;
             sort!((a, b) => KeySort(a.key, b.key))(entries);
         } else {
-            entries[idx].values ~= v;
+            entries[cast(size_t) idx].values ~= v;
         }
     }
 
@@ -176,7 +176,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             return;
         }
         if (idx + 1 < entries.length) {
-            entries[idx .. $ - 1] = entries[idx + 1 .. $];
+            const i = cast(size_t) idx;
+            entries[i .. $ - 1] = entries[i + 1 .. $];
         }
         entries.length = entries.length - 1;
     }
@@ -248,7 +249,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             if (idx == -1) {
                 entryAppender ~= Entry(k, [v]);
             } else {
-                m.entries[idx].values ~= v;
+                m.entries[cast(size_t) idx].values ~= v;
             }
             return this;
         }
