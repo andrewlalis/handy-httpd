@@ -82,6 +82,19 @@ struct Optional(T) {
     }
 
     /**
+     * Gets the value of this optional if it exists, or throws an exception as
+     * produced by the given delegate.
+     * Params:
+     *   exceptionSupplier = A delegate that returns an exception to throw if
+     *                       this optional is null.
+     * Returns: The value of this optional.
+     */
+    T orElseThrow(Exception delegate() exceptionSupplier) {
+        if (this.isNull) throw exceptionSupplier();
+        return this.value;
+    }
+
+    /**
      * Provides a mechanism to allow usage in boolean expressions.
      * Returns: true if non-null, false if null
      * ---
