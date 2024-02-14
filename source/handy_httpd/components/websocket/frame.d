@@ -159,7 +159,7 @@ WebSocketFrame receiveWebSocketFrame(S)(S stream) if (isByteInputStream!S) {
     immutable bool payloadMasked = (maskAndLength & 128) > 0;
     immutable ubyte initialPayloadLength = maskAndLength & 127;
     debugF!"Websocket data frame Mask bit = %s, Initial payload length = %d"(payloadMasked, initialPayloadLength);
-    ulong payloadLength = readPayloadLength(initialPayloadLength, ptr);
+    size_t payloadLength = readPayloadLength(initialPayloadLength, ptr);
     if (isControlFrame && payloadLength > 125) {
         throw new WebSocketException("Control frame payload is too large.");
     }
@@ -223,11 +223,11 @@ private bool validateOpcode(ubyte opcode) {
  *   stream = The stream to read from.
  * Returns: The complete payload length.
  */
-private ulong readPayloadLength(S)(ubyte initialLength, S stream) if (isByteInputStream!S) {
+private size_t readPayloadLength(S)(ubyte initialLength, S stream) if (isByteInputStream!S) {
     if (initialLength == 126) {
         return readDataOrThrow!(ushort)(stream);
     } else if (initialLength == 127) {
-        return readDataOrThrow!(ulong)(stream);
+        return readDataOrThrow!(size_t)(stream);
     }
     return initialLength;
 }
@@ -240,7 +240,7 @@ private ulong readPayloadLength(S)(ubyte initialLength, S stream) if (isByteInpu
  *   stream = The stream to read from.
  * Returns: The payload data that was read.
  */
-private ubyte[] readPayload(S)(ulong payloadLength, S stream) if (isByteInputStream!S) {
+private ubyte[] readPayload(S)(size_t payloadLength, S stream) if (isByteInputStream!S) {
     ubyte[] buffer = new ubyte[payloadLength];
     StreamResult readResult = stream.readFromStream(buffer);
     if (readResult.hasError) {
