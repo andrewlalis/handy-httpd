@@ -3,38 +3,7 @@
  */
 module handy_httpd.components.responses;
 
-import handy_httpd.components.response;
-import handy_httpd.components.handler : HttpRequestContext;
-import streams;
-
-void respond(
-    ref HttpResponse response,
-    HttpStatus status,
-    InputStream!ubyte bodyInputStream,
-    ulong bodySize,
-    string bodyContentType
-) {
-    response.setStatus(status);
-    if (bodyInputStream !is null) {
-        response.writeBody(bodyInputStream, bodySize, bodyContentType);
-    }
-}
-
-void respond(
-    ref HttpResponse response,
-    HttpStatus status,
-    string bodyContent,
-    string bodyContentType = "text/plain; charset=utf-8"
-) {
-    response.setStatus(status);
-    if (bodyContent !is null && bodyContent.length > 0) {
-        response.writeBodyString(bodyContent, bodyContentType);
-    }
-}
-
-void respond(ref HttpResponse response, HttpStatus status) {
-    respond(response, status, null);
-}
+import http_primitives : HttpStatus, HttpResponse, writeBodyString, writeBody, flushHeaders;
 
 /** 
  * Formats a response function name into a camelCase name that's suitable for
@@ -66,11 +35,7 @@ static foreach (member; EnumMembers!HttpStatus) {
     mixin(format(
         q{
             void %s(ref HttpResponse response) {
-                response.setStatus(HttpStatus.%s);
-            }
-
-            void %s(ref HttpRequestContext ctx) {
-                ctx.response.setStatus(HttpStatus.%s);
+                response.status = HttpStatus.%s;
             }
             
             void %s(
@@ -78,21 +43,10 @@ static foreach (member; EnumMembers!HttpStatus) {
                 string bodyContent,
                 string bodyContentType = "text/plain; charset=utf-8"
             ) {
-                response.setStatus(HttpStatus.%s);
+                response.status = HttpStatus.%s;
                 response.writeBodyString(bodyContent, bodyContentType);
             }
-
-            void %s(
-                ref HttpRequestContext ctx,
-                string bodyContent,
-                string bodyContentType = "text/plain; charset=utf-8"
-            ) {
-                ctx.response.setStatus(HttpStatus.%s);
-                ctx.response.writeBodyString(bodyContent, bodyContentType);
-            }
         },
-        formatResponseFunctionName(__traits(identifier, member)), member,
-        formatResponseFunctionName(__traits(identifier, member)), member,
         formatResponseFunctionName(__traits(identifier, member)), member,
         formatResponseFunctionName(__traits(identifier, member)), member
     ));
@@ -106,16 +60,19 @@ static foreach (member; EnumMembers!HttpStatus) {
  *   type = The mime type to send, such as "text/html; charset=utf-8"
  */
 void fileResponse(ref HttpResponse response, string filename, string type) {
-    import std.file;
+    import std.file : exists, getSize;
     import std.conv : to;
     import std.string : toStringz;
     if (!exists(filename)) {
-        response.setStatus(HttpStatus.NOT_FOUND);
-        response.addHeader("Content-Type", type).flushHeaders();
+        response.status = HttpStatus.NOT_FOUND;
+        response.headers.add("Content-Type", type);
+        response.flushHeaders();
     } else {
-        response.setStatus(HttpStatus.OK);
+        response.status = HttpStatus.OK;
         ulong size = getSize(filename);
         // Flush the headers, and begin streaming the file directly.
-        response.writeBody(FileInputStream(toStringz(filename)), size, type);
+        import std.stdio : File;
+        File inputFile = File(filename);
+        response.writeBody(inputFile.byChunk(8192), size, type);
     }
 }

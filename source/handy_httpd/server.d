@@ -20,6 +20,8 @@ import handy_httpd.components.legacy_worker_pool;
 import handy_httpd.components.distributing_worker_pool;
 import handy_httpd.components.websocket;
 
+import http_primitives;
+
 import slf4d;
 
 /** 
@@ -100,7 +102,7 @@ class HttpServer {
      *   config = The server configuration.
      */
     this(
-        HttpRequestHandler handler = noOpHandler(),
+        HttpRequestHandler handler,
         ServerConfig config = ServerConfig.init
     ) {
         this.config = config;
@@ -111,20 +113,6 @@ class HttpServer {
         if (config.enableWebSockets) {
             this.websocketManager = new WebSocketManager();
         }
-    }
-
-    /** 
-     * Constructs a new server using the supplied handler function to handle
-     * all incoming requests.
-     * Params:
-     *   handlerFunc = The function to use to handle requests.
-     *   config = The server configuration.
-     */
-    this(
-        HttpRequestHandlerFunction handlerFunc,
-        ServerConfig config = ServerConfig.init
-    ) {
-        this(toHandler(handlerFunc), config);
     }
 
     /** 

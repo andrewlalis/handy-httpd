@@ -8,6 +8,7 @@ import std.algorithm;
 import std.array;
 
 import handy_httpd.components.handler;
+import http_primitives;
 
 /** 
  * An ordered, singly-linked list of filters to apply to a request context.
@@ -21,9 +22,9 @@ class FilterChain {
      * Params:
      *   ctx = The request context.
      */
-    void doFilter(ref HttpRequestContext ctx) {
+    void doFilter(ref HttpRequest request, ref HttpResponse response) {
         if (this.next !is null) {
-            filter.apply(ctx, this.next);
+            filter.apply(request, response, this.next);
         }
     }
 
@@ -95,7 +96,7 @@ class FilterChain {
 }
 
 private class FilterChainEnd : FilterChain {
-    override void doFilter(ref HttpRequestContext ctx) {} // Don't do anything.
+    override void doFilter(ref HttpRequest request, ref HttpResponse response) {} // Don't do anything.
 }
 
 /** 
@@ -106,13 +107,13 @@ private class FilterChainEnd : FilterChain {
  * is flushed to the client.
  */
 interface HttpRequestFilter {
-    void apply(ref HttpRequestContext ctx, FilterChain filterChain);
+    void apply(ref HttpRequest request, ref HttpResponse response, FilterChain filterChain);
 }
 
 /** 
  * An alias for a function that can be used as a request filter.
  */
-alias HttpRequestFilterFunction = void function (ref HttpRequestContext, FilterChain);
+alias HttpRequestFilterFunction = void function (ref HttpRequest request, ref HttpResponse response, FilterChain);
 
 /** 
  * Constructs a new request filter object from the given function.
@@ -122,8 +123,8 @@ alias HttpRequestFilterFunction = void function (ref HttpRequestContext, FilterC
  */
 HttpRequestFilter toFilter(HttpRequestFilterFunction fn) {
     return new class HttpRequestFilter {
-        void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
-            fn(ctx, filterChain);
+        void apply(ref HttpRequest request, ref HttpResponse response, FilterChain filterChain) {
+            fn(request, response, filterChain);
         }
     };
 }
@@ -139,9 +140,9 @@ private class HandlerFilter : HttpRequestFilter {
         this.handler = handler;
     }
 
-    void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
-        handler.handle(ctx);
-        filterChain.doFilter(ctx);
+    void apply(ref HttpRequest request, ref HttpResponse response, FilterChain filterChain) {
+        handler.handle(request, response);
+        filterChain.doFilter(request, response);
     }
 }
 
@@ -222,7 +223,7 @@ class FilteredRequestHandler : HttpRequestHandler {
         ));
     }
 
-    void handle(ref HttpRequestContext ctx) {
-        filterChain.doFilter(ctx);
+    void handle(ref HttpRequest request, ref HttpResponse response) {
+        filterChain.doFilter(request, response);
     }
 }

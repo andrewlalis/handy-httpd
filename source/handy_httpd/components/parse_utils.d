@@ -3,6 +3,8 @@
  */
 module handy_httpd.components.parse_utils;
 
+import handy_httpd.server : HttpServer;
+
 import std.typecons;
 import std.conv;
 import std.array;
@@ -12,18 +14,8 @@ import std.uri;
 import std.range;
 import std.socket : Socket, Address, lastSocketError;
 import slf4d : Logger, getLogger;
-import streams : isByteInputStream, isByteOutputStream,
-    inputStreamObjectFor, outputStreamObjectFor, arrayInputStreamFor, concatInputStreamFor,
-    bufferedInputStreamFor, StreamResult, SocketInputStream, SocketOutputStream;
+import http_primitives;
 import httparsed;
-
-import handy_httpd.components.request : HttpRequest, methodFromName;
-import handy_httpd.components.form_urlencoded;
-import handy_httpd.components.multivalue_map;
-import handy_httpd.components.optional;
-import handy_httpd.components.handler : HttpRequestContext;
-import handy_httpd.components.response : HttpResponse;
-import handy_httpd.server : HttpServer;
 
 /**
  * The header struct to use when parsing data.
@@ -92,9 +84,9 @@ public Tuple!(HttpRequest, int) parseRequest(ref MsgParser!Msg requestParser, st
     Tuple!(string, StringMultiValueMap) urlAndParams = parseUrlAndParams(rawUrl);
     string method = cast(string) requestParser.method;
     HttpRequest request = HttpRequest(
-        methodFromName(method),
+        methodFromName(method).orElseThrow("Invalid HTTP method verb: " ~ method),
         urlAndParams[0],
-        requestParser.minorVer,
+        cast(ubyte) requestParser.minorVer,
         headersBuilder.build(),
         urlAndParams[1],
         null
@@ -138,70 +130,55 @@ public Tuple!(string, StringMultiValueMap) parseUrlAndParams(string rawUrl) {
  * be closed and no further action is required. Otherwise, it is a valid
  * request context that can be handled using the server's configured handler.
  */
-public Optional!HttpRequestContext receiveRequest(InputStream, OutputStream)(
+public Optional!(Tuple!(HttpRequest, HttpResponse)) receiveRequest(I, O)(
     HttpServer server,
     Socket clientSocket,
-    InputStream inputStream,
-    OutputStream outputStream,
-    ref ubyte[] receiveBuffer,
+    I inputRange,
+    O outputRange,
+    ubyte[] receiveBuffer,
     ref MsgParser!Msg requestParser,
     Logger logger = getLogger()
-) if (isByteInputStream!InputStream && isByteOutputStream!OutputStream) {
+) if (isInputRange!(I) && is(ElementType!(I) == ubyte[]) && isOutputRange!(O, ubyte[])) {
+    alias ResultType = Optional!(Tuple!(HttpRequest, HttpResponse));
     // First try and read as much as we can from the input stream into the buffer.
     logger.trace("Reading the initial request into the receive buffer.");
-    StreamResult initialReadResult = inputStream.readFromStream(receiveBuffer);
-    if (initialReadResult.hasError) {
-        logger.errorF!"Encountered socket receive failure: %s, lastSocketError = %s"(
-            initialReadResult.error.message,
-            lastSocketError()
-        );
-        return Optional!HttpRequestContext.empty();
-    }
+    if (inputRange.empty) return ResultType.empty;
+    ubyte[] initialReadData = inputRange.front();
 
-    logger.debugF!"Received %d bytes from the client."(initialReadResult.count);
-    if (initialReadResult.count == 0) return Optional!HttpRequestContext.empty(); // Skip if we didn't receive valid data.
+    logger.debugF!"Received %d bytes from the client."(initialReadData.length);
+    if (initialReadData.length == 0) return ResultType.empty; // Skip if we didn't receive valid data.
 
     // We store an immutable copy of the data initially received, so we can
     // slice it and work with it even as we keep reading and overwriting the
     // receive buffer.
-    immutable ubyte[] initialData = receiveBuffer[0 .. initialReadResult.count].idup;
+    immutable ubyte[] initialData = initialReadData.idup;
 
     // Prepare the request context by parsing the HttpRequest, and preparing the context.
     try {
         auto requestAndSize = parseRequest(requestParser, cast(string) initialData);
+        HttpRequest request = requestAndSize[0];
         logger.debugF!"Parsed first %d bytes as the HTTP request."(requestAndSize[1]);
         
         // We got a valid request, so prepare the context.
-        HttpRequestContext ctx = HttpRequestContext(requestAndSize[0], HttpResponse());
-        ctx.clientSocket = clientSocket;
-        ctx.server = server;
 
-        ctx.request.receiveBuffer = receiveBuffer;
-        const int bytesReceived = initialReadResult.count;
+        const int bytesReceived = cast(int) initialReadData.length;
         const int bytesRead = requestAndSize[1];
         if (bytesReceived > bytesRead) {
-            ctx.request.inputStream = inputStreamObjectFor(concatInputStreamFor(
-                arrayInputStreamFor(receiveBuffer[bytesRead .. bytesReceived]),
-                bufferedInputStreamFor(inputStream)
-            ));
+            request.inputRange = chain([receiveBuffer[bytesRead .. bytesReceived]], inputRange).inputRangeObject;
         } else {
-            ctx.request.inputStream = inputStreamObjectFor(bufferedInputStreamFor(inputStream));
+            request.inputRange = inputRange.inputRangeObject;
         }
-        ctx.request.remoteAddress = clientSocket.remoteAddress;
+        request.remoteAddress = clientSocket.remoteAddress;
         
-        ctx.response.outputStream = outputStreamObjectFor(outputStream);
-        ctx.response.headers["Connection"] = "close";
+        HttpResponse response;
+        response.outputRange = cast(OutputRange!(ubyte[])) outputRange.outputRangeObject;
+        response.headers.add("Connection", "close");
         foreach (header, value; server.config.defaultHeaders) {
-            ctx.response.addHeader(header, value);
+            response.headers.add(header, value);
         }
-
-        logger.traceF!"Preparing HttpRequestContext using input stream\n%s\nand output stream\n%s"(
-            ctx.request.inputStream,
-            ctx.response.outputStream
-        );
-        return Optional!HttpRequestContext.of(ctx);
+        return ResultType.of(tuple(request, response));
     } catch (Exception e) {
         logger.warnF!"Failed to parse HTTP request: %s"(e.msg);
-        return Optional!HttpRequestContext.empty();
+        return ResultType.empty;
     }
 }

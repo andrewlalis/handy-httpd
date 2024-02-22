@@ -4,10 +4,8 @@
  */
 module handy_httpd.handlers.file_resolving_handler;
 
-import handy_httpd.components.handler;
-import handy_httpd.components.request;
-import handy_httpd.components.response;
 import handy_httpd.components.responses;
+import http_primitives;
 import slf4d;
 
 /** 
@@ -83,27 +81,27 @@ class FileResolvingHandler : HttpRequestHandler {
      * Params:
      *   ctx = The request context.
      */
-    void handle(ref HttpRequestContext ctx) {
+    void handle(ref HttpRequest request, ref HttpResponse response) {
         import std.file : isFile, isDir;
 
         auto log = getLogger();
-        log.debugF!"Resolving file for URL %s"(ctx.request.url);
-        string path = sanitizeRequestPath(ctx.request.url);
-        log.traceF!"Sanitized URL %s to path %s"(ctx.request.url, path);
+        log.debugF!"Resolving file for URL %s"(request.url);
+        string path = sanitizeRequestPath(request.url);
+        log.traceF!"Sanitized URL %s to path %s"(request.url, path);
         if (path !is null) {
             if (isFile(path)) {
                 log.debugF!"Sending file response from path %s"(path);
-                ctx.response.fileResponse(path, getMimeType(path));
+                response.fileResponse(path, getMimeType(path));
             } else if (isDir(path)) {
                 log.debugF!"Handling request for directory %s"(path);
-                handleDirRequest(ctx.response, path, ctx.request.url);
+                handleDirRequest(response, path, request.url);
             } else {
                 log.debugF!"Path %s is not a file or directory."(path);
-                notFoundResponse(ctx.response);
+                notFoundResponse(response);
             }
         } else {
-            log.debugF!"Could not resolve file for url %s."(ctx.request.url);
-            notFoundResponse(ctx.response);
+            log.debugF!"Could not resolve file for url %s."(request.url);
+            notFoundResponse(response);
         }
     }
 

@@ -5,9 +5,7 @@
  */
 module handy_httpd.handlers.path_handler;
 
-import handy_httpd.components.handler;
-import handy_httpd.components.request;
-import handy_httpd.components.response;
+import http_primitives;
 import path_matcher;
 import slf4d;
 import std.typecons;
@@ -48,7 +46,9 @@ class PathHandler : HttpRequestHandler {
      */
     this() {
         this.mappings = [];
-        this.notFoundHandler = toHandler((ref ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
+        this.notFoundHandler = wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+            resp.status = HttpStatus.NOT_FOUND;
+        });
     }
 
     /**
@@ -72,7 +72,7 @@ class PathHandler : HttpRequestHandler {
     }
     ///
     PathHandler addMapping(Method[] methods, string pattern, HttpRequestHandler handler) {
-        this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), [pattern]);
+        this.mappings ~= HandlerMapping(handler, createMethodMask(methods), [pattern]);
         return this;
     }
     ///
@@ -82,22 +82,22 @@ class PathHandler : HttpRequestHandler {
     }
     ///
     PathHandler addMapping(Method[] methods, string[] patterns, HttpRequestHandler handler) {
-        this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), patterns.idup);
+        this.mappings ~= HandlerMapping(handler, createMethodMask(methods), patterns.idup);
         return this;
     }
     ///
     PathHandler addMapping(string pattern, HttpRequestHandler handler) {
-        this.mappings ~= HandlerMapping(handler, methodMaskFromAll(), [pattern]);
+        this.mappings ~= HandlerMapping(handler, ushort.max, [pattern]);
         return this;
     }
     ///
-    PathHandler addMapping(Method method, string pattern, HttpRequestHandlerFunction func) {
-        this.mappings ~= HandlerMapping(toHandler(func), method, [pattern]);
+    PathHandler addMapping(F)(Method method, string pattern, F func) if (isHttpRequestHandler!F) {
+        this.mappings ~= HandlerMapping(wrapHandler(func), method, [pattern]);
         return this;
     }
     ///
-    PathHandler addMapping(string pattern, HttpRequestHandlerFunction func) {
-        this.mappings ~= HandlerMapping(toHandler(func), methodMaskFromAll(), [pattern]);
+    PathHandler addMapping(F)(string pattern, F func) if (isHttpRequestHandler!F) {
+        this.mappings ~= HandlerMapping(wrapHandler(func), methodMaskFromAll(), [pattern]);
         return this;
     }
     
@@ -121,12 +121,12 @@ class PathHandler : HttpRequestHandler {
      * Params:
      *   ctx = The request context.
      */
-    void handle(ref HttpRequestContext ctx) {
-        HttpRequestHandler mappedHandler = findMappedHandler(ctx.request);
+    void handle(ref HttpRequest request, ref HttpResponse response) {
+        HttpRequestHandler mappedHandler = findMappedHandler(request);
         if (mappedHandler !is null) {
-            mappedHandler.handle(ctx);
+            mappedHandler.handle(request, response);
         } else {
-            notFoundHandler.handle(ctx);
+            notFoundHandler.handle(request, response);
         }
     }
 
@@ -150,7 +150,8 @@ class PathHandler : HttpRequestHandler {
                             pattern
                         );
                         foreach (PathParam param; result.pathParams) {
-                            request.pathParams[param.name] = param.value;
+                            // request.pathParams[param.name] = param.value;
+                            // TODO: Add some sort of request context data we can write extra stuff to.
                         }
                         return mapping.handler;
                     }

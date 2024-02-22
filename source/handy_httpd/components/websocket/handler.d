@@ -4,7 +4,7 @@
  */
 module handy_httpd.components.websocket.handler;
 
-import handy_httpd.components.handler : HttpRequestHandler, HttpRequestContext;
+import http_primitives;
 import slf4d;
 
 /**
@@ -188,9 +188,6 @@ class WebSocketConnection {
  * websocket connection handshakes.
  */
 class WebSocketHandler : HttpRequestHandler {
-    import handy_httpd.components.request : Method;
-    import handy_httpd.components.response : HttpStatus;
-
     private WebSocketMessageHandler messageHandler;
 
     /**
@@ -212,10 +209,10 @@ class WebSocketHandler : HttpRequestHandler {
      * Params:
      *   ctx = The request context.
      */
-    void handle(ref HttpRequestContext ctx) {
-        if (!this.verifyRequest(ctx)) return;
-        this.sendSwitchingProtocolsResponse(ctx);
-        ctx.server.getWebSocketManager().registerConnection(ctx.clientSocket, this.messageHandler);
+    void handle(ref HttpRequest request, ref HttpResponse response) {
+        if (!this.verifyRequest(request, response)) return;
+        this.sendSwitchingProtocolsResponse(request, response);
+        // ctx.server.getWebSocketManager().registerConnection(null, this.messageHandler);
     }
 
     /**
@@ -226,23 +223,24 @@ class WebSocketHandler : HttpRequestHandler {
      * created, or false if we should reject. A response message will already
      * be written in that case.
      */
-    private bool verifyRequest(ref HttpRequestContext ctx) {
-        string origin = ctx.request.headers.getFirst("origin").orElse(null);
+    private bool verifyRequest(ref HttpRequest request, ref HttpResponse response) {
+        string origin = request.headers.getFirst("origin").orElse(null);
         // TODO: Verify correct origin.
-        if (ctx.request.method != Method.GET) {
-            ctx.response.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
-            ctx.response.writeBodyString("Only GET requests are allowed.");
+        if (request.method != Method.GET) {
+            response.status = HttpStatus.METHOD_NOT_ALLOWED;
+            response.writeBodyString("Only GET requests are allowed.");
             return false;
         }
-        string key = ctx.request.headers.getFirst("Sec-WebSocket-Key").orElse(null);
+        string key = request.headers.getFirst("Sec-WebSocket-Key").orElse(null);
         if (key is null) {
-            ctx.response.setStatus(HttpStatus.BAD_REQUEST);
-            ctx.response.writeBodyString("Missing Sec-WebSocket-Key header.");
+            response.status = HttpStatus.BAD_REQUEST;
+            response.writeBodyString("Missing Sec-WebSocket-Key header.");
             return false;
         }
-        if (!ctx.server.config.enableWebSockets) {
-            ctx.response.setStatus(HttpStatus.SERVICE_UNAVAILABLE);
-            ctx.response.writeBodyString("This server does not support websockets.");
+        bool supportsWebsockets = true; // TODO: Check if server supports websockets!
+        if (!supportsWebsockets) {
+            response.status = HttpStatus.SERVICE_UNAVAILABLE;
+            response.writeBodyString("This server does not support websockets.");
             return false;
         }
         return true;
@@ -255,13 +253,13 @@ class WebSocketHandler : HttpRequestHandler {
      * Params:
      *   ctx = The request context to send the response to.
      */
-    private void sendSwitchingProtocolsResponse(ref HttpRequestContext ctx) {
-        string key = ctx.request.headers.getFirst("Sec-WebSocket-Key").orElseThrow();
-        ctx.response.setStatus(HttpStatus.SWITCHING_PROTOCOLS);
-        ctx.response.addHeader("Upgrade", "websocket");
-        ctx.response.addHeader("Connection", "Upgrade");
-        ctx.response.addHeader("Sec-WebSocket-Accept", createSecWebSocketAcceptHeader(key));
-        ctx.response.flushHeaders();
+    private void sendSwitchingProtocolsResponse(ref HttpRequest request, ref HttpResponse response) {
+        string key = request.headers.getFirst("Sec-WebSocket-Key").orElseThrow();
+        response.status = HttpStatus.SWITCHING_PROTOCOLS;
+        response.headers.add("Upgrade", "websocket");
+        response.headers.add("Connection", "Upgrade");
+        response.headers.add("Sec-WebSocket-Accept", createSecWebSocketAcceptHeader(key));
+        response.flushHeaders();
     }
 }
 

@@ -5,9 +5,7 @@
  */
 module handy_httpd.handlers.profiling_handler;
 
-import handy_httpd.components.handler;
-import handy_httpd.components.request;
-
+import http_primitives;
 import std.algorithm;
 import std.datetime;
 
@@ -56,18 +54,18 @@ class ProfilingHandler : HttpRequestHandler {
         this.dataHandler = dataHandler;
     }
 
-    public void handle(ref HttpRequestContext ctx) {
+    public void handle(ref HttpRequest request, ref HttpResponse response) {
         import std.datetime.stopwatch;
         StopWatch sw = StopWatch(AutoStart.yes);
         try {
-            this.handler.handle(ctx);
+            this.handler.handle(request, response);
         } finally {
             sw.stop();
             const RequestInfo info = RequestInfo(
                 Clock.currTime(),
                 sw.peek(),
-                ctx.request.method,
-                ctx.response.status.code
+                request.method,
+                response.status.code
             );
             this.dataHandler.handle(info);
         }
@@ -121,7 +119,7 @@ class LoggingProfilingDataHandler : ProfilingDataHandler {
     void handle(const ref RequestInfo info) {
         logF!"Handled request: Method=%s, Duration=%dms, Response=%d"(
             emitLevel,
-            methodToName(info.requestMethod),
+            getMethodName(info.requestMethod),
             info.requestDuration.total!"msecs",
             info.responseStatus
         );
@@ -191,7 +189,7 @@ class CsvProfilingDataHandler : ProfilingDataHandler {
         this.csvFile.writefln!"%s, %d, %s, %d"(
             info.timestamp.toISOExtString(),
             info.requestDuration.total!"hnsecs",
-            methodToName(info.requestMethod),
+            getMethodName(info.requestMethod),
             info.responseStatus
         );
         this.csvFile.flush();
