@@ -76,9 +76,9 @@ class FilterChain {
             this(int id) {
                 this.id = id;
             }
-            void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
-                ctx.response.addHeader("filter-" ~ id.to!string, id.to!string);
-                filterChain.doFilter(ctx);
+            void apply(ref HttpRequest req, ref HttpResponse resp, FilterChain filterChain) {
+                resp.headers.add("filter-" ~ id.to!string, id.to!string);
+                filterChain.doFilter(req, resp);
             }
         }
 
@@ -147,33 +147,35 @@ private class HandlerFilter : HttpRequestFilter {
 }
 
 unittest {
-    import handy_httpd.util.builders;
-    import handy_httpd.components.request;
+    import http_primitives;
+    import handy_httpd.components.builders;
     import slf4d;
 
     // Test that when applied, it calls the handler's handle() method, and then continues the filter chain.
     class TestingFilter : HttpRequestFilter {
         uint callCount;
-        void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
+        void apply(ref HttpRequest req, ref HttpResponse resp, FilterChain filterChain) {
             this.callCount++;
-            filterChain.doFilter(ctx);
+            filterChain.doFilter(req, resp);
         }
     }
 
     class TestingHandler : HttpRequestHandler {
         uint callCount;
-        void handle(ref HttpRequestContext ctx) {
+        void handle(ref HttpRequest req, ref HttpResponse resp) {
             this.callCount++;
         }
     }
 
-    auto ctx = buildCtxForRequest(Method.GET, "/data");
+
     auto testingHandler = new TestingHandler();
     auto testingFilter = new TestingFilter();
     auto handlerFilter = new HandlerFilter(testingHandler);
     HttpRequestFilter[] filters = cast(HttpRequestFilter[])[handlerFilter, testingFilter];
     auto filterChain = FilterChain.build(filters);
-    filterChain.doFilter(ctx);
+    HttpRequest req = buildRequest(Method.GET, "/test");
+    HttpResponse resp = buildDiscardingResponse();
+    filterChain.doFilter(req, resp);
     // Assert that both the handler filter, and the subsequent testing filter were called.
     assert(testingHandler.callCount == 1);
     assert(testingFilter.callCount == 1);

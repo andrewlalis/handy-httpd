@@ -153,18 +153,19 @@ class LoggingProfilingDataHandler : ProfilingDataHandler {
 }
 
 unittest {
-    import handy_httpd.util.builders;
-    import handy_httpd.components.response;
+    import handy_httpd.components.builders;
+    import http_primitives;
     import slf4d;
     import slf4d.test;
     withTestingProvider((provider) {
         LoggingProfilingDataHandler dataHandler = new LoggingProfilingDataHandler();
-        ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
-            ctx.response.status = HttpStatus.OK;
+        ProfilingHandler handler = new ProfilingHandler(wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+            resp.status = HttpStatus.OK;
         }), dataHandler);
         for (int i = 0; i < 10_000; i++) {
-            auto ctx = buildCtxForRequest(Method.GET, "/data");
-            handler.handle(ctx);
+            HttpRequest req = buildRequest(Method.GET, "/data");
+            HttpResponse resp = buildDiscardingResponse();
+            handler.handle(req, resp);
         }
         assert(provider.messageCount == 10_000 + (10_000 / 100));
     });
@@ -201,23 +202,22 @@ class CsvProfilingDataHandler : ProfilingDataHandler {
 }
 
 unittest {
-    import handy_httpd.util.builders;
-    import handy_httpd.components.response;
+    import handy_httpd.components.builders;
+    import http_primitives;
     import std.file;
-    import std.random;
     import std.stdio;
     string csvFile = "tmp-CsvProfilingDataHandler.csv";
     CsvProfilingDataHandler dataHandler = new CsvProfilingDataHandler(csvFile);
     scope(exit) {
         std.file.remove(csvFile);
     }
-    ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
-        ctx.response.status = HttpStatus.OK;
+    ProfilingHandler handler = new ProfilingHandler(wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+        resp.status = HttpStatus.OK;
     }), dataHandler);
     for (int i = 0; i < 1000; i++) {
-        Method method = methodFromIndex(uniform(0, 10));
-        auto ctx = buildCtxForRequest(method, "/data");
-        handler.handle(ctx);
+        HttpRequest req = buildRequest(Method.GET, "/data");
+        HttpResponse resp = buildDiscardingResponse();
+        handler.handle(req, resp);
     }
     dataHandler.close();
 

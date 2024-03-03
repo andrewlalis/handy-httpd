@@ -9,6 +9,7 @@ import std.typecons;
 
 import handy_httpd.server : HttpServer;
 import handy_httpd.components.parse_utils : Msg, receiveRequest;
+import handy_httpd.components.context;
 import http_primitives;
 import httparsed : MsgParser;
 import slf4d;
@@ -58,6 +59,7 @@ public void handleClient(
     Tuple!(HttpRequest, HttpResponse) ctx = optionalCtx.value;
     HttpRequest request = ctx[0];
     HttpResponse response = ctx[1];
+    REQUEST_CONTEXT.server = server;
     logger.infoF!"Request: Method=%s, URL=\"%s\""(request.method, request.url);
     try {
         server.getHandler.handle(request, response);
