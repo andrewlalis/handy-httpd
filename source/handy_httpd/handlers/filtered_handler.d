@@ -8,6 +8,7 @@ import std.algorithm;
 import std.array;
 
 import handy_httpd.components.handler;
+import http_primitives;
 
 /** 
  * An ordered, singly-linked list of filters to apply to a request context.
@@ -21,9 +22,9 @@ class FilterChain {
      * Params:
      *   ctx = The request context.
      */
-    void doFilter(ref HttpRequestContext ctx) {
+    void doFilter(ref HttpRequest request, ref HttpResponse response) {
         if (this.next !is null) {
-            filter.apply(ctx, this.next);
+            filter.apply(request, response, this.next);
         }
     }
 
@@ -75,9 +76,9 @@ class FilterChain {
             this(int id) {
                 this.id = id;
             }
-            void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
-                ctx.response.addHeader("filter-" ~ id.to!string, id.to!string);
-                filterChain.doFilter(ctx);
+            void apply(ref HttpRequest req, ref HttpResponse resp, FilterChain filterChain) {
+                resp.headers.add("filter-" ~ id.to!string, id.to!string);
+                filterChain.doFilter(req, resp);
             }
         }
 
@@ -95,7 +96,7 @@ class FilterChain {
 }
 
 private class FilterChainEnd : FilterChain {
-    override void doFilter(ref HttpRequestContext ctx) {} // Don't do anything.
+    override void doFilter(ref HttpRequest request, ref HttpResponse response) {} // Don't do anything.
 }
 
 /** 
@@ -106,13 +107,13 @@ private class FilterChainEnd : FilterChain {
  * is flushed to the client.
  */
 interface HttpRequestFilter {
-    void apply(ref HttpRequestContext ctx, FilterChain filterChain);
+    void apply(ref HttpRequest request, ref HttpResponse response, FilterChain filterChain);
 }
 
 /** 
  * An alias for a function that can be used as a request filter.
  */
-alias HttpRequestFilterFunction = void function (ref HttpRequestContext, FilterChain);
+alias HttpRequestFilterFunction = void function (ref HttpRequest request, ref HttpResponse response, FilterChain);
 
 /** 
  * Constructs a new request filter object from the given function.
@@ -122,8 +123,8 @@ alias HttpRequestFilterFunction = void function (ref HttpRequestContext, FilterC
  */
 HttpRequestFilter toFilter(HttpRequestFilterFunction fn) {
     return new class HttpRequestFilter {
-        void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
-            fn(ctx, filterChain);
+        void apply(ref HttpRequest request, ref HttpResponse response, FilterChain filterChain) {
+            fn(request, response, filterChain);
         }
     };
 }
@@ -139,40 +140,42 @@ private class HandlerFilter : HttpRequestFilter {
         this.handler = handler;
     }
 
-    void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
-        handler.handle(ctx);
-        filterChain.doFilter(ctx);
+    void apply(ref HttpRequest request, ref HttpResponse response, FilterChain filterChain) {
+        handler.handle(request, response);
+        filterChain.doFilter(request, response);
     }
 }
 
 unittest {
-    import handy_httpd.util.builders;
-    import handy_httpd.components.request;
+    import http_primitives;
+    import handy_httpd.components.builders;
     import slf4d;
 
     // Test that when applied, it calls the handler's handle() method, and then continues the filter chain.
     class TestingFilter : HttpRequestFilter {
         uint callCount;
-        void apply(ref HttpRequestContext ctx, FilterChain filterChain) {
+        void apply(ref HttpRequest req, ref HttpResponse resp, FilterChain filterChain) {
             this.callCount++;
-            filterChain.doFilter(ctx);
+            filterChain.doFilter(req, resp);
         }
     }
 
     class TestingHandler : HttpRequestHandler {
         uint callCount;
-        void handle(ref HttpRequestContext ctx) {
+        void handle(ref HttpRequest req, ref HttpResponse resp) {
             this.callCount++;
         }
     }
 
-    auto ctx = buildCtxForRequest(Method.GET, "/data");
+
     auto testingHandler = new TestingHandler();
     auto testingFilter = new TestingFilter();
     auto handlerFilter = new HandlerFilter(testingHandler);
     HttpRequestFilter[] filters = cast(HttpRequestFilter[])[handlerFilter, testingFilter];
     auto filterChain = FilterChain.build(filters);
-    filterChain.doFilter(ctx);
+    HttpRequest req = buildRequest(Method.GET, "/test");
+    HttpResponse resp = buildDiscardingResponse();
+    filterChain.doFilter(req, resp);
     // Assert that both the handler filter, and the subsequent testing filter were called.
     assert(testingHandler.callCount == 1);
     assert(testingFilter.callCount == 1);
@@ -222,7 +225,7 @@ class FilteredRequestHandler : HttpRequestHandler {
         ));
     }
 
-    void handle(ref HttpRequestContext ctx) {
-        filterChain.doFilter(ctx);
+    void handle(ref HttpRequest request, ref HttpResponse response) {
+        filterChain.doFilter(request, response);
     }
 }

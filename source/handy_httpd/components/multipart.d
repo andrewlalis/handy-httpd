@@ -5,9 +5,7 @@
 module handy_httpd.components.multipart;
 
 import handy_httpd.components.handler : HttpStatusException;
-import handy_httpd.components.response : HttpStatus;
-import handy_httpd.components.request;
-import handy_httpd.components.optional;
+import http_primitives;
 import slf4d;
 
 /**
@@ -99,7 +97,7 @@ MultipartFormData readBodyAsMultipartFormData(ref HttpRequest request, bool allo
         .orElseThrow(() => new MultipartFormatException("Missing multipart boundary definition."));
     string boundary = contentType[boundaryIdx + "boundary=".length .. $];
     debugF!"Reading multipart/form-data request body with boundary=%s"(boundary);
-    string content = request.readBodyAsString(allowInfiniteRead);
+    string content = request.readBodyAsString();
     return parseMultipartFormData(content, boundary);
 }
 

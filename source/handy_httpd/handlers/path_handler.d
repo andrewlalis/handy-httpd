@@ -5,9 +5,8 @@
  */
 module handy_httpd.handlers.path_handler;
 
-import handy_httpd.components.handler;
-import handy_httpd.components.request;
-import handy_httpd.components.response;
+import handy_httpd.components.context;
+import http_primitives;
 import path_matcher;
 import slf4d;
 import std.typecons;
@@ -48,7 +47,9 @@ class PathHandler : HttpRequestHandler {
      */
     this() {
         this.mappings = [];
-        this.notFoundHandler = toHandler((ref ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
+        this.notFoundHandler = wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+            resp.status = HttpStatus.NOT_FOUND;
+        });
     }
 
     /**
@@ -72,7 +73,7 @@ class PathHandler : HttpRequestHandler {
     }
     ///
     PathHandler addMapping(Method[] methods, string pattern, HttpRequestHandler handler) {
-        this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), [pattern]);
+        this.mappings ~= HandlerMapping(handler, createMethodMask(methods), [pattern]);
         return this;
     }
     ///
@@ -82,24 +83,24 @@ class PathHandler : HttpRequestHandler {
     }
     ///
     PathHandler addMapping(Method[] methods, string[] patterns, HttpRequestHandler handler) {
-        this.mappings ~= HandlerMapping(handler, methodMaskFromMethods(methods), patterns.idup);
+        this.mappings ~= HandlerMapping(handler, createMethodMask(methods), patterns.idup);
         return this;
     }
     ///
     PathHandler addMapping(string pattern, HttpRequestHandler handler) {
-        this.mappings ~= HandlerMapping(handler, methodMaskFromAll(), [pattern]);
+        this.mappings ~= HandlerMapping(handler, ushort.max, [pattern]);
         return this;
     }
-    ///
-    PathHandler addMapping(Method method, string pattern, HttpRequestHandlerFunction func) {
-        this.mappings ~= HandlerMapping(toHandler(func), method, [pattern]);
-        return this;
-    }
-    ///
-    PathHandler addMapping(string pattern, HttpRequestHandlerFunction func) {
-        this.mappings ~= HandlerMapping(toHandler(func), methodMaskFromAll(), [pattern]);
-        return this;
-    }
+    // ///
+    // PathHandler addMapping(F)(Method method, string pattern, F func) if (isHttpRequestHandler!F) {
+    //     this.mappings ~= HandlerMapping(wrapHandler(func), method, [pattern]);
+    //     return this;
+    // }
+    // ///
+    // PathHandler addMapping(F)(string pattern, F func) if (isHttpRequestHandler!F) {
+    //     this.mappings ~= HandlerMapping(wrapHandler(func), methodMaskFromAll(), [pattern]);
+    //     return this;
+    // }
     
     /**
      * Sets the handler that will be called for requests that don't match any
@@ -121,12 +122,14 @@ class PathHandler : HttpRequestHandler {
      * Params:
      *   ctx = The request context.
      */
-    void handle(ref HttpRequestContext ctx) {
-        HttpRequestHandler mappedHandler = findMappedHandler(ctx.request);
+    void handle(ref HttpRequest request, ref HttpResponse response) {
+        // Clear any path params currently in the request context.
+        REQUEST_CONTEXT.pathParams.clear();
+        HttpRequestHandler mappedHandler = findMappedHandler(request);
         if (mappedHandler !is null) {
-            mappedHandler.handle(ctx);
+            mappedHandler.handle(request, response);
         } else {
-            notFoundHandler.handle(ctx);
+            notFoundHandler.handle(request, response);
         }
     }
 
@@ -150,7 +153,7 @@ class PathHandler : HttpRequestHandler {
                             pattern
                         );
                         foreach (PathParam param; result.pathParams) {
-                            request.pathParams[param.name] = param.value;
+                            REQUEST_CONTEXT.pathParams.add(param.name, param.value);
                         }
                         return mapping.handler;
                     }
@@ -164,38 +167,48 @@ class PathHandler : HttpRequestHandler {
 
 // Test PathHandler.setNotFoundHandler
 unittest {
+    import http_primitives;
     import std.exception;
     auto handler = new PathHandler();
     assertThrown!Exception(handler.setNotFoundHandler(null));
-    auto notFoundHandler = toHandler((ref ctx) {
-        ctx.response.status = HttpStatus.NOT_FOUND;
+    auto notFoundHandler = wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+        resp.status = HttpStatus.NOT_FOUND;
     });
     assertNotThrown!Exception(handler.setNotFoundHandler(notFoundHandler));
 }
 
 // Test PathHandler.handle
 unittest {
-    import handy_httpd.util.builders;
-    import handy_httpd.components.responses;
+    import handy_httpd.components.builders;
+    import handy_httpd.components.context;
+    import http_primitives.util.optional;
+    import std.conv;
+    HttpRequestHandler okResponder = wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+        resp.status = HttpStatus.OK;
+    });
     PathHandler handler = new PathHandler()
-        .addMapping(Method.GET, "/home", (ref ctx) {ctx.response.okResponse();})
-        .addMapping(Method.GET, "/users", (ref ctx) {ctx.response.okResponse();})
-        .addMapping(Method.GET, "/users/:id:ulong", (ref ctx) {ctx.response.okResponse();})
-        .addMapping(Method.GET, "/api/*", (ref ctx) {ctx.response.okResponse();});
+        .addMapping(Method.GET, "/home", okResponder)
+        .addMapping(Method.GET, "/users", okResponder)
+        .addMapping(Method.GET, "/users/:id:ulong", okResponder)
+        .addMapping(Method.GET, "/api/*", okResponder);
 
-    HttpRequestContext generateHandledCtx(Method method, string url) {
-        auto ctx = buildCtxForRequest(method, url);
-        handler.handle(ctx);
-        return ctx;
+    RequestResponsePair generateHandledResponse(Method method, string url) {
+        HttpRequest request = buildRequest(method, url);
+        HttpResponse response = buildDiscardingResponse();
+        handler.handle(request, response);
+        return RequestResponsePair(request, response);
     }
 
-    assert(generateHandledCtx(Method.GET, "/home").response.status == HttpStatus.OK);
-    assert(generateHandledCtx(Method.GET, "/home-not-exists").response.status == HttpStatus.NOT_FOUND);
-    assert(generateHandledCtx(Method.GET, "/users").response.status == HttpStatus.OK);
-    assert(generateHandledCtx(Method.GET, "/users/34").response.status == HttpStatus.OK);
-    assert(generateHandledCtx(Method.GET, "/users/34").request.getPathParamAs!ulong("id") == 34);
-    assert(generateHandledCtx(Method.GET, "/api/test").response.status == HttpStatus.OK);
-    assert(generateHandledCtx(Method.GET, "/api/test/bleh").response.status == HttpStatus.NOT_FOUND);
-    assert(generateHandledCtx(Method.GET, "/api").response.status == HttpStatus.NOT_FOUND);
-    assert(generateHandledCtx(Method.GET, "/").response.status == HttpStatus.NOT_FOUND);
+    assert(generateHandledResponse(Method.GET, "/home").response.status == HttpStatus.OK);
+    assert(generateHandledResponse(Method.GET, "/home-not-exists").response.status == HttpStatus.NOT_FOUND);
+    assert(generateHandledResponse(Method.GET, "/users").response.status == HttpStatus.OK);
+    assert(generateHandledResponse(Method.GET, "/users/34").response.status == HttpStatus.OK);
+
+    assert(generateHandledResponse(Method.GET, "/users/34").response.status == HttpStatus.OK);
+    assert(REQUEST_CONTEXT.pathParams.getFirst("id").mapIfPresent!(to!ulong).orElse(0L) == 34);
+
+    assert(generateHandledResponse(Method.GET, "/api/test").response.status == HttpStatus.OK);
+    assert(generateHandledResponse(Method.GET, "/api/test/bleh").response.status == HttpStatus.NOT_FOUND);
+    assert(generateHandledResponse(Method.GET, "/api").response.status == HttpStatus.NOT_FOUND);
+    assert(generateHandledResponse(Method.GET, "/").response.status == HttpStatus.NOT_FOUND);
 }

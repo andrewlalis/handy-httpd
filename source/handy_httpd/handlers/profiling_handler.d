@@ -5,9 +5,7 @@
  */
 module handy_httpd.handlers.profiling_handler;
 
-import handy_httpd.components.handler;
-import handy_httpd.components.request;
-
+import http_primitives;
 import std.algorithm;
 import std.datetime;
 
@@ -56,18 +54,18 @@ class ProfilingHandler : HttpRequestHandler {
         this.dataHandler = dataHandler;
     }
 
-    public void handle(ref HttpRequestContext ctx) {
+    public void handle(ref HttpRequest request, ref HttpResponse response) {
         import std.datetime.stopwatch;
         StopWatch sw = StopWatch(AutoStart.yes);
         try {
-            this.handler.handle(ctx);
+            this.handler.handle(request, response);
         } finally {
             sw.stop();
             const RequestInfo info = RequestInfo(
                 Clock.currTime(),
                 sw.peek(),
-                ctx.request.method,
-                ctx.response.status.code
+                request.method,
+                response.status.code
             );
             this.dataHandler.handle(info);
         }
@@ -121,7 +119,7 @@ class LoggingProfilingDataHandler : ProfilingDataHandler {
     void handle(const ref RequestInfo info) {
         logF!"Handled request: Method=%s, Duration=%dms, Response=%d"(
             emitLevel,
-            methodToName(info.requestMethod),
+            getMethodName(info.requestMethod),
             info.requestDuration.total!"msecs",
             info.responseStatus
         );
@@ -155,18 +153,19 @@ class LoggingProfilingDataHandler : ProfilingDataHandler {
 }
 
 unittest {
-    import handy_httpd.util.builders;
-    import handy_httpd.components.response;
+    import handy_httpd.components.builders;
+    import http_primitives;
     import slf4d;
     import slf4d.test;
     withTestingProvider((provider) {
         LoggingProfilingDataHandler dataHandler = new LoggingProfilingDataHandler();
-        ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
-            ctx.response.status = HttpStatus.OK;
+        ProfilingHandler handler = new ProfilingHandler(wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+            resp.status = HttpStatus.OK;
         }), dataHandler);
         for (int i = 0; i < 10_000; i++) {
-            auto ctx = buildCtxForRequest(Method.GET, "/data");
-            handler.handle(ctx);
+            HttpRequest req = buildRequest(Method.GET, "/data");
+            HttpResponse resp = buildDiscardingResponse();
+            handler.handle(req, resp);
         }
         assert(provider.messageCount == 10_000 + (10_000 / 100));
     });
@@ -191,7 +190,7 @@ class CsvProfilingDataHandler : ProfilingDataHandler {
         this.csvFile.writefln!"%s, %d, %s, %d"(
             info.timestamp.toISOExtString(),
             info.requestDuration.total!"hnsecs",
-            methodToName(info.requestMethod),
+            getMethodName(info.requestMethod),
             info.responseStatus
         );
         this.csvFile.flush();
@@ -203,23 +202,22 @@ class CsvProfilingDataHandler : ProfilingDataHandler {
 }
 
 unittest {
-    import handy_httpd.util.builders;
-    import handy_httpd.components.response;
+    import handy_httpd.components.builders;
+    import http_primitives;
     import std.file;
-    import std.random;
     import std.stdio;
     string csvFile = "tmp-CsvProfilingDataHandler.csv";
     CsvProfilingDataHandler dataHandler = new CsvProfilingDataHandler(csvFile);
     scope(exit) {
         std.file.remove(csvFile);
     }
-    ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
-        ctx.response.status = HttpStatus.OK;
+    ProfilingHandler handler = new ProfilingHandler(wrapHandler((ref HttpRequest req, ref HttpResponse resp) {
+        resp.status = HttpStatus.OK;
     }), dataHandler);
     for (int i = 0; i < 1000; i++) {
-        Method method = methodFromIndex(uniform(0, 10));
-        auto ctx = buildCtxForRequest(method, "/data");
-        handler.handle(ctx);
+        HttpRequest req = buildRequest(Method.GET, "/data");
+        HttpResponse resp = buildDiscardingResponse();
+        handler.handle(req, resp);
     }
     dataHandler.close();
 
