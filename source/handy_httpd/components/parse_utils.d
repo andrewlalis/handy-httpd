@@ -145,7 +145,7 @@ public Optional!(Tuple!(HttpRequest, HttpResponse)) receiveRequest(I, O)(
     if (inputRange.empty) return ResultType.empty;
     ubyte[] initialReadData = inputRange.front();
 
-    logger.debugF!"Received %d bytes from the client."(initialReadData.length);
+    logger.debugF!"Received %d bytes from the client.\n%s\n"(initialReadData.length, cast(string) initialReadData);
     if (initialReadData.length == 0) return ResultType.empty; // Skip if we didn't receive valid data.
 
     // We store an immutable copy of the data initially received, so we can
@@ -166,12 +166,12 @@ public Optional!(Tuple!(HttpRequest, HttpResponse)) receiveRequest(I, O)(
         if (bytesReceived > bytesRead) {
             request.inputRange = chain([receiveBuffer[bytesRead .. bytesReceived]], inputRange).inputRangeObject;
         } else {
-            request.inputRange = inputRange.inputRangeObject;
+            request.inputRange = new InputRangeObject!(typeof(inputRange))(inputRange);
         }
         request.remoteAddress = clientSocket.remoteAddress;
         
         HttpResponse response;
-        response.outputRange = cast(OutputRange!(ubyte[])) outputRange.outputRangeObject;
+        response.outputRange = new OutputRangeObject!(typeof(outputRange), ubyte[])(outputRange);
         response.headers.add("Connection", "close");
         foreach (header, value; server.config.defaultHeaders) {
             response.headers.add(header, value);

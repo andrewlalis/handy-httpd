@@ -4,6 +4,7 @@
  */
 module handy_httpd.components.websocket.handler;
 
+import handy_httpd.components.socket_range;
 import http_primitives;
 import slf4d;
 
@@ -93,7 +94,6 @@ class WebSocketConnection {
     import std.uuid : UUID, randomUUID;
     import std.socket : Socket, SocketShutdown;
     import handy_httpd.components.websocket.frame;
-    import streams : SocketOutputStream, byteArrayOutputStream, dataOutputStreamFor;
 
     /**
      * The internal id Handy-Httpd has assigned to this connection.
@@ -131,7 +131,7 @@ class WebSocketConnection {
      */
     void sendTextMessage(string text) {
         throwIfClosed();
-        sendWebSocketTextFrame(SocketOutputStream(this.socket), text);
+        sendWebSocketTextFrame(SocketOutputRange(this.socket), text);
     }
 
     /**
@@ -141,7 +141,7 @@ class WebSocketConnection {
      */
     void sendBinaryMessage(ubyte[] bytes) {
         throwIfClosed();
-        sendWebSocketBinaryFrame(SocketOutputStream(this.socket), bytes);
+        sendWebSocketBinaryFrame(SocketOutputRange(this.socket), bytes);
     }
 
     /**
@@ -153,7 +153,7 @@ class WebSocketConnection {
      */
     void sendCloseMessage(WebSocketCloseStatusCode status, string message) {
         throwIfClosed();
-        sendWebSocketCloseFrame(SocketOutputStream(this.socket), status, message);
+        sendWebSocketCloseFrame(SocketOutputRange(this.socket), status, message);
     }
 
     /**

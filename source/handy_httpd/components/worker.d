@@ -10,6 +10,7 @@ import std.typecons;
 import handy_httpd.server : HttpServer;
 import handy_httpd.components.parse_utils : Msg, receiveRequest;
 import handy_httpd.components.context;
+import handy_httpd.components.socket_range;
 import http_primitives;
 import httparsed : MsgParser;
 import slf4d;
@@ -62,7 +63,9 @@ public void handleClient(
     REQUEST_CONTEXT.server = server;
     logger.infoF!"Request: Method=%s, URL=\"%s\""(request.method, request.url);
     try {
+        logger.info("About to handle...");
         server.getHandler.handle(request, response);
+        logger.info("Handled.");
         if (!response.isFlushed) {
             response.flushHeaders();
         }
@@ -91,36 +94,4 @@ public void handleClient(
     requestParser.msg.reset();
 }
 
-struct SocketOutputRange {
-    private Socket socket;
 
-    void put(ubyte[] data) {
-        ptrdiff_t sent = socket.send(data);
-        if (sent != data.length) throw new Exception("Couldn't send all data.");
-    }
-}
-
-struct SocketInputRange {
-    private Socket socket;
-    private ubyte[] buffer;
-    private size_t bytesAvailable;
-    bool closed = false;
-
-    bool empty() {
-        return socket is null || closed || !socket.isAlive;
-    }
-
-    ubyte[] front() {
-        return buffer[0 .. bytesAvailable];
-    }
-
-    void popFront() {
-        if (closed || socket is null) return;
-        ptrdiff_t readCount = socket.receive(buffer);
-        if (readCount == 0 || readCount == Socket.ERROR) {
-            closed = true;
-        } else {
-            bytesAvailable = readCount;
-        }
-    }
-}

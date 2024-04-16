@@ -59,7 +59,7 @@ class Tests {
                     return true;
                 }
             } catch (Exception e) {
-                // Skip this.
+                System.err.println("Exception: " + e.getClass().getName());
             }
             System.out.println("Waiting for server to go online...");
             attempts++;

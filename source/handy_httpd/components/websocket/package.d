@@ -12,13 +12,12 @@ public import handy_httpd.components.websocket.manager;
 unittest {
     import slf4d;
     import slf4d.default_provider;
-    import streams;
 
     // auto provider = new shared DefaultProvider(true, Levels.TRACE);
     // configureLoggingProvider(provider);
 
     ubyte[] example1 = [0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f];
-    WebSocketFrame frame1 = receiveWebSocketFrame(arrayInputStreamFor(example1));
+    WebSocketFrame frame1 = receiveWebSocketFrame(example1);
     assert(frame1.finalFragment);
     assert(frame1.opcode == WebSocketFrameOpcode.TEXT_FRAME);
     assert(cast(string) frame1.payload == "Hello");

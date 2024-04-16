@@ -123,9 +123,12 @@ class PathHandler : HttpRequestHandler {
      *   ctx = The request context.
      */
     void handle(ref HttpRequest request, ref HttpResponse response) {
+        info("Handling request...");
         // Clear any path params currently in the request context.
         REQUEST_CONTEXT.pathParams.clear();
+        info("Cleared request context...");
         HttpRequestHandler mappedHandler = findMappedHandler(request);
+        infoF!"Found mapped handler: %s"(mappedHandler);
         if (mappedHandler !is null) {
             mappedHandler.handle(request, response);
         } else {

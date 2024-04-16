@@ -4,8 +4,8 @@
  */
 module handy_httpd.components.websocket.manager;
 
+import handy_httpd.components.socket_range;
 import core.thread.osthread : Thread;
-import streams;
 import slf4d;
 
 /**
@@ -185,7 +185,7 @@ class WebSocketManager : Thread {
      *   conn = The connection to receive a websocket frame from.
      */
     private void handleIncomingMessage(WebSocketConnection conn) {
-        SocketInputStream sIn = SocketInputStream(conn.getSocket());
+        SocketInputRange sIn = SocketInputRange(conn.getSocket(), new ubyte[8192]);
         WebSocketFrame frame;
         try {
             frame = receiveWebSocketFrame(sIn);
@@ -206,7 +206,7 @@ class WebSocketManager : Thread {
                 this.handleClientClose(frame, conn);
                 break;
             case WebSocketFrameOpcode.PING:
-                sendWebSocketPongFrame(SocketOutputStream(conn.getSocket()), frame.payload);
+                sendWebSocketPongFrame(SocketOutputRange(conn.getSocket()), frame.payload);
                 break;
             case WebSocketFrameOpcode.TEXT_FRAME:
             case WebSocketFrameOpcode.BINARY_FRAME:
@@ -241,7 +241,7 @@ class WebSocketManager : Thread {
             }
         }
         try {
-            sendWebSocketFrame(SocketOutputStream(conn.getSocket()), closeFrame);
+            sendWebSocketFrame(SocketOutputRange(conn.getSocket()), closeFrame);
         } catch (WebSocketException e) {
             // Ignore any failure in sending an echo response back.
         }

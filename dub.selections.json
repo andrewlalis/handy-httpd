@@ -1,10 +1,9 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"http-primitives": "1.0.0",
+		"http-primitives": "1.1.0",
 		"httparsed": "1.2.1",
 		"path-matcher": "1.1.4",
-		"slf4d": "3.0.0",
-		"streams": "3.5.0"
+		"slf4d": "3.0.0"
 	}
 }
