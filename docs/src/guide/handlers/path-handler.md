@@ -8,7 +8,7 @@ For example, suppose we have a handler named `userHandler` that we want to invok
 
 ```d
 auto pathHandler = new PathHandler()
-    .addMapping(Method.GET, "/users/:userId:ulong", userHandler);
+    .addMapping(Method.GET, "/users/:userId:ulong", &userHandler);
 new HttpServer(pathHandler).start();
 ```
 

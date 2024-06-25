@@ -16,7 +16,7 @@ The HttpRequestContext that's provided to the handler contains all the informati
 
 - The [HttpRequest](ddoc-handy_httpd.components.request.HttpRequest) that was received.
 - The [HttpResponse](ddoc-handy_httpd.components.response.HttpResponse) that will be sent.
-- The [HttpServer](ddoc-handy_httpd.server.Server) that received the request.
+- The [HttpServer](ddoc-handy_httpd.server.HttpServer) that received the request.
 - The [ServerWorkerThread](ddoc-handy_httpd.components.worker.ServerWorkerThread) that's processing the request.
 
 ### Request
@@ -61,7 +61,7 @@ The easiest way to understand this behavior is through an example. Suppose we de
 
 ```d
 auto handler = new PathHandler();
-handler.addMapping("/users/:userId:ulong/settings/:setting", userSettingsHandler);
+handler.addMapping("/users/:userId:ulong/settings/:setting", &userSettingsHandler);
 ```
 
 Then in our `userSettingsHandler` we can retrieve the path parameters like so:
