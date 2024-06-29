@@ -4,6 +4,7 @@ import slf4d.writer;
 import slf4d.default_provider;
 import handy_httpd;
 
+import std.algorithm;
 import core.cpuid;
 
 import requester;
@@ -19,8 +20,18 @@ int main() {
 
 	return runTests(
 		// () => new SpeedTest("Single-Thread BlockingWorkerPool", getBlockingServer(), 4, LimitType.RequestCount, 10_000),
-		() => new SpeedTest("Single-Thread DistributingWorkerPool", getTestingServer(1), 1, LimitType.Time, 10_000),
-		() => new SpeedTest("Multi-Thread DistributingWorkerPool", getTestingServer(cpuThreads), cpuThreads / 2, LimitType.Time, 10_000)
+		() => new SpeedTest(
+			"Single-Thread DistributingWorkerPool",
+			getTestingServer(1),
+			1,
+			LimitType.Time, 10_000
+		),
+		() => new SpeedTest(
+			"Multi-Thread DistributingWorkerPool",
+			getTestingServer(max(1, cpuThreads)),
+			max(1, cpuThreads / 2),
+			LimitType.Time, 10_000
+		)
 	);
 }
 
