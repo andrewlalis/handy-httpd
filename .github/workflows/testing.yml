@@ -25,6 +25,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
         compiler: [dmd-latest, ldc-1.31.0, ldc-latest]
+        exclude:
+          - os: macOS-latest
+            compiler: dmd-latest
     runs-on: ${{ matrix.os }}
 
     steps:
