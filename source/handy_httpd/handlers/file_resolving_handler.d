@@ -99,11 +99,11 @@ class FileResolvingHandler : HttpRequestHandler {
                 handleDirRequest(ctx.response, path, ctx.request.url);
             } else {
                 log.debugF!"Path %s is not a file or directory."(path);
-                notFoundResponse(ctx.response);
+                ctx.response.status = HttpStatus.NOT_FOUND;
             }
         } else {
             log.debugF!"Could not resolve file for url %s."(ctx.request.url);
-            notFoundResponse(ctx.response);
+            ctx.response.status = HttpStatus.NOT_FOUND;
         }
     }
 
@@ -237,7 +237,7 @@ HTML";
             return;
         }
         // No other option but to return not-found.
-        notFoundResponse(response);
+        response.status = HttpStatus.NOT_FOUND;
     }
 
     /** 

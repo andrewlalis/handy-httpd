@@ -178,10 +178,10 @@ unittest {
     import handy_httpd.util.builders;
     import handy_httpd.components.responses;
     PathHandler handler = new PathHandler()
-        .addMapping(Method.GET, "/home", (ref ctx) {ctx.response.okResponse();})
-        .addMapping(Method.GET, "/users", (ref ctx) {ctx.response.okResponse();})
-        .addMapping(Method.GET, "/users/:id:ulong", (ref ctx) {ctx.response.okResponse();})
-        .addMapping(Method.GET, "/api/*", (ref ctx) {ctx.response.okResponse();});
+        .addMapping(Method.GET, "/home", (ref ctx) {ctx.response.status = HttpStatus.OK;})
+        .addMapping(Method.GET, "/users", (ref ctx) {ctx.response.status = HttpStatus.OK;})
+        .addMapping(Method.GET, "/users/:id:ulong", (ref ctx) {ctx.response.status = HttpStatus.OK;})
+        .addMapping(Method.GET, "/api/*", (ref ctx) {ctx.response.status = HttpStatus.OK;});
 
     HttpRequestContext generateHandledCtx(Method method, string url) {
         auto ctx = buildCtxForRequest(method, url);
