@@ -7,33 +7,35 @@ import handy_httpd.components.response;
 import handy_httpd.components.handler : HttpRequestContext;
 import streams;
 
-void respond(
-    ref HttpResponse response,
-    HttpStatus status,
-    InputStream!ubyte bodyInputStream,
-    ulong bodySize,
-    string bodyContentType
-) {
-    response.setStatus(status);
-    if (bodyInputStream !is null) {
-        response.writeBody(bodyInputStream, bodySize, bodyContentType);
+deprecated("Use methods available directly from HttpResponse instead.") {
+    void respond(
+        ref HttpResponse response,
+        HttpStatus status,
+        InputStream!ubyte bodyInputStream,
+        ulong bodySize,
+        string bodyContentType
+    ) {
+        response.setStatus(status);
+        if (bodyInputStream !is null) {
+            response.writeBody(bodyInputStream, bodySize, bodyContentType);
+        }
     }
-}
 
-void respond(
-    ref HttpResponse response,
-    HttpStatus status,
-    string bodyContent,
-    string bodyContentType = "text/plain; charset=utf-8"
-) {
-    response.setStatus(status);
-    if (bodyContent !is null && bodyContent.length > 0) {
-        response.writeBodyString(bodyContent, bodyContentType);
+    void respond(
+        ref HttpResponse response,
+        HttpStatus status,
+        string bodyContent,
+        string bodyContentType = "text/plain; charset=utf-8"
+    ) {
+        response.setStatus(status);
+        if (bodyContent !is null && bodyContent.length > 0) {
+            response.writeBodyString(bodyContent, bodyContentType);
+        }
     }
-}
 
-void respond(ref HttpResponse response, HttpStatus status) {
-    respond(response, status, null);
+    void respond(ref HttpResponse response, HttpStatus status) {
+        respond(response, status, null);
+    }
 }
 
 /** 
