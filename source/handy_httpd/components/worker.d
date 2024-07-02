@@ -5,6 +5,7 @@
 module handy_httpd.components.worker;
 
 import std.socket : Socket, SocketShutdown;
+import std.datetime : Clock, UTC;
 
 import handy_httpd.server : HttpServer;
 import handy_httpd.components.parse_utils : Msg, receiveRequest;
@@ -60,7 +61,9 @@ public void handleClient(
 
     // We successfully got a request, so use the server's handler to handle it.
     HttpRequestContext ctx = optionalCtx.value;
-    logger.infoF!"Request: Method=%s, URL=\"%s\""(ctx.request.method, ctx.request.url);
+    auto startTime = Clock.currTime(UTC());
+
+    logger.debugF!"Request: Method=%s, URL=\"%s\""(ctx.request.method, ctx.request.url);
     try {
         server.getHandler.handle(ctx);
         if (!ctx.response.isFlushed) {
@@ -86,7 +89,12 @@ public void handleClient(
         logger.debug_("Keeping socket alive due to SWITCHING_PROTOCOLS status.");
     }
 
-    logger.infoF!"Response: Status=%d %s"(ctx.response.status.code, ctx.response.status.text);
+    auto endTime = Clock.currTime(UTC());
+
+    logger.infoF!"Response: %s %s - %d %s (%s)"(
+        ctx.request.method, ctx.request.url, ctx.response.status.code,
+        ctx.response.status.text, (endTime - startTime).toString
+    );
 
     // Reset the request parser so we're ready for the next request.
     requestParser.msg.reset();
