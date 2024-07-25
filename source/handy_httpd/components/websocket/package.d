@@ -9,11 +9,16 @@ public import handy_httpd.components.websocket.frame;
 public import handy_httpd.components.websocket.handler;
 public import handy_httpd.components.websocket.manager;
 
+/**
+ * The following unit tests are derived from examples provided in
+ * https://datatracker.ietf.org/doc/html/rfc6455#section-5.7
+ */
 unittest {
     import slf4d;
     import slf4d.default_provider;
     import streams;
 
+    // Note: Un-comment the below two lines to enable TRACE-level log messages.
     // auto provider = new shared DefaultProvider(true, Levels.TRACE);
     // configureLoggingProvider(provider);
 
