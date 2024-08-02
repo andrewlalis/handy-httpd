@@ -10,8 +10,20 @@ import handy_httpd.components.optional;
  * A multi-valued mapping, where a key is mapped to one or more values. The map
  * is sorted by keys for O(log(n)) lookup and retrieval, and O(n*log(n))
  * insertion.
+ *
+ * `KeyType` is the type used for the map's keys.
+ * `ValueType` is the type used for the map's values.
+ * `KeySort` is a function that takes two operands and returns true if the
+ * first one is less than the second.
+ * `KeyEquals` is a function that takes two operands and returns true if they
+ * are equal.
  */
-struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
+struct MultiValueMap(
+    KeyType,
+    ValueType,
+    alias KeySort = (a, b) => a < b,
+    alias KeyEquals = (a, b) => a == b
+) {
     /// The internal structure used to store each key and set of values.
     static struct Entry {
         /// The key for this entry.
@@ -58,7 +70,8 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
         size_t endIdx = entries.length - 1;
         while (startIdx <= endIdx) {
             size_t mid = startIdx + (endIdx - startIdx) / 2;
-            if (entries[mid].key == k) return mid;
+            const key = entries[mid].key;
+            if (KeyEquals(key, k)) return mid;
             if (KeySort(entries[mid].key, k)) {
                 startIdx = mid + 1;
             } else {
@@ -268,7 +281,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
 
         private long indexOf(KeyType k) {
             foreach (i, entry; m.entries) {
-                if (entry.key == k) return i;
+                if (KeyEquals(entry.key, k)) return i;
             }
             return -1;
         }
@@ -358,6 +371,18 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
  * string values. All keys are case-sensitive.
  */
 alias StringMultiValueMap = MultiValueMap!(string, string);
+
+/**
+ * A multivalued map of strings, where keys are NOT case sensitive.
+ */
+alias CaseInsensitiveStringMultiValueMap = MultiValueMap!(
+    string, string,
+    (a, b) => a < b,
+    (a, b) {
+        import std.string : toLower;
+        return toLower(a) == toLower(b);
+    }
+);
 
 unittest {
     StringMultiValueMap m;

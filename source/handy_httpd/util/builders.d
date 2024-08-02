@@ -146,7 +146,7 @@ class HttpRequestBuilder {
 
     private Method method = Method.GET;
     private string url = "/";
-    private StringMultiValueMap headers;
+    private CaseInsensitiveStringMultiValueMap headers;
     private StringMultiValueMap params;
     private string[string] pathParams;
     private string pathPattern = null;

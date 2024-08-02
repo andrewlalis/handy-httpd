@@ -42,7 +42,7 @@ struct HttpRequest {
     /** 
      * A list of all request headers.
      */
-    public const(StringMultiValueMap) headers;
+    public const(CaseInsensitiveStringMultiValueMap) headers;
 
     /**
      * A list of parsed query parameters from the request's URL.
@@ -128,7 +128,7 @@ struct HttpRequest {
             Method.GET,
             "/api",
             1,
-            StringMultiValueMap.init,
+            CaseInsensitiveStringMultiValueMap.init,
             StringMultiValueMap.fromAssociativeArray(["a": "123", "b": "c", "c": "true"]),
             string[string].init
         );

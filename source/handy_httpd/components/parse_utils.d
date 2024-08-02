@@ -84,7 +84,7 @@ public Tuple!(HttpRequest, int) parseRequest(ref MsgParser!Msg requestParser, st
         throw new Exception("Couldn't parse header.");
     }
     
-    StringMultiValueMap.Builder headersBuilder;
+    CaseInsensitiveStringMultiValueMap.Builder headersBuilder;
     foreach (h; requestParser.headers) {
         headersBuilder.add(cast(string) h.name, cast(string) h.value);
     }
