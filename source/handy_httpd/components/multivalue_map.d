@@ -62,6 +62,7 @@ struct MultiValueMap(KeyType, ValueType, alias KeySort = (a, b) => a < b) {
             if (KeySort(entries[mid].key, k)) {
                 startIdx = mid + 1;
             } else {
+                if (mid == 0) return -1;
                 endIdx = mid - 1;
             }
         }
