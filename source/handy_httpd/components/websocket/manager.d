@@ -197,7 +197,16 @@ class WebSocketManager : Thread {
         }
         debugF!"Received websocket frame from connection %s @ %s: %s, payload length = %d"(
             conn.id,
-            conn.getSocket().remoteAddress(),
+	    (){
+	      import std.socket : SocketOSException;
+	      string address = "unkown";
+	      try {
+                address = conn.getSocket().remoteAddress().toString;
+	      }
+	      catch(SocketOSException e) {
+	      }
+	      return address;
+	    }(),
             frame.opcode,
             frame.payload.length
         );
