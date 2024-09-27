@@ -199,13 +199,11 @@ class WebSocketManager : Thread {
             conn.id,
 	    (){
 	      import std.socket : SocketOSException;
-	      string address = "unkown";
 	      try {
-                address = conn.getSocket().remoteAddress().toString;
+                  return conn.getSocket().remoteAddress().toString;
+	      } catch(SocketOSException e) {
+	          return "unknown";
 	      }
-	      catch(SocketOSException e) {
-	      }
-	      return address;
 	    }(),
             frame.opcode,
             frame.payload.length
