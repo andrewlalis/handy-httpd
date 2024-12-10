@@ -60,9 +60,11 @@ struct HttpRequestContext {
 /**
  * An alias for the signature of a function capable of handling requests. It's
  * just a `void` function that takes a single `HttpRequestContext` parameter.
- * It is acceptable to throw exceptions from the function.
+ * It is acceptable to throw exceptions from the function. Note that this type
+ * is declared as a delegate, which allows for passing functions which use some
+ * external state, like local variables or class member functions.
  */
-alias HttpRequestHandlerFunction = void function(ref HttpRequestContext);
+alias HttpRequestHandlerFunction = void delegate(ref HttpRequestContext);
 
 /**
  * Interface for any component that handles HTTP requests.
