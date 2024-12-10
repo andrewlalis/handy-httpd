@@ -18,7 +18,7 @@ void main(string[] args) {
         import std.conv;
         cfg.port = args[1].to!ushort;
     }
-    new HttpServer((ref ctx) {
+    new HttpServer((ref HttpRequestContext ctx) {
         // We can inspect the request's URL directly like so:
         if (ctx.request.url == "/stop") {
             ctx.response.writeBodyString("Shutting down the server.");

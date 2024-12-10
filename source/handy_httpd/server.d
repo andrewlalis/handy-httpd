@@ -120,10 +120,10 @@ class HttpServer {
      *   handlerFunc = The function to use to handle requests.
      *   config = The server configuration.
      */
-    this(
-        HttpRequestHandlerFunction handlerFunc,
+    this(F)(
+        F handlerFunc,
         ServerConfig config = ServerConfig.init
-    ) {
+    ) if (isHttpRequestHandlerFunction!F) {
         this(toHandler(handlerFunc), config);
     }
 

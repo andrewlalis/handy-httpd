@@ -58,13 +58,42 @@ struct HttpRequestContext {
 }
 
 /**
- * An alias for the signature of a function capable of handling requests. It's
- * just a `void` function that takes a single `HttpRequestContext` parameter.
- * It is acceptable to throw exceptions from the function. Note that this type
- * is declared as a delegate, which allows for passing functions which use some
- * external state, like local variables or class member functions.
+ * Compile-time function used to determine if something is a request handler
+ * function. That is, it returns `void`, takes `ref HttpRequestContext` as a
+ * single argument, and is callable.
+ * Returns: True if the given type is a request handler function.
  */
-alias HttpRequestHandlerFunction = void delegate(ref HttpRequestContext);
+bool isHttpRequestHandlerFunction(T)() {
+    import std.traits;
+    static if (isCallable!T && arity!T == 1) {
+        import std.stdio;
+        alias p = Parameters!T[0];
+        alias s = ParameterStorageClassTuple!T[0];
+        return (
+            s == ParameterStorageClass.ref_
+            && is(p == HttpRequestContext)
+            && is(ReturnType!T == void)
+        );
+    } else {
+        return false;
+    }
+}
+
+unittest {
+    void f1(int n) {
+        n += 1;
+    }
+    assert(!isHttpRequestHandlerFunction!(typeof(&f1)));
+    void f2(ref HttpRequestContext ctx) {
+        ctx.response.writeBodyString("Hello world!");
+    }
+    assert(isHttpRequestHandlerFunction!(typeof(&f2)));
+    assert(isHttpRequestHandlerFunction!(typeof(
+        (ref HttpRequestContext ctx) {
+            ctx.response.status = HttpStatus.OK;
+        }
+    )));
+}
 
 /**
  * Interface for any component that handles HTTP requests.
@@ -156,7 +185,7 @@ class BasicServerExceptionHandler : ServerExceptionHandler {
  *   fn = The function that will handle requests.
  * Returns: The request handler.
  */
-HttpRequestHandler toHandler(HttpRequestHandlerFunction fn) {
+HttpRequestHandler toHandler(F)(F fn) if (isHttpRequestHandlerFunction!(F)) {
     return new class HttpRequestHandler {
         void handle(ref HttpRequestContext ctx) {
             fn(ctx);
@@ -170,7 +199,7 @@ HttpRequestHandler toHandler(HttpRequestHandlerFunction fn) {
  * Returns: The request handler.
  */
 HttpRequestHandler noOpHandler() {
-    return toHandler((ref ctx) {
+    return toHandler((ref HttpRequestContext ctx) {
         ctx.response.setStatus(HttpStatus.SERVICE_UNAVAILABLE);
     });
 }

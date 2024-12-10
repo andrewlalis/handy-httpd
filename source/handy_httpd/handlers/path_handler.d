@@ -48,7 +48,7 @@ class PathHandler : HttpRequestHandler {
      */
     this() {
         this.mappings = [];
-        this.notFoundHandler = toHandler((ref ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
+        this.notFoundHandler = toHandler((ref HttpRequestContext ctx) { ctx.response.status = HttpStatus.NOT_FOUND; });
     }
 
     /**
@@ -91,12 +91,12 @@ class PathHandler : HttpRequestHandler {
         return this;
     }
     ///
-    PathHandler addMapping(Method method, string pattern, HttpRequestHandlerFunction func) {
+    PathHandler addMapping(F)(Method method, string pattern, F func) if (isHttpRequestHandlerFunction!F) {
         this.mappings ~= HandlerMapping(toHandler(func), method, [pattern]);
         return this;
     }
     ///
-    PathHandler addMapping(string pattern, HttpRequestHandlerFunction func) {
+    PathHandler addMapping(F)(string pattern, F func) if (isHttpRequestHandlerFunction!F) {
         this.mappings ~= HandlerMapping(toHandler(func), methodMaskFromAll(), [pattern]);
         return this;
     }
@@ -167,7 +167,7 @@ unittest {
     import std.exception;
     auto handler = new PathHandler();
     assertThrown!Exception(handler.setNotFoundHandler(null));
-    auto notFoundHandler = toHandler((ref ctx) {
+    auto notFoundHandler = toHandler((ref HttpRequestContext ctx) {
         ctx.response.status = HttpStatus.NOT_FOUND;
     });
     assertNotThrown!Exception(handler.setNotFoundHandler(notFoundHandler));
@@ -178,10 +178,10 @@ unittest {
     import handy_httpd.util.builders;
     import handy_httpd.components.responses;
     PathHandler handler = new PathHandler()
-        .addMapping(Method.GET, "/home", (ref ctx) {ctx.response.status = HttpStatus.OK;})
-        .addMapping(Method.GET, "/users", (ref ctx) {ctx.response.status = HttpStatus.OK;})
-        .addMapping(Method.GET, "/users/:id:ulong", (ref ctx) {ctx.response.status = HttpStatus.OK;})
-        .addMapping(Method.GET, "/api/*", (ref ctx) {ctx.response.status = HttpStatus.OK;});
+        .addMapping(Method.GET, "/home", (ref HttpRequestContext ctx) {ctx.response.status = HttpStatus.OK;})
+        .addMapping(Method.GET, "/users", (ref HttpRequestContext ctx) {ctx.response.status = HttpStatus.OK;})
+        .addMapping(Method.GET, "/users/:id:ulong", (ref HttpRequestContext ctx) {ctx.response.status = HttpStatus.OK;})
+        .addMapping(Method.GET, "/api/*", (ref HttpRequestContext ctx) {ctx.response.status = HttpStatus.OK;});
 
     HttpRequestContext generateHandledCtx(Method method, string url) {
         auto ctx = buildCtxForRequest(method, url);

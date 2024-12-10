@@ -14,7 +14,7 @@ Then, you can create a server like so:
 import handy_httpd;
 
 void main() {
-    auto server = new HttpServer((ref ctx) {
+    auto server = new HttpServer((ref HttpRequestContext ctx) {
         ctx.response.writeBodyString("Hello world!");
     });
     server.start();

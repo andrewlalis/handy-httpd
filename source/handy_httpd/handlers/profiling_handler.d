@@ -161,7 +161,7 @@ unittest {
     import slf4d.test;
     withTestingProvider((provider) {
         LoggingProfilingDataHandler dataHandler = new LoggingProfilingDataHandler();
-        ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
+        ProfilingHandler handler = new ProfilingHandler(toHandler((ref HttpRequestContext ctx) {
             ctx.response.status = HttpStatus.OK;
         }), dataHandler);
         for (int i = 0; i < 10_000; i++) {
@@ -213,7 +213,7 @@ unittest {
     scope(exit) {
         std.file.remove(csvFile);
     }
-    ProfilingHandler handler = new ProfilingHandler(toHandler((ref ctx) {
+    ProfilingHandler handler = new ProfilingHandler(toHandler((ref HttpRequestContext ctx) {
         ctx.response.status = HttpStatus.OK;
     }), dataHandler);
     for (int i = 0; i < 1000; i++) {

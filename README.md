@@ -33,7 +33,7 @@ An extremely lightweight HTTP server for the [D programming language](https://dl
 import handy_httpd;
 
 void main() {
-	new HttpServer((ref ctx) {
+	new HttpServer((ref HttpRequestContext ctx) {
 		ctx.response.writeBodyString("Hello world!");
 	}).start();
 }
