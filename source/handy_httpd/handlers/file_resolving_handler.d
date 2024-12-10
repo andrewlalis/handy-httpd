@@ -74,7 +74,7 @@ class FileResolvingHandler : HttpRequestHandler {
             "pdf": "application/pdf",
             "xml": "application/xml"
         ];
-        this.directoryResolutionStrategy = DirectoryResolutionStrategies.listDirContentsAndServeIndexFiles;
+        this.directoryResolutionStrategy = directoryResolutionStrategy;
     }
 
     /**
