@@ -76,6 +76,13 @@ public void handleClient(
         } catch (Exception e2) {
             logger.error("Exception occurred in the server's exception handler.", e2);
         }
+    } catch (Error e) {
+        logger.errorF!(
+            "Encountered error %s while handling request: %s; " ~
+            "Note: Server's exception handler will not be invoked for errors. " ~
+            "Please address the root cause of the error or provide your own error-handling logic."
+        )(e.classinfo.name, e.msg);
+        throw e;
     }
     // Only close the socket if we're not switching protocols.
     if (ctx.response.status != HttpStatus.SWITCHING_PROTOCOLS) {
