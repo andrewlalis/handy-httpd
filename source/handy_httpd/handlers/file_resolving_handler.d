@@ -61,6 +61,7 @@ class FileResolvingHandler : HttpRequestHandler {
             "jpg": "image/jpg",
             "gif": "image/gif",
             "webp": "image/webp",
+            "svg": "image/svg+xml",
             "wav": "audio/wav",
             "ogg": "audio/ogg",
             "mp3": "audio/mpeg",
@@ -69,7 +70,6 @@ class FileResolvingHandler : HttpRequestHandler {
             "ttf": "application/font-ttf",
             "eot": "application/vnd.ms-fontobject",
             "otf": "application/font-otf",
-            "svg": "application/image/svg+xml",
             "wasm": "application/wasm",
             "pdf": "application/pdf",
             "xml": "application/xml"
