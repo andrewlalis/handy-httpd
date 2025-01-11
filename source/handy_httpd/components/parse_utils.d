@@ -190,7 +190,7 @@ public Optional!HttpRequestContext receiveRequest(InputStream, OutputStream)(
         ctx.request.remoteAddress = clientSocket.remoteAddress;
         
         ctx.response.outputStream = outputStreamObjectFor(outputStream);
-        ctx.response.headers["Connection"] = "close";
+        ctx.response.addHeader("Connection", "close");
         foreach (header, value; server.config.defaultHeaders) {
             ctx.response.addHeader(header, value);
         }

@@ -286,7 +286,7 @@ class HttpResponseBuilder {
     private HttpRequestContextBuilder ctxBuilder;
 
     private StatusInfo status = HttpStatus.OK;
-    private string[string] headers;
+    private StringMultiValueMap headers;
     private OutputStream!ubyte outputStream = new ResponseCachingOutputStream();
 
     this() {}
@@ -301,13 +301,13 @@ class HttpResponseBuilder {
     }
 
     HttpResponseBuilder withHeader(string name, string value) {
-        this.headers[name] = value;
+        this.headers.add(name, value);
         return this;
     }
 
     HttpResponseBuilder withHeader(V)(string name, V value) {
         import std.conv : to;
-        this.headers[name] = value.to!string;
+        this.headers.add(name, value.to!string);
         return this;
     }
 

@@ -3,6 +3,8 @@
  */
 module handy_httpd.components.response;
 
+import handy_httpd.components.multivalue_map;
+
 import std.array : appender;
 import std.conv : to;
 import std.socket : Socket;
@@ -19,9 +21,9 @@ struct HttpResponse {
     public StatusInfo status = HttpStatus.OK;
 
     /** 
-     * An associative array of headers.
+     * A multi-valued map of response headers.
      */
-    public string[string] headers;
+    public StringMultiValueMap headers;
 
     /** 
      * Internal flag used to determine if we've already flushed the headers.
@@ -60,7 +62,7 @@ struct HttpResponse {
         if (flushed) {
             warnF!"Attempted to set header \"%s\" to \"%s\" after the response has already been flushed."(name, value);
         }
-        this.headers[name] = value;
+        this.headers.add(name, value);
         return this;
     }
 
@@ -76,7 +78,7 @@ struct HttpResponse {
             warn("Attempted to set response body as chunked-encoded after headers have been flushed.");
             return this;
         }
-        this.headers["Transfer-Encoding"] = "chunked";
+        this.addHeader("Transfer-Encoding", "chunked");
         this.outputStream = outputStreamObjectFor(ChunkedEncodingOutputStream!(OutputStream!ubyte)(this.outputStream));
         return this;
     }
