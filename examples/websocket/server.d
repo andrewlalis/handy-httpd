@@ -11,7 +11,7 @@ import handy_httpd.handlers.file_resolving_handler;
 import slf4d;
 
 class MyWebSocketHandler : WebSocketMessageHandler {
-    override void onConnectionEstablished(WebSocketConnection conn) {
+    override void onConnectionEstablished(WebSocketConnection conn, in HttpRequest request) {
         infoF!"Connection established with id %s"(conn.id);
     }
 

@@ -5,6 +5,7 @@
 module handy_httpd.components.websocket.handler;
 
 import handy_httpd.components.handler : HttpRequestHandler, HttpRequestContext;
+import handy_httpd.components.request;
 import slf4d;
 
 /**
@@ -52,8 +53,9 @@ abstract class WebSocketMessageHandler {
      * Called when a new websocket connection is established.
      * Params:
      *   conn = The new connection.
+     *   request = The original HTTP request sent by the client.
      */
-    void onConnectionEstablished(WebSocketConnection conn) {}
+    void onConnectionEstablished(WebSocketConnection conn, in HttpRequest request) {}
 
     /**
      * Called when a text message is received.
@@ -215,7 +217,7 @@ class WebSocketHandler : HttpRequestHandler {
     void handle(ref HttpRequestContext ctx) {
         if (!this.verifyRequest(ctx)) return;
         this.sendSwitchingProtocolsResponse(ctx);
-        ctx.server.getWebSocketManager().registerConnection(ctx.clientSocket, this.messageHandler);
+        ctx.server.getWebSocketManager().registerConnection(ctx, this.messageHandler);
     }
 
     /**

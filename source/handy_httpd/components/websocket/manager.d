@@ -24,6 +24,7 @@ class WebSocketManager : Thread {
     import core.sync.rwmutex : ReadWriteMutex;
     import handy_httpd.components.websocket.handler;
     import handy_httpd.components.websocket.frame;
+    import handy_httpd.components.handler : HttpRequestContext;
 
     private WebSocketConnection[UUID] connections;
     private ReadWriteMutex connectionsMutex;
@@ -44,16 +45,16 @@ class WebSocketManager : Thread {
      * Registers a new websocket connection to this manager, and begins
      * listening for messages to pass on to the given handler.
      * Params:
-     *   socket = The socket that's connected.
+     *   ctx = The request context.
      *   handler = The handler to handle any websocket messages.
      */
-    void registerConnection(Socket socket, WebSocketMessageHandler handler) {
-        socket.blocking(false);
-        auto conn = new WebSocketConnection(socket, handler);
+    void registerConnection(ref HttpRequestContext ctx, WebSocketMessageHandler handler) {
+        ctx.clientSocket.blocking(false);
+        auto conn = new WebSocketConnection(ctx.clientSocket, handler);
         synchronized(this.connectionsMutex.writer) {
             this.connections[conn.id] = conn;
         }
-        conn.getMessageHandler().onConnectionEstablished(conn);
+        conn.getMessageHandler().onConnectionEstablished(conn, ctx.request);
     }
 
     /**
