@@ -11,7 +11,7 @@
 	"copyright": "Copyright © 2022, Andrew Lalis",
 	"dependencies": {
 		"httparsed": "~>1.2.1",
-		"slf4d": "~>3",
+		"slf4d": "~>4",
 		"streams": "~>3",
 		"path-matcher": "~>1.2.0"
 	},
