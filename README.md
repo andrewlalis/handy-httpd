@@ -5,6 +5,8 @@
 ![DUB Downloads](https://img.shields.io/dub/dt/handy-httpd?style=flat-square&logo=d&logoColor=%23B03931)
 ![GitHub Tag](https://img.shields.io/github/v/tag/andrewlalis/handy-httpd?style=flat-square&label=version&color=%23B03931)
 
+⚠️ **This repository is no longer being updated. Please view [Handy-Http](https://handy-http.andrewlalis.com/) for the successor of  this project.**
+
 An extremely lightweight HTTP server for the [D programming language](https://dlang.org/).
 
 ## Features
