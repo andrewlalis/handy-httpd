@@ -118,6 +118,8 @@ void fileResponse(ref HttpResponse response, string filename, string type) {
         response.setStatus(HttpStatus.OK);
         ulong size = getSize(filename);
         // Flush the headers, and begin streaming the file directly.
-        response.writeBody(FileInputStream(toStringz(filename)), size, type);
+        auto stream = FileInputStream(toStringz(filename));
+        response.writeBody(stream, size, type);
+        stream.closeStream();
     }
 }
