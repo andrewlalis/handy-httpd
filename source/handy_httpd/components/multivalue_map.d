@@ -183,17 +183,14 @@ struct MultiValueMap(
      *   k = The key to remove.
      */
     void remove(KeyType k) {
+        import std.algorithm : remove;
         long idx = indexOf(k);
         if (idx == -1) return;
         if (entries.length == 1) {
             clear();
             return;
         }
-        if (idx + 1 < entries.length) {
-            const i = cast(size_t) idx;
-            entries[i .. $ - 1] = entries[i + 1 .. $];
-        }
-        entries.length = entries.length - 1;
+        entries = entries.remove(idx);
     }
 
     /**
@@ -445,4 +442,12 @@ unittest {
     builder.add("a", "123");
     builder.add("a", "456");
     assert(builder.build()[] == [StringMultiValueMap.Entry("a", ["123", "456"])], builder.build().toString);
+}
+
+unittest {
+    MultiValueMap!(string, string) map;
+    map.add("a", "one");
+    map.add("b", "two");
+    map.add("c", "three");
+    map.remove("a");
 }
